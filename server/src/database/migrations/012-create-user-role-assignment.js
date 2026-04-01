@@ -22,12 +22,13 @@ module.exports = {
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE',
       },
-      org_unit_id: {
+      scope_type: {
+        type: Sequelize.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
+        allowNull: false,
+      },
+      scope_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        references: { model: 'org_unit', key: 'org_unit_id' },
-        onUpdate: 'CASCADE',
-        onDelete: 'CASCADE',
       },
       assigned_by: {
         type: Sequelize.INTEGER,
@@ -56,15 +57,15 @@ module.exports = {
       },
     });
 
-    await queryInterface.addIndex('user_role_assignment', ['user_id', 'role_id', 'org_unit_id'], {
+    await queryInterface.addIndex('user_role_assignment', ['user_id', 'role_id', 'scope_type', 'scope_id'], {
       unique: true,
       name: 'user_role_assignment_unique',
     });
-    await queryInterface.addIndex('user_role_assignment', ['user_id', 'org_unit_id'], {
-      name: 'user_role_assignment_user_org_idx',
+    await queryInterface.addIndex('user_role_assignment', ['user_id', 'scope_type', 'scope_id'], {
+      name: 'user_role_assignment_user_scope_idx',
     });
-    await queryInterface.addIndex('user_role_assignment', ['org_unit_id'], {
-      name: 'user_role_assignment_org_idx',
+    await queryInterface.addIndex('user_role_assignment', ['scope_type', 'scope_id'], {
+      name: 'user_role_assignment_scope_idx',
     });
   },
 

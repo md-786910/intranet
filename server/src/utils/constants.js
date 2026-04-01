@@ -1,17 +1,9 @@
-// Organisation hierarchy node types
-const NODE_TYPES = {
+// Scope types for polymorphic hierarchy references
+const SCOPE_TYPES = {
   ORGANISATION: 'ORGANISATION',
   OFFICE_LOCATION: 'OFFICE_LOCATION',
   VERTICAL: 'VERTICAL',
   DEPARTMENT: 'DEPARTMENT',
-};
-
-// Valid parent types for hierarchy enforcement
-const VALID_PARENT_MAP = {
-  ORGANISATION: null,
-  OFFICE_LOCATION: 'ORGANISATION',
-  VERTICAL: 'OFFICE_LOCATION',
-  DEPARTMENT: 'VERTICAL',
 };
 
 // User account statuses
@@ -83,16 +75,15 @@ const AUDIT_ACTIONS = {
 
 // Default tenant ID (used in seeders)
 const DEFAULT_TENANT_ID = 1;
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 module.exports = {
-  NODE_TYPES,
-  VALID_PARENT_MAP,
+  SCOPE_TYPES,
   USER_STATUS,
   ORG_STATUS,
   PERMISSION_EFFECT,
   MODULES,
   AUDIT_ACTIONS,
   DEFAULT_TENANT_ID,
-  DEFAULT_ORG_UNIT_ID,
+  DEFAULT_ORGANISATION_ID,
 };

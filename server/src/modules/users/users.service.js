@@ -52,7 +52,7 @@ const usersService = {
   },
 
   async getById(id) {
-    const { UserAccount, PersonProfile, UserRoleAssignment, Role, OrgUnit, DepartmentMembership } = require('../../database/models');
+    const { UserAccount, PersonProfile, UserRoleAssignment, Role, DepartmentMembership, Department } = require('../../database/models');
 
     const user = await UserAccount.findByPk(id, {
       attributes: { exclude: ['password_hash'] },
@@ -63,14 +63,13 @@ const usersService = {
           as: 'roleAssignments',
           include: [
             { model: Role, as: 'role', attributes: ['role_id', 'name', 'code', 'is_system'] },
-            { model: OrgUnit, as: 'orgUnit', attributes: ['org_unit_id', 'name', 'node_type', 'path'] },
           ],
         },
         {
           model: DepartmentMembership,
           as: 'departmentMemberships',
           include: [
-            { model: OrgUnit, as: 'department', attributes: ['org_unit_id', 'name', 'node_type', 'path'] },
+            { model: Department, as: 'department', attributes: ['id', 'name', 'code'] },
           ],
         },
       ],
@@ -114,12 +113,16 @@ const usersService = {
         await PersonProfile.create({ user_id: user.user_id }, { transaction });
       }
 
-      // Create initial role assignment if provided
-      if (data.initial_role) {
+      // Create initial role assignment(s) if provided
+      const rolesToAssign = data.initial_roles
+        || (data.initial_role ? [data.initial_role] : []);
+
+      for (const role of rolesToAssign) {
         await UserRoleAssignment.create({
           user_id: user.user_id,
-          role_id: data.initial_role.role_id,
-          org_unit_id: data.initial_role.org_unit_id,
+          role_id: role.role_id,
+          scope_type: role.scope_type || 'ORGANISATION',
+          scope_id: role.scope_id,
           assigned_by: actorUserId,
         }, { transaction });
       }
@@ -211,7 +214,8 @@ const usersService = {
       where: {
         user_id: userId,
         role_id: data.role_id,
-        org_unit_id: data.org_unit_id,
+        scope_type: data.scope_type || 'ORGANISATION',
+        scope_id: data.scope_id,
       },
     });
     if (existing) throw ApiError.conflict('Role already assigned at this scope');
@@ -219,7 +223,8 @@ const usersService = {
     const assignment = await UserRoleAssignment.create({
       user_id: userId,
       role_id: data.role_id,
-      org_unit_id: data.org_unit_id,
+      scope_type: data.scope_type || 'ORGANISATION',
+      scope_id: data.scope_id,
       assigned_by: actorUserId,
       starts_at: data.starts_at || null,
       ends_at: data.ends_at || null,
@@ -304,7 +309,8 @@ const usersService = {
       try {
         await this.create({
           ...rows[i],
-          org_unit_id: rows[i].org_unit_id,
+          scope_type: rows[i].scope_type || 'ORGANISATION',
+          scope_id: rows[i].scope_id,
         }, actorUserId);
         results.created++;
       } catch (error) {

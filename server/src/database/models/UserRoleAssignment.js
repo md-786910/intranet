@@ -13,7 +13,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
-    org_unit_id: {
+    scope_type: {
+      type: DataTypes.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
+      allowNull: false,
+    },
+    scope_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
@@ -42,10 +46,8 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'role_id',
       as: 'role',
     });
-    UserRoleAssignment.belongsTo(models.OrgUnit, {
-      foreignKey: 'org_unit_id',
-      as: 'orgUnit',
-    });
+    // Polymorphic scope — no direct FK association
+    // Use scope.service.js to resolve scope_type + scope_id
   };
 
   return UserRoleAssignment;

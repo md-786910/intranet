@@ -3,7 +3,7 @@ import PageHeader from '../../components/common/PageHeader';
 import { analyticsService } from '../../services/analyticsService';
 import { useToast } from '../../hooks/useToast';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 function StatCard({ label, value, color = 'primary' }) {
   const colorMap = {
@@ -29,7 +29,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    analyticsService.getDashboard({ org_unit_id: DEFAULT_ORG_UNIT_ID })
+    analyticsService.getDashboard({ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
       .then((res) => setDashboard(res.data?.data))
       .catch(() => addToast('Failed to load analytics', 'error'))
       .finally(() => setLoading(false));

@@ -27,7 +27,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
-    owning_org_unit_id: {
+    owning_scope_type: {
+      type: DataTypes.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
+      allowNull: false,
+    },
+    owning_scope_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
@@ -66,10 +70,7 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'created_by',
       as: 'creator',
     });
-    PushCampaign.belongsTo(models.OrgUnit, {
-      foreignKey: 'owning_org_unit_id',
-      as: 'owningOrgUnit',
-    });
+    // Polymorphic scope — use scope.service.js to resolve owning_scope_type + owning_scope_id
     PushCampaign.hasMany(models.ContentAudienceRule, {
       foreignKey: 'entity_id',
       as: 'audienceRules',

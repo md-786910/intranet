@@ -13,7 +13,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
-    target_org_unit_id: {
+    target_scope_type: {
+      type: DataTypes.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
+      allowNull: false,
+    },
+    target_scope_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
@@ -22,10 +26,7 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   ContentAudienceRule.associate = (models) => {
-    ContentAudienceRule.belongsTo(models.OrgUnit, {
-      foreignKey: 'target_org_unit_id',
-      as: 'targetOrgUnit',
-    });
+    // Polymorphic scope — use scope.service.js to resolve target_scope_type + target_scope_id
   };
 
   return ContentAudienceRule;

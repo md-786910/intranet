@@ -21,7 +21,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: true,
     },
-    org_unit_id: {
+    scope_type: {
+      type: DataTypes.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
+      allowNull: true,
+    },
+    scope_id: {
       type: DataTypes.INTEGER,
       allowNull: true,
     },
@@ -41,10 +45,7 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'user_id',
       as: 'user',
     });
-    AnalyticsEvent.belongsTo(models.OrgUnit, {
-      foreignKey: 'org_unit_id',
-      as: 'orgUnit',
-    });
+    // Polymorphic scope — use scope.service.js to resolve scope_type + scope_id
   };
 
   return AnalyticsEvent;

@@ -4,10 +4,10 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import StatusBadge from '../../components/common/StatusBadge';
 import OrgTreeView from '../../components/org/OrgTreeView';
-import { orgService } from '../../services/orgService';
+import { TYPE_COLORS, TYPE_ICONS, NODE_TYPE_LABELS } from '../../components/org/OrgTreeNode';
+import { orgService, transformOrgTree } from '../../services/orgService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
-import { NODE_TYPE_LABELS } from '../../utils/constants';
 
 const CHILD_TYPE_MAP = {
   ORGANISATION: 'OFFICE_LOCATION',
@@ -19,6 +19,14 @@ const CHILD_LABEL_MAP = {
   ORGANISATION: 'Office Location',
   OFFICE_LOCATION: 'Vertical',
   VERTICAL: 'Department',
+};
+
+// Accent bar colors for the panel header
+const ACCENT_COLORS = {
+  ORGANISATION: 'bg-blue-500',
+  OFFICE_LOCATION: 'bg-emerald-500',
+  VERTICAL: 'bg-amber-500',
+  DEPARTMENT: 'bg-gray-400',
 };
 
 function getCreateEndpoint(t) {
@@ -64,7 +72,7 @@ export default function OrganisationPage() {
     try {
       setLoading(true);
       const res = await orgService.getOrgTree();
-      setTree(res.data?.data || []);
+      setTree(transformOrgTree(res.data?.data));
     } catch {
       addToast('Failed to load organisation tree', 'error');
     } finally {
@@ -83,7 +91,7 @@ export default function OrganisationPage() {
 
   const openEdit = (node) => {
     const target = node || selected;
-    if (!target || target.node_type === 'ORGANISATION') return;
+    if (!target || target.type === 'ORGANISATION') return;
     setSelected(target);
     setForm({
       name: target.name || '', code: target.code || '',
@@ -96,7 +104,7 @@ export default function OrganisationPage() {
   };
 
   const openCreate = (parentNode) => {
-    const childType = CHILD_TYPE_MAP[parentNode.node_type];
+    const childType = CHILD_TYPE_MAP[parentNode.type];
     if (!childType) return;
     setCreateParent(parentNode);
     setCreateNodeType(childType);
@@ -119,7 +127,7 @@ export default function OrganisationPage() {
 
     setSaving(true);
     try {
-      const nodeType = panelMode === 'create' ? createNodeType : selected.node_type;
+      const nodeType = panelMode === 'create' ? createNodeType : selected.type;
       const isOffice = nodeType === 'OFFICE_LOCATION';
       const locationFields = isOffice ? {
         address: form.address.trim() || undefined,
@@ -130,23 +138,25 @@ export default function OrganisationPage() {
 
       if (panelMode === 'create') {
         if (!createParent) return;
+        const parentFkMap = {
+          OFFICE_LOCATION: { organisation_id: createParent.id },
+          VERTICAL: { office_location_id: createParent.id },
+          DEPARTMENT: { vertical_id: createParent.id },
+        };
         await getCreateEndpoint(createNodeType)({
           name: form.name.trim(),
           code: form.code.trim() || undefined,
-          parent_org_unit_id: createParent.org_unit_id,
-          org_unit_id: createParent.org_unit_id,
+          ...parentFkMap[createNodeType],
           ...locationFields,
         });
         addToast(`${NODE_TYPE_LABELS[createNodeType]} created`, 'success');
       } else {
-        const scopeId = selected.parent_org_unit_id || selected.org_unit_id;
-        await getUpdateEndpoint(selected.node_type)(selected.org_unit_id, {
+        await getUpdateEndpoint(selected.type)(selected.id, {
           name: form.name.trim(),
           code: form.code.trim() || undefined,
-          org_unit_id: scopeId,
           ...locationFields,
         });
-        addToast(`${NODE_TYPE_LABELS[selected.node_type]} updated`, 'success');
+        addToast(`${NODE_TYPE_LABELS[selected.type]} updated`, 'success');
       }
       closePanel();
       fetchTree();
@@ -159,11 +169,11 @@ export default function OrganisationPage() {
 
   // ── Delete ──
   const handleDelete = async () => {
-    if (!selected || selected.node_type === 'ORGANISATION') return;
+    if (!selected || selected.type === 'ORGANISATION') return;
     setDeleting(true);
     try {
-      await getDeleteEndpoint(selected.node_type)(selected.org_unit_id);
-      addToast(`${NODE_TYPE_LABELS[selected.node_type]} deleted`, 'success');
+      await getDeleteEndpoint(selected.type)(selected.id);
+      addToast(`${NODE_TYPE_LABELS[selected.type]} deleted`, 'success');
       closePanel();
       setSelected(null);
       fetchTree();
@@ -179,28 +189,31 @@ export default function OrganisationPage() {
     if (errors[field]) setErrors(prev => ({ ...prev, [field]: null }));
   };
 
-  // For the form — which node type are we editing/creating?
-  const activeNodeType = panelMode === 'create' ? createNodeType : selected?.node_type;
+  const activeNodeType = panelMode === 'create' ? createNodeType : selected?.type;
   const isOffice = activeNodeType === 'OFFICE_LOCATION';
   const hasChildren = selected?.children?.length > 0;
   const panelTitle =
-    panelMode === 'create' ? `New ${CHILD_LABEL_MAP[createParent?.node_type] || ''}` :
-    panelMode === 'edit' ? `Edit ${NODE_TYPE_LABELS[selected?.node_type] || ''}` :
+    panelMode === 'create' ? `New ${CHILD_LABEL_MAP[createParent?.type] || ''}` :
+    panelMode === 'edit' ? `Edit ${NODE_TYPE_LABELS[selected?.type] || ''}` :
     selected?.name || '';
 
+  const panelAccent = ACCENT_COLORS[activeNodeType || selected?.type] || ACCENT_COLORS.DEPARTMENT;
+  const panelTypeColor = TYPE_COLORS[activeNodeType || selected?.type] || TYPE_COLORS.DEPARTMENT;
+  const panelIconPath = TYPE_ICONS[activeNodeType || selected?.type] || TYPE_ICONS.DEPARTMENT;
+
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title="Organisation Structure"
         subtitle="Manage your offices, verticals, and departments."
       />
 
       {/* ── Tree ── */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <OrgTreeView
           tree={tree}
           loading={loading}
-          selectedId={selected?.org_unit_id}
+          selectedId={selected?.id}
           onSelect={openView}
           onAdd={openCreate}
           onEdit={openEdit}
@@ -208,29 +221,39 @@ export default function OrganisationPage() {
         />
       </div>
 
-      {/* ── Slide-out Panel (view / edit / create — all in one) ── */}
+      {/* ── Slide-out Panel ── */}
       {panelMode && (
         <>
           <div className="fixed inset-0 bg-black/20 z-40" onClick={closePanel} />
-          <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-xl z-50 flex flex-col">
+          <div className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-xl z-50 flex flex-col overflow-hidden">
+
+            {/* Colored accent bar */}
+            <div className={`h-1 flex-shrink-0 ${panelAccent}`} />
 
             {/* ── Panel Header ── */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-semibold text-gray-900 truncate">{panelTitle}</h2>
-                {panelMode === 'view' && (
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-gray-500">{NODE_TYPE_LABELS[selected?.node_type]}</span>
-                    <StatusBadge status={selected?.status} />
-                  </div>
-                )}
-                {panelMode === 'create' && createParent && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Under: {createParent.name}
-                  </p>
-                )}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <span className={`flex-shrink-0 p-2 rounded-lg ${panelTypeColor}`}>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d={panelIconPath} />
+                  </svg>
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold text-gray-900 truncate">{panelTitle}</h2>
+                  {panelMode === 'view' && (
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-gray-500">{NODE_TYPE_LABELS[selected?.type]}</span>
+                      <StatusBadge status={selected?.status} />
+                    </div>
+                  )}
+                  {panelMode === 'create' && createParent && (
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Under: {createParent.name}
+                    </p>
+                  )}
+                </div>
               </div>
-              <button onClick={closePanel} className="p-1 text-gray-400 hover:text-gray-600 rounded ml-3 flex-shrink-0">
+              <button onClick={closePanel} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg ml-3 flex-shrink-0 transition-colors">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -251,60 +274,62 @@ export default function OrganisationPage() {
                     </div>
                   )}
 
-                  {/* Details */}
-                  <dl className="grid grid-cols-2 gap-4 text-sm">
-                    {selected.code && (
+                  {/* Details card */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <dl className="grid grid-cols-2 gap-4 text-sm">
+                      {selected.code && (
+                        <div>
+                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Code</dt>
+                          <dd className="font-medium text-gray-800">{selected.code}</dd>
+                        </div>
+                      )}
+                      {selected.city && (
+                        <div>
+                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">City</dt>
+                          <dd className="font-medium text-gray-800">{selected.city}</dd>
+                        </div>
+                      )}
+                      {selected.country && (
+                        <div>
+                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Country</dt>
+                          <dd className="font-medium text-gray-800">{selected.country}</dd>
+                        </div>
+                      )}
+                      {selected.timezone && (
+                        <div>
+                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Timezone</dt>
+                          <dd className="font-medium text-gray-800">{selected.timezone}</dd>
+                        </div>
+                      )}
+                      {selected.address && (
+                        <div className="col-span-2">
+                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Address</dt>
+                          <dd className="font-medium text-gray-800">{selected.address}</dd>
+                        </div>
+                      )}
                       <div>
-                        <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Code</dt>
-                        <dd className="font-medium text-gray-800">{selected.code}</dd>
+                        <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Created</dt>
+                        <dd className="font-medium text-gray-800">{formatDate(selected.created_at)}</dd>
                       </div>
-                    )}
-                    {selected.city && (
-                      <div>
-                        <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">City</dt>
-                        <dd className="font-medium text-gray-800">{selected.city}</dd>
-                      </div>
-                    )}
-                    {selected.country && (
-                      <div>
-                        <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Country</dt>
-                        <dd className="font-medium text-gray-800">{selected.country}</dd>
-                      </div>
-                    )}
-                    {selected.timezone && (
-                      <div>
-                        <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Timezone</dt>
-                        <dd className="font-medium text-gray-800">{selected.timezone}</dd>
-                      </div>
-                    )}
-                    {selected.address && (
-                      <div className="col-span-2">
-                        <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Address</dt>
-                        <dd className="font-medium text-gray-800">{selected.address}</dd>
-                      </div>
-                    )}
-                    <div>
-                      <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Created</dt>
-                      <dd className="font-medium text-gray-800">{formatDate(selected.created_at)}</dd>
-                    </div>
-                    {selected.children && (
-                      <div>
-                        <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Children</dt>
-                        <dd className="font-medium text-gray-800">{selected.children.length} direct</dd>
-                      </div>
-                    )}
-                  </dl>
+                      {selected.children && (
+                        <div>
+                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Children</dt>
+                          <dd className="font-medium text-gray-800">{selected.children.length} direct</dd>
+                        </div>
+                      )}
+                    </dl>
+                  </div>
 
                   {/* Add child */}
-                  {selected.node_type !== 'DEPARTMENT' && (
+                  {selected.type !== 'DEPARTMENT' && (
                     <Button variant="secondary" size="sm" onClick={() => openCreate(selected)}>
-                      + Add {CHILD_LABEL_MAP[selected.node_type]}
+                      + Add {CHILD_LABEL_MAP[selected.type]}
                     </Button>
                   )}
 
                   {/* Delete zone */}
-                  {selected.node_type !== 'ORGANISATION' && (
-                    <div className="pt-4 mt-2 border-t border-gray-100">
+                  {selected.type !== 'ORGANISATION' && (
+                    <div className="pt-4 mt-2 border-t border-gray-200">
                       {!confirmDelete ? (
                         <button
                           onClick={() => setConfirmDelete(true)}
@@ -316,7 +341,7 @@ export default function OrganisationPage() {
                       ) : (
                         <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                           <p className="text-sm text-red-800 font-medium mb-2">
-                            Delete "{selected.name}" permanently?
+                            Delete &ldquo;{selected.name}&rdquo; permanently?
                           </p>
                           <div className="flex gap-2">
                             <Button size="sm" variant="danger" onClick={handleDelete} loading={deleting}>
@@ -381,10 +406,10 @@ export default function OrganisationPage() {
             </div>
 
             {/* ── Panel Footer ── */}
-            <div className="px-6 py-4 border-t border-gray-200">
-              {panelMode === 'view' && selected?.node_type !== 'ORGANISATION' && (
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50/50">
+              {panelMode === 'view' && selected?.type !== 'ORGANISATION' && (
                 <Button variant="primary" className="w-full" onClick={() => openEdit(selected)}>
-                  Edit {NODE_TYPE_LABELS[selected?.node_type]}
+                  Edit {NODE_TYPE_LABELS[selected?.type]}
                 </Button>
               )}
 

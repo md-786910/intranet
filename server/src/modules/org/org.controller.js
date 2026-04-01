@@ -1,6 +1,5 @@
 const catchAsync = require('../../utils/catchAsync');
 const orgService = require('./org.service');
-const { NODE_TYPES } = require('../../utils/constants');
 
 const getTree = catchAsync(async (req, res) => {
   const tree = await orgService.getFullTree();
@@ -8,8 +7,8 @@ const getTree = catchAsync(async (req, res) => {
 });
 
 const getById = catchAsync(async (req, res) => {
-  const orgUnit = await orgService.getById(req.params.id);
-  res.status(200).json({ status: 'success', data: orgUnit });
+  const node = await orgService.getNodeById(req.params.id);
+  res.status(200).json({ status: 'success', data: node });
 });
 
 const getChildren = catchAsync(async (req, res) => {
@@ -18,76 +17,55 @@ const getChildren = catchAsync(async (req, res) => {
 });
 
 const getSubtree = catchAsync(async (req, res) => {
-  const subtree = await orgService.getSubtree(req.params.id, req.query);
+  const subtree = await orgService.getSubtree(req.params.id);
   res.status(200).json({ status: 'success', data: subtree });
 });
 
 // Office Locations
 const createOfficeLocation = catchAsync(async (req, res) => {
-  const orgUnit = await orgService.createNode(
-    { ...req.body, node_type: NODE_TYPES.OFFICE_LOCATION },
-    req.user.user_id
-  );
-  res.status(201).json({ status: 'success', data: orgUnit });
+  const office = await orgService.createOfficeLocation(req.body, req.user.user_id);
+  res.status(201).json({ status: 'success', data: office });
 });
 
 const updateOfficeLocation = catchAsync(async (req, res) => {
-  const orgUnit = await orgService.updateNode(
-    req.params.id, NODE_TYPES.OFFICE_LOCATION, req.body
-  );
-  res.status(200).json({ status: 'success', data: orgUnit });
+  const office = await orgService.updateOfficeLocation(req.params.id, req.body);
+  res.status(200).json({ status: 'success', data: office });
 });
 
 const deleteOfficeLocation = catchAsync(async (req, res) => {
-  const result = await orgService.deleteNode(
-    req.params.id, NODE_TYPES.OFFICE_LOCATION, req.user.user_id
-  );
+  const result = await orgService.deleteOfficeLocation(req.params.id, req.user.user_id);
   res.status(200).json({ status: 'success', data: result });
 });
 
 // Verticals
 const createVertical = catchAsync(async (req, res) => {
-  const orgUnit = await orgService.createNode(
-    { ...req.body, node_type: NODE_TYPES.VERTICAL },
-    req.user.user_id
-  );
-  res.status(201).json({ status: 'success', data: orgUnit });
+  const vertical = await orgService.createVertical(req.body, req.user.user_id);
+  res.status(201).json({ status: 'success', data: vertical });
 });
 
 const updateVertical = catchAsync(async (req, res) => {
-  const orgUnit = await orgService.updateNode(
-    req.params.id, NODE_TYPES.VERTICAL, req.body
-  );
-  res.status(200).json({ status: 'success', data: orgUnit });
+  const vertical = await orgService.updateVertical(req.params.id, req.body);
+  res.status(200).json({ status: 'success', data: vertical });
 });
 
 const deleteVertical = catchAsync(async (req, res) => {
-  const result = await orgService.deleteNode(
-    req.params.id, NODE_TYPES.VERTICAL, req.user.user_id
-  );
+  const result = await orgService.deleteVertical(req.params.id, req.user.user_id);
   res.status(200).json({ status: 'success', data: result });
 });
 
 // Departments
 const createDepartment = catchAsync(async (req, res) => {
-  const orgUnit = await orgService.createNode(
-    { ...req.body, node_type: NODE_TYPES.DEPARTMENT },
-    req.user.user_id
-  );
-  res.status(201).json({ status: 'success', data: orgUnit });
+  const department = await orgService.createDepartment(req.body, req.user.user_id);
+  res.status(201).json({ status: 'success', data: department });
 });
 
 const updateDepartment = catchAsync(async (req, res) => {
-  const orgUnit = await orgService.updateNode(
-    req.params.id, NODE_TYPES.DEPARTMENT, req.body
-  );
-  res.status(200).json({ status: 'success', data: orgUnit });
+  const department = await orgService.updateDepartment(req.params.id, req.body);
+  res.status(200).json({ status: 'success', data: department });
 });
 
 const deleteDepartment = catchAsync(async (req, res) => {
-  const result = await orgService.deleteNode(
-    req.params.id, NODE_TYPES.DEPARTMENT, req.user.user_id
-  );
+  const result = await orgService.deleteDepartment(req.params.id, req.user.user_id);
   res.status(200).json({ status: 'success', data: result });
 });
 

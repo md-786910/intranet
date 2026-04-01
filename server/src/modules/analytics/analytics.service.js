@@ -18,11 +18,9 @@ const analyticsService = {
 
     const [orgStats] = await sequelize.query(`
       SELECT
-        COUNT(*) FILTER (WHERE node_type = 'OFFICE_LOCATION') AS office_locations,
-        COUNT(*) FILTER (WHERE node_type = 'VERTICAL') AS verticals,
-        COUNT(*) FILTER (WHERE node_type = 'DEPARTMENT') AS departments
-      FROM org_unit
-      WHERE deleted_at IS NULL
+        (SELECT COUNT(*) FROM office_location WHERE deleted_at IS NULL) AS office_locations,
+        (SELECT COUNT(*) FROM vertical WHERE deleted_at IS NULL) AS verticals,
+        (SELECT COUNT(*) FROM department WHERE deleted_at IS NULL) AS departments
     `, { type: QueryTypes.SELECT });
 
     // News stats - table may not exist yet, handle gracefully

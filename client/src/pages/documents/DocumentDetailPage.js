@@ -8,7 +8,7 @@ import { documentService } from '../../services/documentService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate, formatFileSize } from '../../utils/formatters';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 export default function DocumentDetailPage() {
   const { id } = useParams();
@@ -20,7 +20,7 @@ export default function DocumentDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const fetchDoc = () => {
-    documentService.getDocument(id, { org_unit_id: DEFAULT_ORG_UNIT_ID })
+    documentService.getDocument(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
       .then((res) => setDoc(res.data?.data))
       .catch(() => addToast('Failed to load document', 'error'))
       .finally(() => setLoading(false));
@@ -31,7 +31,7 @@ export default function DocumentDetailPage() {
   const handlePublish = async () => {
     setActionLoading(true);
     try {
-      await documentService.publishDocument(id, { org_unit_id: DEFAULT_ORG_UNIT_ID });
+      await documentService.publishDocument(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID });
       addToast('Document published', 'success');
       fetchDoc();
     } catch (err) {

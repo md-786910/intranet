@@ -41,7 +41,7 @@ const newsService = {
   },
 
   async getById(id) {
-    const { NewsItem, UserAccount, ContentAudienceRule, OrgUnit } = require('../../database/models');
+    const { NewsItem, UserAccount, ContentAudienceRule } = require('../../database/models');
 
     const article = await NewsItem.findByPk(id, {
       include: [
@@ -55,11 +55,6 @@ const newsService = {
           as: 'audienceRules',
           where: { entity_type: 'NEWS' },
           required: false,
-          include: [{
-            model: OrgUnit,
-            as: 'targetOrgUnit',
-            attributes: ['org_unit_id', 'name', 'node_type', 'path'],
-          }],
         },
       ],
     });
@@ -83,7 +78,8 @@ const newsService = {
       cover_image_id: data.cover_image_id || null,
       status: 'DRAFT',
       author_id: authorId,
-      owning_org_unit_id: data.owning_org_unit_id,
+      owning_scope_type: data.owning_scope_type || 'ORGANISATION',
+      owning_scope_id: data.owning_scope_id,
     });
 
     await auditService.log({
@@ -187,10 +183,11 @@ const newsService = {
         transaction,
       });
 
-      const rules = orgUnitIds.map((ouId) => ({
+      const rules = orgUnitIds.map((target) => ({
         entity_type: 'NEWS',
         entity_id: id,
-        target_org_unit_id: ouId,
+        target_scope_type: target.scope_type || 'ORGANISATION',
+        target_scope_id: target.scope_id,
       }));
 
       await ContentAudienceRule.bulkCreate(rules, { transaction });

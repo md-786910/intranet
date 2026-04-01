@@ -7,7 +7,7 @@ const tokenService = require("../../services/token.service");
 const auditService = require("../../services/audit.service");
 const permissionService = require("../../services/permission.service");
 const logger = require("../../config/logger");
-const { DEFAULT_ORG_UNIT_ID } = require("../../utils/constants");
+const { DEFAULT_ORGANISATION_ID } = require("../../utils/constants");
 
 const LOCK_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_FAILED_ATTEMPTS = 5;
@@ -108,7 +108,7 @@ const authService = {
     // Get user permissions at root org
     const permissions = await permissionService.getEffectivePermissions(
       user.user_id,
-      DEFAULT_ORG_UNIT_ID,
+      'ORGANISATION', DEFAULT_ORGANISATION_ID,
     );
 
     await auditService.log({
@@ -280,7 +280,7 @@ const authService = {
 
     const permissions = await permissionService.getEffectivePermissions(
       userId,
-      DEFAULT_ORG_UNIT_ID,
+      'ORGANISATION', DEFAULT_ORGANISATION_ID,
     );
 
     return {

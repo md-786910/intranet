@@ -51,12 +51,13 @@ module.exports = {
         onUpdate: 'CASCADE',
         onDelete: 'RESTRICT',
       },
-      owning_org_unit_id: {
+      owning_scope_type: {
+        type: Sequelize.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
+        allowNull: false,
+      },
+      owning_scope_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        references: { model: 'org_unit', key: 'org_unit_id' },
-        onUpdate: 'CASCADE',
-        onDelete: 'RESTRICT',
       },
       published_at: {
         type: Sequelize.DATE,
@@ -88,8 +89,8 @@ module.exports = {
     await queryInterface.addIndex('news_item', ['author_id'], {
       name: 'news_item_author_idx',
     });
-    await queryInterface.addIndex('news_item', ['owning_org_unit_id'], {
-      name: 'news_item_org_unit_idx',
+    await queryInterface.addIndex('news_item', ['owning_scope_type', 'owning_scope_id'], {
+      name: 'news_item_scope_idx',
     });
     await queryInterface.addIndex('news_item', ['slug'], {
       name: 'news_item_slug_idx',

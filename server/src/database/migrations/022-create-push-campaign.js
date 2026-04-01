@@ -32,12 +32,13 @@ module.exports = {
         onUpdate: 'CASCADE',
         onDelete: 'RESTRICT',
       },
-      owning_org_unit_id: {
+      owning_scope_type: {
+        type: Sequelize.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
+        allowNull: false,
+      },
+      owning_scope_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        references: { model: 'org_unit', key: 'org_unit_id' },
-        onUpdate: 'CASCADE',
-        onDelete: 'RESTRICT',
       },
       scheduled_at: {
         type: Sequelize.DATE,

@@ -2,23 +2,18 @@
 
 const bcrypt = require('bcryptjs');
 
-const TENANT_ID = 1;
-const ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 module.exports = {
   async up(queryInterface, Sequelize) {
     const now = new Date();
     const rounds = parseInt(process.env.BCRYPT_ROUNDS, 10) || 12;
 
-    // 1. Create the root organisation org_unit
-    await queryInterface.bulkInsert('org_unit', [{
-      org_unit_id: ORG_UNIT_ID,
-      parent_org_unit_id: null,
-      tenant_id: TENANT_ID,
-      node_type: 'ORGANISATION',
+    // 1. Create the root organisation
+    await queryInterface.bulkInsert('organisation', [{
+      id: DEFAULT_ORGANISATION_ID,
       name: 'Brighthouse',
       code: 'brighthouse',
-      path: 'brighthouse',
       status: 'ACTIVE',
       sort_order: 0,
       deleted_at: null,
@@ -26,14 +21,7 @@ module.exports = {
       updated_at: now,
     }]);
 
-    // 2. Create closure table self-reference for root org
-    await queryInterface.bulkInsert('org_unit_closure', [{
-      ancestor_org_unit_id: ORG_UNIT_ID,
-      descendant_org_unit_id: ORG_UNIT_ID,
-      depth: 0,
-    }]);
-
-    // 3. Create owner user account
+    // 2. Create owner user account
     const email = process.env.OWNER_EMAIL || 'owner@brighthouse.local';
     const password = process.env.OWNER_PASSWORD || 'ChangeMe123!';
     const passwordHash = await bcrypt.hash(password, rounds);
@@ -58,7 +46,7 @@ module.exports = {
     );
     const userId = user.user_id;
 
-    // 4. Create person profile for owner
+    // 3. Create person profile for owner
     await queryInterface.bulkInsert('person_profile', [{
       user_id: userId,
       job_title: 'Platform Owner',
@@ -66,9 +54,9 @@ module.exports = {
       updated_at: now,
     }]);
 
-    // 5. Assign Owner role at root org_unit
+    // 4. Assign Owner role at organisation scope
     const [ownerRole] = await queryInterface.sequelize.query(
-      `SELECT role_id FROM role WHERE code = 'OWNER' AND tenant_id = ${TENANT_ID} LIMIT 1`,
+      `SELECT role_id FROM role WHERE code = 'OWNER' AND tenant_id = 1 LIMIT 1`,
       { type: Sequelize.QueryTypes.SELECT }
     );
 
@@ -76,7 +64,8 @@ module.exports = {
       await queryInterface.bulkInsert('user_role_assignment', [{
         user_id: userId,
         role_id: ownerRole.role_id,
-        org_unit_id: ORG_UNIT_ID,
+        scope_type: 'ORGANISATION',
+        scope_id: DEFAULT_ORGANISATION_ID,
         assigned_by: null,
         starts_at: null,
         ends_at: null,
@@ -97,7 +86,6 @@ module.exports = {
     await queryInterface.bulkDelete('user_role_assignment', null, {});
     await queryInterface.bulkDelete('person_profile', null, {});
     await queryInterface.bulkDelete('user_account', null, {});
-    await queryInterface.bulkDelete('org_unit_closure', null, {});
-    await queryInterface.bulkDelete('org_unit', null, {});
+    await queryInterface.bulkDelete('organisation', null, {});
   },
 };

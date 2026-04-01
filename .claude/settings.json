@@ -18,7 +18,8 @@
       "Bash(docker exec:*)",
       "Bash(\"C:\\\\Program Files\\\\Docker\\\\Docker\\\\resources\\\\bin\\\\docker.exe\" exec bh_redis redis-cli -a 786ddd0e9b5764a271ca1eff656f53be2cce69d04c360763 --no-auth-warning FLUSHDB)",
       "Bash(docker.exe exec:*)",
-      "Bash(powershell.exe -Command \"docker exec bh_redis redis-cli -a 786ddd0e9b5764a271ca1eff656f53be2cce69d04c360763 --no-auth-warning FLUSHDB\")"
+      "Bash(powershell.exe -Command \"docker exec bh_redis redis-cli -a 786ddd0e9b5764a271ca1eff656f53be2cce69d04c360763 --no-auth-warning FLUSHDB\")",
+      "Bash(npx sequelize-cli:*)"
     ]
   }
 }

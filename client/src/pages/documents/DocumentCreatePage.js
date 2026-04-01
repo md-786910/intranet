@@ -8,7 +8,7 @@ import Select from '../../components/common/Select';
 import { documentService } from '../../services/documentService';
 import { useToast } from '../../hooks/useToast';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 export default function DocumentCreatePage() {
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ export default function DocumentCreatePage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    documentService.getCategories({ org_unit_id: DEFAULT_ORG_UNIT_ID })
+    documentService.getCategories({ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
       .then((res) => setCategories(res.data?.data || []))
       .catch(() => {});
   }, []);
@@ -37,7 +37,7 @@ export default function DocumentCreatePage() {
       await documentService.createDocument({
         ...form,
         category_id: form.category_id || undefined,
-        owning_org_unit_id: DEFAULT_ORG_UNIT_ID,
+        owning_scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID,
       });
       addToast('Document created', 'success');
       navigate('/documents');

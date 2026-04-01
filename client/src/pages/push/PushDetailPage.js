@@ -8,7 +8,7 @@ import { pushService } from '../../services/pushService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 export default function PushDetailPage() {
   const { id } = useParams();
@@ -21,7 +21,7 @@ export default function PushDetailPage() {
   const [cancelOpen, setCancelOpen] = useState(false);
 
   const fetchCampaign = () => {
-    pushService.getCampaign(id, { org_unit_id: DEFAULT_ORG_UNIT_ID })
+    pushService.getCampaign(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
       .then((res) => setCampaign(res.data?.data))
       .catch(() => addToast('Failed to load campaign', 'error'))
       .finally(() => setLoading(false));
@@ -32,7 +32,7 @@ export default function PushDetailPage() {
   const handleSend = async () => {
     setActionLoading(true);
     try {
-      await pushService.sendCampaign(id, { org_unit_id: DEFAULT_ORG_UNIT_ID });
+      await pushService.sendCampaign(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID });
       addToast('Campaign sent', 'success');
       fetchCampaign();
     } catch (err) {
@@ -46,7 +46,7 @@ export default function PushDetailPage() {
   const handleCancel = async () => {
     setActionLoading(true);
     try {
-      await pushService.cancelCampaign(id, { org_unit_id: DEFAULT_ORG_UNIT_ID });
+      await pushService.cancelCampaign(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID });
       addToast('Campaign cancelled', 'success');
       fetchCampaign();
     } catch (err) {
@@ -113,7 +113,7 @@ export default function PushDetailPage() {
             <div className="flex flex-wrap gap-2">
               {campaign.audienceRules.map((r) => (
                 <span key={r.audience_rule_id} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">
-                  {r.targetOrgUnit?.name}
+                  {r.target_scope_type}: {r.target_scope_id}
                 </span>
               ))}
             </div>

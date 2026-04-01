@@ -7,7 +7,7 @@ import Textarea from '../../components/common/Textarea';
 import { newsService } from '../../services/newsService';
 import { useToast } from '../../hooks/useToast';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 export default function NewsEditPage() {
   const { id } = useParams();
@@ -18,7 +18,7 @@ export default function NewsEditPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    newsService.getArticle(id, { org_unit_id: DEFAULT_ORG_UNIT_ID })
+    newsService.getArticle(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
       .then((res) => {
         const a = res.data?.data;
         setForm({ title: a.title, summary: a.summary || '', body: a.body || '', cover_image_url: a.cover_image_url || '' });
@@ -33,7 +33,7 @@ export default function NewsEditPage() {
     if (!form.title.trim()) { addToast('Title is required', 'error'); return; }
     setSaving(true);
     try {
-      await newsService.updateArticle(id, { ...form, org_unit_id: DEFAULT_ORG_UNIT_ID });
+      await newsService.updateArticle(id, { ...form, scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID });
       addToast('Article updated', 'success');
       navigate(`/news/${id}`);
     } catch (err) {

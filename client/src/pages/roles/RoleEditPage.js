@@ -12,7 +12,7 @@ import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 export default function RoleEditPage() {
   const { id } = useParams();
@@ -30,8 +30,8 @@ export default function RoleEditPage() {
 
   useEffect(() => {
     Promise.all([
-      roleService.getRole(id, { org_unit_id: DEFAULT_ORG_UNIT_ID }),
-      roleService.getModules({ org_unit_id: DEFAULT_ORG_UNIT_ID }),
+      roleService.getRole(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID }),
+      roleService.getModules({ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID }),
     ]).then(([roleRes, modulesRes]) => {
       const r = roleRes.data?.data;
       setRole(r);
@@ -60,7 +60,7 @@ export default function RoleEditPage() {
       await roleService.updateRole(id, {
         name: form.name,
         description: form.description,
-        org_unit_id: DEFAULT_ORG_UNIT_ID,
+        scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID,
         permissions,
       });
       addToast('Role updated successfully', 'success');

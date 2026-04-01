@@ -16,12 +16,13 @@ module.exports = {
         type: Sequelize.INTEGER,
         allowNull: false,
       },
-      target_org_unit_id: {
+      target_scope_type: {
+        type: Sequelize.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
+        allowNull: false,
+      },
+      target_scope_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        references: { model: 'org_unit', key: 'org_unit_id' },
-        onUpdate: 'CASCADE',
-        onDelete: 'CASCADE',
       },
       created_at: {
         type: Sequelize.DATE,
@@ -38,10 +39,10 @@ module.exports = {
     await queryInterface.addIndex('content_audience_rule', ['entity_type', 'entity_id'], {
       name: 'content_audience_rule_entity_idx',
     });
-    await queryInterface.addIndex('content_audience_rule', ['target_org_unit_id'], {
+    await queryInterface.addIndex('content_audience_rule', ['target_scope_type', 'target_scope_id'], {
       name: 'content_audience_rule_target_idx',
     });
-    await queryInterface.addIndex('content_audience_rule', ['entity_type', 'entity_id', 'target_org_unit_id'], {
+    await queryInterface.addIndex('content_audience_rule', ['entity_type', 'entity_id', 'target_scope_type', 'target_scope_id'], {
       unique: true,
       name: 'content_audience_rule_unique_idx',
     });

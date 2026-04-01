@@ -41,7 +41,7 @@ const documentsService = {
   },
 
   async getById(id) {
-    const { DocumentItem, UserAccount, Category, DocumentVersion, ContentAudienceRule, OrgUnit } = require('../../database/models');
+    const { DocumentItem, UserAccount, Category, DocumentVersion, ContentAudienceRule } = require('../../database/models');
 
     const doc = await DocumentItem.findByPk(id, {
       include: [
@@ -58,7 +58,6 @@ const documentsService = {
           as: 'audienceRules',
           where: { entity_type: 'DOCUMENT' },
           required: false,
-          include: [{ model: OrgUnit, as: 'targetOrgUnit', attributes: ['org_unit_id', 'name', 'node_type'] }],
         },
       ],
     });
@@ -82,7 +81,8 @@ const documentsService = {
         category_id: data.category_id || null,
         status: 'DRAFT',
         author_id: authorId,
-        owning_org_unit_id: data.owning_org_unit_id,
+        owning_scope_type: data.owning_scope_type || 'ORGANISATION',
+        owning_scope_id: data.owning_scope_id,
       }, { transaction });
 
       // Create initial version

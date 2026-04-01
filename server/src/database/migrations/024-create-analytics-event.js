@@ -27,12 +27,13 @@ module.exports = {
         type: Sequelize.INTEGER,
         allowNull: true,
       },
-      org_unit_id: {
+      scope_type: {
+        type: Sequelize.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
+        allowNull: true,
+      },
+      scope_id: {
         type: Sequelize.INTEGER,
         allowNull: true,
-        references: { model: 'org_unit', key: 'org_unit_id' },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL',
       },
       metadata: {
         type: Sequelize.JSONB,
@@ -54,8 +55,8 @@ module.exports = {
     await queryInterface.addIndex('analytics_event', ['target_type', 'target_id'], {
       name: 'analytics_event_target_idx',
     });
-    await queryInterface.addIndex('analytics_event', ['org_unit_id'], {
-      name: 'analytics_event_org_unit_idx',
+    await queryInterface.addIndex('analytics_event', ['scope_type', 'scope_id'], {
+      name: 'analytics_event_scope_idx',
     });
     await queryInterface.addIndex('analytics_event', ['created_at'], {
       name: 'analytics_event_created_idx',

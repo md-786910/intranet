@@ -10,7 +10,7 @@ import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { formatDate } from '../../utils/formatters';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 export default function PushListPage() {
   const navigate = useNavigate();
@@ -22,7 +22,7 @@ export default function PushListPage() {
   const fetchCampaigns = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await pushService.getCampaigns({ page, limit, org_unit_id: DEFAULT_ORG_UNIT_ID });
+      const res = await pushService.getCampaigns({ page, limit, scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID });
       setData(res.data?.data || { campaigns: [], pagination: {} });
     } catch (err) {
       addToast('Failed to load campaigns', 'error');

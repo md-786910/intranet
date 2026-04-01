@@ -8,7 +8,7 @@ import { newsService } from '../../services/newsService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 export default function NewsDetailPage() {
   const { id } = useParams();
@@ -20,7 +20,7 @@ export default function NewsDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const fetchArticle = () => {
-    newsService.getArticle(id, { org_unit_id: DEFAULT_ORG_UNIT_ID })
+    newsService.getArticle(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
       .then((res) => setArticle(res.data?.data))
       .catch(() => addToast('Failed to load article', 'error'))
       .finally(() => setLoading(false));
@@ -31,7 +31,7 @@ export default function NewsDetailPage() {
   const handlePublish = async () => {
     setActionLoading(true);
     try {
-      await newsService.publishArticle(id, { org_unit_id: DEFAULT_ORG_UNIT_ID });
+      await newsService.publishArticle(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID });
       addToast('Article published', 'success');
       fetchArticle();
     } catch (err) {
@@ -44,7 +44,7 @@ export default function NewsDetailPage() {
   const handleArchive = async () => {
     setActionLoading(true);
     try {
-      await newsService.archiveArticle(id, { org_unit_id: DEFAULT_ORG_UNIT_ID });
+      await newsService.archiveArticle(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID });
       addToast('Article archived', 'success');
       fetchArticle();
     } catch (err) {
@@ -113,7 +113,7 @@ export default function NewsDetailPage() {
             <div className="flex flex-wrap gap-2">
               {article.audienceRules.map((r) => (
                 <span key={r.audience_rule_id} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">
-                  {r.targetOrgUnit?.name}
+                  {r.target_scope_type}: {r.target_scope_id}
                 </span>
               ))}
             </div>

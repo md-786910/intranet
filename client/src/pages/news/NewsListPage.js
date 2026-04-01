@@ -12,7 +12,7 @@ import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import { formatDate, truncate } from '../../utils/formatters';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 const STATUS_TABS = ['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED'];
 
 export default function NewsListPage() {
@@ -28,7 +28,7 @@ export default function NewsListPage() {
   const fetchArticles = useCallback(async () => {
     try {
       setLoading(true);
-      const params = { page, limit, org_unit_id: DEFAULT_ORG_UNIT_ID };
+      const params = { page, limit, scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID };
       if (debouncedSearch) params.search = debouncedSearch;
       if (statusTab !== 'ALL') params.status = statusTab;
       const res = await newsService.getArticles(params);

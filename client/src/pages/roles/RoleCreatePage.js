@@ -10,7 +10,7 @@ import { roleService } from '../../services/roleService';
 import { useToast } from '../../hooks/useToast';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 function generateCode(name) {
   return name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -34,7 +34,7 @@ export default function RoleCreatePage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    roleService.getModules({ org_unit_id: DEFAULT_ORG_UNIT_ID })
+    roleService.getModules({ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
       .then((res) => {
         const mods = res.data?.data || [];
         setModules(mods);
@@ -83,7 +83,7 @@ export default function RoleCreatePage() {
         name: form.name,
         code: form.code,
         description: form.description,
-        org_unit_id: DEFAULT_ORG_UNIT_ID,
+        scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID,
         permissions,
       });
       addToast('Role created successfully', 'success');

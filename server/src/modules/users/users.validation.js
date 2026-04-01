@@ -1,6 +1,7 @@
 const Joi = require('joi');
 
 const idPattern = Joi.number().integer().positive();
+const scopeTypePattern = Joi.string().valid('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT');
 
 const passwordPattern = Joi.string()
   .min(8)
@@ -18,7 +19,8 @@ const listUsersSchema = {
     search: Joi.string().trim().max(255).optional().allow(''),
     status: Joi.string().valid('ACTIVE', 'INACTIVE', 'LOCKED').optional(),
     department_id: idPattern.optional(),
-    org_unit_id: idPattern.required(),
+    scope_type: scopeTypePattern.optional(),
+    scope_id: idPattern.optional(),
   }),
 };
 
@@ -35,7 +37,8 @@ const createUserSchema = {
     first_name: Joi.string().trim().min(1).max(100).required(),
     last_name: Joi.string().trim().min(1).max(100).required(),
     phone: Joi.string().trim().max(20).optional().allow('', null),
-    org_unit_id: idPattern.required(),
+    scope_type: scopeTypePattern.optional(),
+    scope_id: idPattern.optional(),
     profile: Joi.object({
       job_title: Joi.string().trim().max(255).optional().allow('', null),
       bio: Joi.string().trim().max(2000).optional().allow('', null),
@@ -45,8 +48,16 @@ const createUserSchema = {
     }).optional(),
     initial_role: Joi.object({
       role_id: idPattern.required(),
-      org_unit_id: idPattern.required(),
+      scope_type: scopeTypePattern.required(),
+      scope_id: idPattern.required(),
     }).optional(),
+    initial_roles: Joi.array().items(
+      Joi.object({
+        role_id: idPattern.required(),
+        scope_type: scopeTypePattern.required(),
+        scope_id: idPattern.required(),
+      })
+    ).optional(),
   }),
 };
 
@@ -59,7 +70,8 @@ const updateUserSchema = {
     last_name: Joi.string().trim().min(1).max(100).optional(),
     phone: Joi.string().trim().max(20).optional().allow('', null),
     status: Joi.string().valid('ACTIVE', 'INACTIVE', 'LOCKED').optional(),
-    org_unit_id: idPattern.required(),
+    scope_type: scopeTypePattern.optional(),
+    scope_id: idPattern.optional(),
     profile: Joi.object({
       job_title: Joi.string().trim().max(255).optional().allow('', null),
       bio: Joi.string().trim().max(2000).optional().allow('', null),
@@ -76,7 +88,8 @@ const assignRoleSchema = {
   }),
   body: Joi.object({
     role_id: idPattern.required(),
-    org_unit_id: idPattern.required(),
+    scope_type: scopeTypePattern.required(),
+    scope_id: idPattern.required(),
     starts_at: Joi.date().iso().optional().allow(null),
     ends_at: Joi.date().iso().optional().allow(null),
   }),
@@ -89,7 +102,6 @@ const assignDepartmentSchema = {
   body: Joi.object({
     department_id: idPattern.required(),
     is_primary: Joi.boolean().default(false),
-    org_unit_id: idPattern.required(),
   }),
 };
 

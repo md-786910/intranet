@@ -7,13 +7,15 @@ const listRolesSchema = {
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(20),
     search: Joi.string().trim().max(255).optional().allow(''),
-    org_unit_id: idPattern.required(),
+    scope_type: Joi.string().valid('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT').optional(),
+    scope_id: idPattern.optional(),
   }),
 };
 
 const getModulesSchema = {
   query: Joi.object({
-    org_unit_id: idPattern.required(),
+    scope_type: Joi.string().valid('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT').optional(),
+    scope_id: idPattern.optional(),
   }),
 };
 
@@ -29,7 +31,8 @@ const createRoleSchema = {
     code: Joi.string().trim().max(64).uppercase().pattern(/^[A-Z][A-Z0-9_]*$/).required()
       .messages({ 'string.pattern.base': 'Code must be uppercase alphanumeric with underscores' }),
     description: Joi.string().trim().max(1000).optional().allow('', null),
-    org_unit_id: idPattern.required(),
+    scope_type: Joi.string().valid('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT').optional(),
+    scope_id: idPattern.optional(),
     permissions: Joi.array().items(
       Joi.object({
         module_action_id: idPattern.required(),
@@ -46,7 +49,8 @@ const updateRoleSchema = {
   body: Joi.object({
     name: Joi.string().trim().min(1).max(255).optional(),
     description: Joi.string().trim().max(1000).optional().allow('', null),
-    org_unit_id: idPattern.required(),
+    scope_type: Joi.string().valid('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT').optional(),
+    scope_id: idPattern.optional(),
     permissions: Joi.array().items(
       Joi.object({
         module_action_id: idPattern.required(),
@@ -63,7 +67,8 @@ const cloneRoleSchema = {
   body: Joi.object({
     name: Joi.string().trim().min(1).max(255).required(),
     code: Joi.string().trim().max(64).uppercase().pattern(/^[A-Z][A-Z0-9_]*$/).required(),
-    org_unit_id: idPattern.required(),
+    scope_type: Joi.string().valid('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT').optional(),
+    scope_id: idPattern.optional(),
   }),
 };
 

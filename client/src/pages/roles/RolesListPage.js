@@ -12,7 +12,7 @@ import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 function groupPermissionsByModule(permissions) {
   if (!permissions?.length) return [];
@@ -102,7 +102,7 @@ export default function RolesListPage() {
     try {
       setLoading(true);
       const res = await roleService.getRoles({
-        page, limit: 100, search: debouncedSearch, org_unit_id: DEFAULT_ORG_UNIT_ID,
+        page, limit: 100, search: debouncedSearch, scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID,
       });
       const data = res.data?.data || { roles: [], pagination: {} };
       setAllRoles(data.roles || []);

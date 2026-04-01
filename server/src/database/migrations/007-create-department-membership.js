@@ -18,7 +18,7 @@ module.exports = {
       department_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        references: { model: 'org_unit', key: 'org_unit_id' },
+        references: { model: 'department', key: 'id' },
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE',
       },

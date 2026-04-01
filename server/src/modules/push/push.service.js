@@ -30,7 +30,7 @@ const pushService = {
   },
 
   async getById(id) {
-    const { PushCampaign, UserAccount, ContentAudienceRule, OrgUnit } = require('../../database/models');
+    const { PushCampaign, UserAccount, ContentAudienceRule } = require('../../database/models');
 
     const campaign = await PushCampaign.findByPk(id, {
       include: [
@@ -44,11 +44,6 @@ const pushService = {
           as: 'audienceRules',
           where: { entity_type: 'PUSH' },
           required: false,
-          include: [{
-            model: OrgUnit,
-            as: 'targetOrgUnit',
-            attributes: ['org_unit_id', 'name', 'node_type', 'path'],
-          }],
         },
       ],
     });
@@ -68,15 +63,17 @@ const pushService = {
         body: data.body,
         status: data.scheduled_at ? 'SCHEDULED' : 'DRAFT',
         created_by: userId,
-        owning_org_unit_id: data.owning_org_unit_id,
+        owning_scope_type: data.owning_scope_type || 'ORGANISATION',
+        owning_scope_id: data.owning_scope_id,
         scheduled_at: data.scheduled_at || null,
       }, { transaction });
 
       // Create audience rules
-      const rules = data.audience_org_unit_ids.map((ouId) => ({
+      const rules = (data.audience_targets || []).map((target) => ({
         entity_type: 'PUSH',
         entity_id: campaign.push_campaign_id,
-        target_org_unit_id: ouId,
+        target_scope_type: target.scope_type || 'ORGANISATION',
+        target_scope_id: target.scope_id,
       }));
       await ContentAudienceRule.bulkCreate(rules, { transaction });
 

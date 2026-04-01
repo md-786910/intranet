@@ -38,7 +38,7 @@ const archive = catchAsync(async (req, res) => {
 
 const setAudience = catchAsync(async (req, res) => {
   const article = await newsService.setAudience(
-    req.params.id, req.body.org_unit_ids, req.user.user_id
+    req.params.id, req.body.targets, req.user.user_id
   );
   res.status(200).json({ status: 'success', data: article });
 });

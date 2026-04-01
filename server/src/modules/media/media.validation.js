@@ -4,7 +4,8 @@ const idPattern = Joi.number().integer().positive();
 
 const uploadSchema = {
   body: Joi.object({
-    org_unit_id: idPattern.optional(),
+    scope_type: Joi.string().valid('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT').optional(),
+    scope_id: idPattern.optional(),
     alt_text: Joi.string().trim().max(512).optional().allow('', null),
   }),
 };

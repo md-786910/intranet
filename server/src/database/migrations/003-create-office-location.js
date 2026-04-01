@@ -2,26 +2,18 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('org_unit', {
-      org_unit_id: {
+    await queryInterface.createTable('office_location', {
+      id: {
         type: Sequelize.INTEGER,
         autoIncrement: true,
         primaryKey: true,
       },
-      parent_org_unit_id: {
+      organisation_id: {
         type: Sequelize.INTEGER,
-        allowNull: true,
-        references: { model: 'org_unit', key: 'org_unit_id' },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL',
-      },
-      tenant_id: {
-        type: Sequelize.INTEGER,
-        allowNull: true,
-      },
-      node_type: {
-        type: Sequelize.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
         allowNull: false,
+        references: { model: 'organisation', key: 'id' },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
       },
       name: {
         type: Sequelize.STRING(255),
@@ -30,10 +22,6 @@ module.exports = {
       code: {
         type: Sequelize.STRING(64),
         allowNull: true,
-      },
-      path: {
-        type: Sequelize.TEXT,
-        allowNull: false,
       },
       status: {
         type: Sequelize.ENUM('ACTIVE', 'INACTIVE', 'ARCHIVED'),
@@ -76,24 +64,12 @@ module.exports = {
       },
     });
 
-    await queryInterface.addIndex('org_unit', ['parent_org_unit_id'], {
-      name: 'org_unit_parent_idx',
-    });
-    await queryInterface.addIndex('org_unit', ['node_type', 'status'], {
-      name: 'org_unit_type_status_idx',
-    });
-    await queryInterface.addIndex('org_unit', ['tenant_id'], {
-      name: 'org_unit_tenant_idx',
-    });
-    await queryInterface.addIndex('org_unit', ['path'], {
-      name: 'org_unit_path_idx',
-    });
-    await queryInterface.addIndex('org_unit', ['deleted_at'], {
-      name: 'org_unit_deleted_idx',
+    await queryInterface.addIndex('office_location', ['organisation_id'], {
+      name: 'office_location_org_idx',
     });
   },
 
   async down(queryInterface) {
-    await queryInterface.dropTable('org_unit');
+    await queryInterface.dropTable('office_location');
   },
 };

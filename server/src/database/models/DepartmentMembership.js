@@ -30,7 +30,7 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'user_id',
       as: 'user',
     });
-    DepartmentMembership.belongsTo(models.OrgUnit, {
+    DepartmentMembership.belongsTo(models.Department, {
       foreignKey: 'department_id',
       as: 'department',
     });

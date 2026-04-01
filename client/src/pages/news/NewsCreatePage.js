@@ -8,7 +8,7 @@ import { newsService } from '../../services/newsService';
 import { useToast } from '../../hooks/useToast';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 export default function NewsCreatePage() {
   const navigate = useNavigate();
@@ -28,7 +28,7 @@ export default function NewsCreatePage() {
     try {
       await newsService.createArticle({
         ...form,
-        owning_org_unit_id: DEFAULT_ORG_UNIT_ID,
+        owning_scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID,
       });
       addToast('Article created as draft', 'success');
       navigate('/news');

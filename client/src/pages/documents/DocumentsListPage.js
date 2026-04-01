@@ -13,7 +13,7 @@ import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import { formatDate } from '../../utils/formatters';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 export default function DocumentsListPage() {
   const navigate = useNavigate();
@@ -28,7 +28,7 @@ export default function DocumentsListPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    documentService.getCategories({ org_unit_id: DEFAULT_ORG_UNIT_ID })
+    documentService.getCategories({ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
       .then((res) => setCategories(res.data?.data || []))
       .catch(() => {});
   }, []);
@@ -36,7 +36,7 @@ export default function DocumentsListPage() {
   const fetchDocs = useCallback(async () => {
     try {
       setLoading(true);
-      const params = { page, limit, org_unit_id: DEFAULT_ORG_UNIT_ID };
+      const params = { page, limit, scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID };
       if (debouncedSearch) params.search = debouncedSearch;
       if (statusFilter) params.status = statusFilter;
       if (categoryFilter) params.category_id = categoryFilter;

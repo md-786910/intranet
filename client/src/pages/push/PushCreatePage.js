@@ -7,7 +7,7 @@ import Textarea from '../../components/common/Textarea';
 import { pushService } from '../../services/pushService';
 import { useToast } from '../../hooks/useToast';
 
-const DEFAULT_ORG_UNIT_ID = 1;
+const DEFAULT_ORGANISATION_ID = 1;
 
 export default function PushCreatePage() {
   const navigate = useNavigate();
@@ -27,8 +27,8 @@ export default function PushCreatePage() {
       await pushService.createCampaign({
         title: form.title,
         body: form.body,
-        owning_org_unit_id: DEFAULT_ORG_UNIT_ID,
-        audience_org_unit_ids: [DEFAULT_ORG_UNIT_ID],
+        owning_scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID,
+        audience_targets: [{ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID }],
         scheduled_at: form.scheduled_at || null,
       });
       addToast('Campaign created', 'success');
