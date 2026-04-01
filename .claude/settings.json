@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(docker --version)",
+      "WebSearch",
+      "Bash(node -e \":*)",
+      "Bash(wsl docker:*)",
+      "Bash(find . -maxdepth 2 -type f -name *.yml -o -name *.yaml -o -name .env* -o -name Dockerfile*)",
+      "Bash(for dir:*)",
+      "Bash(do echo:*)",
+      "Read(//d/intranet/server/src/modules/**)",
+      "Bash(done)",
+      "Bash(npx react-scripts:*)",
+      "Bash(npx craco:*)",
+      "Bash(npm start:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(docker exec:*)",
+      "Bash(\"C:\\\\Program Files\\\\Docker\\\\Docker\\\\resources\\\\bin\\\\docker.exe\" exec bh_redis redis-cli -a 786ddd0e9b5764a271ca1eff656f53be2cce69d04c360763 --no-auth-warning FLUSHDB)",
+      "Bash(docker.exe exec:*)",
+      "Bash(powershell.exe -Command \"docker exec bh_redis redis-cli -a 786ddd0e9b5764a271ca1eff656f53be2cce69d04c360763 --no-auth-warning FLUSHDB\")"
+    ]
+  }
+}

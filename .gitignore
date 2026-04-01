@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+build/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker volumes (if local)
+pg_data/
+redis_data/
+pgadmin_data/
+redis_insight_data/
+
+# Uploads
+uploads/
+
+# Sequelize (prevent accidental config.json)
+server/config/config.json

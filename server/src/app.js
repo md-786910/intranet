@@ -1,0 +1,90 @@
+require('express-async-errors');
+const express = require('express');
+const cors = require('cors');
+const compression = require('compression');
+const morgan = require('morgan');
+
+// Config
+const corsOptions = require('./config/cors');
+const helmetConfig = require('./config/helmet');
+const logger = require('./config/logger');
+
+// Middleware
+const requestId = require('./middleware/requestId');
+const { globalLimiter } = require('./middleware/rateLimiter');
+const sanitize = require('./middleware/sanitize');
+const errorHandler = require('./middleware/errorHandler');
+const ApiError = require('./utils/ApiError');
+
+// Route imports
+const authRoutes = require('./modules/auth/auth.routes');
+const orgRoutes = require('./modules/org/org.routes');
+const rolesRoutes = require('./modules/roles/roles.routes');
+const usersRoutes = require('./modules/users/users.routes');
+const newsRoutes = require('./modules/news/news.routes');
+const documentsRoutes = require('./modules/documents/documents.routes');
+const pushRoutes = require('./modules/push/push.routes');
+const mediaRoutes = require('./modules/media/media.routes');
+const analyticsRoutes = require('./modules/analytics/analytics.routes');
+
+const app = express();
+
+// ── Security middleware (order matters) ──
+
+// 1. Request ID for tracing
+app.use(requestId);
+
+// 2. Security headers (helmet)
+app.use(helmetConfig);
+
+// 3. CORS
+app.use(cors(corsOptions));
+
+// 4. Compression
+app.use(compression());
+
+// 5. Body parsing with size limits
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// 6. Input sanitization (XSS prevention)
+app.use(sanitize);
+
+// 7. Global rate limiting (Redis-backed)
+app.use(globalLimiter);
+
+// 8. HTTP request logging
+app.use(morgan('combined', { stream: logger.stream }));
+
+// ── Health check (no auth needed) ──
+app.get('/api/v1/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// ── API routes ──
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/org', orgRoutes);
+app.use('/api/v1/roles', rolesRoutes);
+app.use('/api/v1/users', usersRoutes);
+app.use('/api/v1/news', newsRoutes);
+app.use('/api/v1/documents', documentsRoutes);
+app.use('/api/v1/push', pushRoutes);
+app.use('/api/v1/media', mediaRoutes);
+app.use('/api/v1/analytics', analyticsRoutes);
+
+// Serve uploaded files
+app.use('/uploads', require('express').static(require('path').join(__dirname, '..', 'uploads')));
+
+// ── 404 handler ──
+app.all('*', (req, res, next) => {
+  next(ApiError.notFound(`Cannot ${req.method} ${req.originalUrl}`));
+});
+
+// ── Global error handler (MUST be last) ──
+app.use(errorHandler);
+
+module.exports = app;

@@ -1,0 +1,46 @@
+services:
+  # ---------- pgAdmin ----------
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: bh_pgadmin
+    restart: unless-stopped
+    profiles:
+      - tools
+    depends_on:
+      - postgres
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@brighthouse.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "8001:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - bh_network
+
+  # ---------- Redis Insight ----------
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: bh_redis_insight
+    restart: unless-stopped
+    profiles:
+      - tools
+    depends_on:
+      - redis
+    ports:
+      - "5540:5540"
+    volumes:
+      - redis_insight_data:/data
+    networks:
+      - bh_network
+
+volumes:
+  pgadmin_data:
+    driver: local
+  redis_insight_data:
+    driver: local
+
+networks:
+  bh_network:
+    driver: bridge

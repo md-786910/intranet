@@ -1,0 +1,103 @@
+const Joi = require('joi');
+
+const idPattern = Joi.number().integer().positive();
+
+const passwordPattern = Joi.string()
+  .min(8)
+  .max(128)
+  .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?])/)
+  .messages({
+    'string.min': 'Password must be at least 8 characters',
+    'string.pattern.base': 'Password must contain at least 1 uppercase, 1 lowercase, 1 digit, and 1 special character',
+  });
+
+const listUsersSchema = {
+  query: Joi.object({
+    page: Joi.number().integer().min(1).default(1),
+    limit: Joi.number().integer().min(1).max(100).default(20),
+    search: Joi.string().trim().max(255).optional().allow(''),
+    status: Joi.string().valid('ACTIVE', 'INACTIVE', 'LOCKED').optional(),
+    department_id: idPattern.optional(),
+    org_unit_id: idPattern.required(),
+  }),
+};
+
+const idParam = {
+  params: Joi.object({
+    id: idPattern.required(),
+  }),
+};
+
+const createUserSchema = {
+  body: Joi.object({
+    email: Joi.string().email().required().lowercase().trim(),
+    password: passwordPattern.required(),
+    first_name: Joi.string().trim().min(1).max(100).required(),
+    last_name: Joi.string().trim().min(1).max(100).required(),
+    phone: Joi.string().trim().max(20).optional().allow('', null),
+    org_unit_id: idPattern.required(),
+    profile: Joi.object({
+      job_title: Joi.string().trim().max(255).optional().allow('', null),
+      bio: Joi.string().trim().max(2000).optional().allow('', null),
+      employee_id: Joi.string().trim().max(50).optional().allow('', null),
+      date_of_birth: Joi.date().iso().optional().allow(null),
+      date_of_joining: Joi.date().iso().optional().allow(null),
+    }).optional(),
+    initial_role: Joi.object({
+      role_id: idPattern.required(),
+      org_unit_id: idPattern.required(),
+    }).optional(),
+  }),
+};
+
+const updateUserSchema = {
+  params: Joi.object({
+    id: idPattern.required(),
+  }),
+  body: Joi.object({
+    first_name: Joi.string().trim().min(1).max(100).optional(),
+    last_name: Joi.string().trim().min(1).max(100).optional(),
+    phone: Joi.string().trim().max(20).optional().allow('', null),
+    status: Joi.string().valid('ACTIVE', 'INACTIVE', 'LOCKED').optional(),
+    org_unit_id: idPattern.required(),
+    profile: Joi.object({
+      job_title: Joi.string().trim().max(255).optional().allow('', null),
+      bio: Joi.string().trim().max(2000).optional().allow('', null),
+      employee_id: Joi.string().trim().max(50).optional().allow('', null),
+      date_of_birth: Joi.date().iso().optional().allow(null),
+      date_of_joining: Joi.date().iso().optional().allow(null),
+    }).optional(),
+  }),
+};
+
+const assignRoleSchema = {
+  params: Joi.object({
+    id: idPattern.required(),
+  }),
+  body: Joi.object({
+    role_id: idPattern.required(),
+    org_unit_id: idPattern.required(),
+    starts_at: Joi.date().iso().optional().allow(null),
+    ends_at: Joi.date().iso().optional().allow(null),
+  }),
+};
+
+const assignDepartmentSchema = {
+  params: Joi.object({
+    id: idPattern.required(),
+  }),
+  body: Joi.object({
+    department_id: idPattern.required(),
+    is_primary: Joi.boolean().default(false),
+    org_unit_id: idPattern.required(),
+  }),
+};
+
+module.exports = {
+  listUsersSchema,
+  idParam,
+  createUserSchema,
+  updateUserSchema,
+  assignRoleSchema,
+  assignDepartmentSchema,
+};
