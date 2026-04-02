@@ -4,6 +4,7 @@ import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
+import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
 import PermissionMatrix from '../../components/roles/PermissionMatrix';
 import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
@@ -11,13 +12,6 @@ import { useToast } from '../../hooks/useToast';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
 
 const DEFAULT_ORGANISATION_ID = 1;
-
-const SCOPE_TYPE_OPTIONS = [
-  { value: 'ORGANISATION', label: 'Organisation' },
-  { value: 'OFFICE_LOCATION', label: 'Office Location' },
-  { value: 'VERTICAL', label: 'Vertical' },
-  { value: 'DEPARTMENT', label: 'Department' },
-];
 
 /**
  * Extract the Set of module_action_ids from a role's permissions array.
@@ -52,8 +46,11 @@ export default function UserCreatePage() {
 
   // Role picker form
   const [pickerRoleId, setPickerRoleId] = useState('');
-  const [pickerScopeType, setPickerScopeType] = useState('ORGANISATION');
-  const [pickerScopeId, setPickerScopeId] = useState(String(DEFAULT_ORGANISATION_ID));
+  const [pickerScope, setPickerScope] = useState({
+    scope_type: 'ORGANISATION',
+    scope_id: DEFAULT_ORGANISATION_ID,
+    scope_label: '',
+  });
 
   // Which assigned role's permissions are being previewed (index or null)
   const [previewIndex, setPreviewIndex] = useState(null);
@@ -101,8 +98,9 @@ export default function UserCreatePage() {
         role_id: roleId,
         role_name: role.name,
         is_system: role.is_system,
-        scope_type: pickerScopeType,
-        scope_id: Number(pickerScopeId) || DEFAULT_ORGANISATION_ID,
+        scope_type: pickerScope.scope_type,
+        scope_id: pickerScope.scope_id || DEFAULT_ORGANISATION_ID,
+        scope_label: pickerScope.scope_label,
       },
     ]);
     setPickerRoleId('');
@@ -204,7 +202,7 @@ export default function UserCreatePage() {
             <h3 className="text-sm font-semibold text-gray-900 mb-4">Role Assignment</h3>
 
             {/* Role picker */}
-            <div className="flex items-end gap-3 mb-4">
+            <div className="space-y-3 mb-4">
               <Select
                 label="Role"
                 name="role"
@@ -212,32 +210,21 @@ export default function UserCreatePage() {
                 onChange={(e) => setPickerRoleId(e.target.value)}
                 options={roleOptions}
                 placeholder="Select a role..."
-                className="flex-1"
               />
-              <Select
-                label="Scope"
-                name="scope_type"
-                value={pickerScopeType}
-                onChange={(e) => setPickerScopeType(e.target.value)}
-                options={SCOPE_TYPE_OPTIONS}
-                className="w-44"
+              <HierarchyScopeSelector
+                value={pickerScope}
+                onChange={setPickerScope}
               />
-              <Input
-                label="Scope ID"
-                name="scope_id"
-                type="number"
-                value={pickerScopeId}
-                onChange={(e) => setPickerScopeId(e.target.value)}
-                className="w-24"
-              />
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={handleAddRole}
-                disabled={!pickerRoleId}
-              >
-                Add
-              </Button>
+              <div className="flex justify-end">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={handleAddRole}
+                  disabled={!pickerRoleId}
+                >
+                  Add Role
+                </Button>
+              </div>
             </div>
 
             {/* Assigned roles list */}
@@ -257,7 +244,7 @@ export default function UserCreatePage() {
                       <div>
                         <div className="text-sm font-medium text-gray-900">{a.role_name}</div>
                         <div className="text-xs text-gray-500">
-                          {a.scope_type.replace(/_/g, ' ')} #{a.scope_id}
+                          {a.scope_type.replace(/_/g, ' ')}{a.scope_label ? `: ${a.scope_label}` : ''}
                         </div>
                       </div>
                       {a.is_system && (
