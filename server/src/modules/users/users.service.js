@@ -6,6 +6,19 @@ const tokenService = require('../../services/token.service');
 const { DEFAULT_TENANT_ID } = require('../../utils/constants');
 const { parsePagination, buildPagination } = require('../../utils/pagination');
 
+function buildDepartmentPath(department) {
+  if (!department) return null;
+
+  const parts = [
+    department.name,
+    department.vertical?.name,
+    department.vertical?.officeLocation?.name,
+    department.vertical?.officeLocation?.organisation?.name,
+  ].filter(Boolean);
+
+  return parts.join(' · ');
+}
+
 const usersService = {
   async list(query) {
     const { UserAccount, PersonProfile, DepartmentMembership } = require('../../database/models');
@@ -52,7 +65,20 @@ const usersService = {
   },
 
   async getById(id) {
-    const { UserAccount, PersonProfile, UserRoleAssignment, Role, DepartmentMembership, Department, UserPermission, ModuleAction, Module } = require('../../database/models');
+    const {
+      UserAccount,
+      PersonProfile,
+      UserRoleAssignment,
+      Role,
+      DepartmentMembership,
+      Department,
+      Vertical,
+      OfficeLocation,
+      Organisation,
+      UserPermission,
+      ModuleAction,
+      Module,
+    } = require('../../database/models');
 
     const user = await UserAccount.findByPk(id, {
       attributes: { exclude: ['password_hash'] },
@@ -69,7 +95,32 @@ const usersService = {
           model: DepartmentMembership,
           as: 'departmentMemberships',
           include: [
-            { model: Department, as: 'department', attributes: ['id', 'name', 'code'] },
+            {
+              model: Department,
+              as: 'department',
+              attributes: ['id', 'name', 'code'],
+              include: [
+                {
+                  model: Vertical,
+                  as: 'vertical',
+                  attributes: ['id', 'name'],
+                  include: [
+                    {
+                      model: OfficeLocation,
+                      as: 'officeLocation',
+                      attributes: ['id', 'name'],
+                      include: [
+                        {
+                          model: Organisation,
+                          as: 'organisation',
+                          attributes: ['id', 'name'],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
           ],
         },
         {
@@ -90,11 +141,85 @@ const usersService = {
     });
 
     if (!user) throw ApiError.notFound('User not found');
-    return user;
+
+    const scopedDepartmentIds = new Set();
+
+    (user.roleAssignments || []).forEach((assignment) => {
+      if (assignment.scope_type === 'DEPARTMENT' && assignment.scope_id) {
+        scopedDepartmentIds.add(Number(assignment.scope_id));
+      }
+    });
+
+    (user.directPermissions || []).forEach((permission) => {
+      if (permission.scope_type === 'DEPARTMENT' && permission.scope_id) {
+        scopedDepartmentIds.add(Number(permission.scope_id));
+      }
+    });
+
+    const existingMemberships = (user.departmentMemberships || []).map((membership) => ({
+      ...membership.toJSON(),
+      department_id: membership.department_id,
+      path: buildDepartmentPath(membership.department),
+      source: membership.is_primary ? 'Primary membership' : 'Membership',
+    }));
+
+    const existingDepartmentIds = new Set(existingMemberships.map((membership) => Number(membership.department_id)));
+    const derivedDepartmentIds = [...scopedDepartmentIds].filter((departmentId) => !existingDepartmentIds.has(departmentId));
+
+    if (derivedDepartmentIds.length > 0) {
+      const derivedDepartments = await Department.findAll({
+        where: { id: derivedDepartmentIds },
+        include: [
+          {
+            model: Vertical,
+            as: 'vertical',
+            attributes: ['id', 'name'],
+            include: [
+              {
+                model: OfficeLocation,
+                as: 'officeLocation',
+                attributes: ['id', 'name'],
+                include: [
+                  {
+                    model: Organisation,
+                    as: 'organisation',
+                    attributes: ['id', 'name'],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        order: [['name', 'ASC']],
+      });
+
+      derivedDepartments.forEach((department) => {
+        existingMemberships.push({
+          membership_id: `derived-${department.id}`,
+          department_id: department.id,
+          is_primary: false,
+          joined_at: null,
+          source: 'Inherited from scoped assignment',
+          department: department.toJSON(),
+          path: buildDepartmentPath(department),
+        });
+      });
+    }
+
+    const userData = user.toJSON();
+    userData.departmentMemberships = existingMemberships;
+    return userData;
   },
 
   async create(data, actorUserId) {
-    const { UserAccount, PersonProfile, UserRoleAssignment, UserPermission, sequelize } = require('../../database/models');
+    const {
+      UserAccount,
+      PersonProfile,
+      UserRoleAssignment,
+      UserPermission,
+      DepartmentMembership,
+      sequelize,
+    } = require('../../database/models');
     const transaction = await sequelize.transaction();
 
     try {
@@ -139,6 +264,27 @@ const usersService = {
           scope_id: role.scope_id,
           assigned_by: actorUserId,
         }, { transaction });
+      }
+
+      const initialDepartmentIds = [
+        ...new Set(
+          rolesToAssign
+            .filter((role) => role.scope_type === 'DEPARTMENT' && role.scope_id)
+            .map((role) => Number(role.scope_id))
+            .concat(
+              (data.initial_permissions || [])
+                .filter((permission) => permission.scope_type === 'DEPARTMENT' && permission.scope_id)
+                .map((permission) => Number(permission.scope_id))
+            )
+        ),
+      ];
+
+      for (const departmentId of initialDepartmentIds) {
+        await DepartmentMembership.findOrCreate({
+          where: { user_id: user.user_id, department_id: departmentId },
+          defaults: { user_id: user.user_id, department_id: departmentId, is_primary: false },
+          transaction,
+        });
       }
 
       // Create initial direct permissions if provided
@@ -235,7 +381,7 @@ const usersService = {
   },
 
   async assignRole(userId, data, actorUserId) {
-    const { UserRoleAssignment } = require('../../database/models');
+    const { UserRoleAssignment, DepartmentMembership } = require('../../database/models');
 
     // Check for duplicate
     const existing = await UserRoleAssignment.findOne({
@@ -257,6 +403,17 @@ const usersService = {
       starts_at: data.starts_at || null,
       ends_at: data.ends_at || null,
     });
+
+    if (data.scope_type === 'DEPARTMENT' && data.scope_id) {
+      await DepartmentMembership.findOrCreate({
+        where: { user_id: userId, department_id: Number(data.scope_id) },
+        defaults: {
+          user_id: userId,
+          department_id: Number(data.scope_id),
+          is_primary: false,
+        },
+      });
+    }
 
     await cacheService.deletePattern(`bh:perm:${userId}:*`);
     await cacheService.deletePattern(`bh:perms:${userId}:*`);

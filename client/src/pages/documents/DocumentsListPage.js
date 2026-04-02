@@ -11,13 +11,13 @@ import { documentService } from '../../services/documentService';
 import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
+import { usePermission } from '../../hooks/usePermission';
 import { formatDate } from '../../utils/formatters';
-
-const DEFAULT_ORGANISATION_ID = 1;
 
 export default function DocumentsListPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { hasPermission: canCreateDocuments } = usePermission('DOCUMENTS', 'CREATE');
   const { page, limit, setPage } = usePagination();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -28,7 +28,7 @@ export default function DocumentsListPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    documentService.getCategories({ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
+    documentService.getCategories()
       .then((res) => setCategories(res.data?.data || []))
       .catch(() => {});
   }, []);
@@ -36,7 +36,7 @@ export default function DocumentsListPage() {
   const fetchDocs = useCallback(async () => {
     try {
       setLoading(true);
-      const params = { page, limit, scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID };
+      const params = { page, limit };
       if (debouncedSearch) params.search = debouncedSearch;
       if (statusFilter) params.status = statusFilter;
       if (categoryFilter) params.category_id = categoryFilter;
@@ -72,7 +72,7 @@ export default function DocumentsListPage() {
       <PageHeader
         title="Documents"
         subtitle="Manage documents and files"
-        actions={<Button onClick={() => navigate('/documents/create')}>Upload Document</Button>}
+        actions={canCreateDocuments ? <Button onClick={() => navigate('/documents/create')}>Upload Document</Button> : null}
       />
       <div className="flex gap-4 mb-4">
         <div className="w-72"><SearchBar value={search} onChange={setSearch} placeholder="Search documents..." /></div>

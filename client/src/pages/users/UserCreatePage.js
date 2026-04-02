@@ -4,15 +4,73 @@ import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
-import ScopePicker from '../../components/common/ScopePicker';
+import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
 import PermissionMatrix from '../../components/roles/PermissionMatrix';
 import { getPermLabel } from '../../components/roles/PermissionMatrix';
 import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
 import { useToast } from '../../hooks/useToast';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
+import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 
-const DEFAULT_ORGANISATION_ID = 1;
+function isSameRoleAssignment(left, right) {
+  return left.role_id === right.role_id
+    && left.scope_type === right.scope_type
+    && left.scope_id === right.scope_id;
+}
+
+function isSamePermissionAssignment(left, right) {
+  return left.module_action_id === right.module_action_id
+    && left.scope_type === right.scope_type
+    && left.scope_id === right.scope_id;
+}
+
+function formatScopeLabel(scopeLabel, scopeType, scopeId) {
+  if (scopeLabel) return scopeLabel;
+  return `${scopeType.replace(/_/g, ' ')} #${scopeId}`;
+}
+
+function buildDraftRoleAssignments(allRoles, pickerRoleId, pickerScopes, currentOrganisationId) {
+  if (!pickerRoleId) return [];
+
+  const role = allRoles.find((item) => item.role_id === Number(pickerRoleId));
+  if (!role) return [];
+
+  const scopes = pickerScopes.length > 0
+    ? pickerScopes
+    : [{ scope_type: 'ORGANISATION', scope_id: currentOrganisationId, scope_label: 'Organisation' }];
+
+  return scopes.map((scope) => ({
+    role_id: role.role_id,
+    role_name: role.name,
+    is_system: role.is_system,
+    scope_type: scope.scope_type,
+    scope_id: scope.scope_id || currentOrganisationId,
+    scope_label: scope.scope_label,
+  }));
+}
+
+function buildDraftPermissions(modules, permModuleId, permActionId, permScopes, currentOrganisationId) {
+  if (!permActionId) return [];
+
+  const mod = modules.find((item) => item.module_id === Number(permModuleId));
+  const action = mod?.actions.find((item) => item.module_action_id === Number(permActionId));
+  if (!mod || !action) return [];
+
+  const { label } = getPermLabel(mod.code, action.action_code);
+  const scopes = permScopes.length > 0
+    ? permScopes
+    : [{ scope_type: 'ORGANISATION', scope_id: currentOrganisationId, scope_label: 'Organisation' }];
+
+  return scopes.map((scope) => ({
+    module_action_id: action.module_action_id,
+    module_name: mod.name,
+    action_label: label,
+    scope_type: scope.scope_type,
+    scope_id: scope.scope_id || currentOrganisationId,
+    scope_label: scope.scope_label,
+  }));
+}
 
 function extractPermissionIds(role) {
   if (!role?.permissions) return new Set();
@@ -27,6 +85,7 @@ function extractPermissionIds(role) {
 export default function UserCreatePage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { currentOrganisationId } = useCurrentOrganisation();
 
   const [form, setForm] = useState({
     email: '', password: '', first_name: '', last_name: '', phone: '',
@@ -40,16 +99,14 @@ export default function UserCreatePage() {
   const [modules, setModules] = useState([]);
   const [assignedRoles, setAssignedRoles] = useState([]);
   const [pickerRoleId, setPickerRoleId] = useState('');
-  const [pickerScopeType, setPickerScopeType] = useState('ORGANISATION');
-  const [pickerScopeId, setPickerScopeId] = useState(DEFAULT_ORGANISATION_ID);
+  const [pickerScopes, setPickerScopes] = useState([]);
   const [previewRoleIndex, setPreviewRoleIndex] = useState(null);
 
   // Extra permissions
   const [extraPerms, setExtraPerms] = useState([]);
   const [permModuleId, setPermModuleId] = useState('');
   const [permActionId, setPermActionId] = useState('');
-  const [permScopeType, setPermScopeType] = useState('ORGANISATION');
-  const [permScopeId, setPermScopeId] = useState(DEFAULT_ORGANISATION_ID);
+  const [permScopes, setPermScopes] = useState([]);
   const [showPermForm, setShowPermForm] = useState(false);
 
   useEffect(() => {
@@ -59,10 +116,9 @@ export default function UserCreatePage() {
 
   // ── Derived ──
   const roleOptions = useMemo(() => {
-    const assignedIds = new Set(assignedRoles.map((a) => a.role_id));
-    return allRoles.filter((r) => !assignedIds.has(r.role_id))
+    return allRoles
       .map((r) => ({ value: String(r.role_id), label: `${r.name}${r.is_system ? ' (System)' : ''}` }));
-  }, [allRoles, assignedRoles]);
+  }, [allRoles]);
 
   const pickerRole = pickerRoleId ? allRoles.find((r) => r.role_id === Number(pickerRoleId)) : null;
   const pickerPermissions = useMemo(() => extractPermissionIds(pickerRole), [pickerRole]);
@@ -78,10 +134,9 @@ export default function UserCreatePage() {
     if (!permModuleId) return [];
     const mod = modules.find((m) => m.module_id === Number(permModuleId));
     if (!mod) return [];
-    const existingIds = new Set(extraPerms.map((p) => p.module_action_id));
-    return mod.actions.filter((a) => !existingIds.has(a.module_action_id))
+    return mod.actions
       .map((a) => { const { label } = getPermLabel(mod.code, a.action_code); return { value: String(a.module_action_id), label }; });
-  }, [permModuleId, modules, extraPerms]);
+  }, [permModuleId, modules]);
 
   // ── Handlers ──
   const handleChange = (e) => {
@@ -94,13 +149,28 @@ export default function UserCreatePage() {
     const roleId = Number(pickerRoleId);
     const role = allRoles.find((r) => r.role_id === roleId);
     if (!role) return;
-    setAssignedRoles((prev) => [...prev, {
-      role_id: roleId, role_name: role.name, is_system: role.is_system,
-      scope_type: pickerScopeType, scope_id: pickerScopeId || DEFAULT_ORGANISATION_ID,
-    }]);
+
+    const scopesToAdd = pickerScopes.length > 0
+      ? pickerScopes
+      : [{ scope_type: 'ORGANISATION', scope_id: currentOrganisationId, scope_label: 'Organisation' }];
+
+    setAssignedRoles((prev) => {
+      const nextAssignments = scopesToAdd
+        .map((scope) => ({
+          role_id: roleId,
+          role_name: role.name,
+          is_system: role.is_system,
+          scope_type: scope.scope_type,
+          scope_id: scope.scope_id || currentOrganisationId,
+          scope_label: scope.scope_label,
+        }))
+        .filter((assignment) => !prev.some((existing) => isSameRoleAssignment(existing, assignment)));
+
+      return nextAssignments.length > 0 ? [...prev, ...nextAssignments] : prev;
+    });
+
     setPickerRoleId('');
-    setPickerScopeType('ORGANISATION');
-    setPickerScopeId(DEFAULT_ORGANISATION_ID);
+    setPickerScopes([]);
   };
 
   const handleRemoveRole = (index) => {
@@ -115,15 +185,29 @@ export default function UserCreatePage() {
     const action = mod?.actions.find((a) => a.module_action_id === Number(permActionId));
     if (!mod || !action) return;
     const { label } = getPermLabel(mod.code, action.action_code);
-    setExtraPerms((prev) => [...prev, {
-      module_action_id: Number(permActionId),
-      module_name: mod.name,
-      action_label: label,
-      scope_type: permScopeType,
-      scope_id: permScopeId || DEFAULT_ORGANISATION_ID,
-    }]);
+
+    const scopesToAdd = permScopes.length > 0
+      ? permScopes
+      : [{ scope_type: 'ORGANISATION', scope_id: currentOrganisationId, scope_label: 'Organisation' }];
+
+    setExtraPerms((prev) => {
+      const nextPermissions = scopesToAdd
+        .map((scope) => ({
+          module_action_id: Number(permActionId),
+          module_name: mod.name,
+          action_label: label,
+          scope_type: scope.scope_type,
+          scope_id: scope.scope_id || currentOrganisationId,
+          scope_label: scope.scope_label,
+        }))
+        .filter((permission) => !prev.some((existing) => isSamePermissionAssignment(existing, permission)));
+
+      return nextPermissions.length > 0 ? [...prev, ...nextPermissions] : prev;
+    });
+
     setPermActionId('');
     setPermModuleId('');
+    setPermScopes([]);
     setShowPermForm(false);
   };
 
@@ -137,10 +221,27 @@ export default function UserCreatePage() {
     if (!form.password) newErrors.password = 'Password is required';
     if (!form.first_name) newErrors.first_name = 'First name is required';
     if (!form.last_name) newErrors.last_name = 'Last name is required';
+    if (!currentOrganisationId) newErrors.organisation = 'Active organisation is required';
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
     setSaving(true);
     try {
+      const draftRoles = buildDraftRoleAssignments(allRoles, pickerRoleId, pickerScopes, currentOrganisationId);
+      const finalRoles = [...assignedRoles];
+      draftRoles.forEach((assignment) => {
+        if (!finalRoles.some((existing) => isSameRoleAssignment(existing, assignment))) {
+          finalRoles.push(assignment);
+        }
+      });
+
+      const draftPermissions = buildDraftPermissions(modules, permModuleId, permActionId, permScopes, currentOrganisationId);
+      const finalPermissions = [...extraPerms];
+      draftPermissions.forEach((permission) => {
+        if (!finalPermissions.some((existing) => isSamePermissionAssignment(existing, permission))) {
+          finalPermissions.push(permission);
+        }
+      });
+
       await userService.createUser({
         email: form.email,
         password: form.password,
@@ -148,16 +249,16 @@ export default function UserCreatePage() {
         last_name: form.last_name,
         phone: form.phone || undefined,
         scope_type: 'ORGANISATION',
-        scope_id: DEFAULT_ORGANISATION_ID,
+        scope_id: currentOrganisationId,
         profile: {
           job_title: form.job_title || undefined,
           employee_id: form.employee_id || undefined,
         },
-        initial_roles: assignedRoles.length > 0
-          ? assignedRoles.map((a) => ({ role_id: a.role_id, scope_type: a.scope_type, scope_id: a.scope_id }))
+        initial_roles: finalRoles.length > 0
+          ? finalRoles.map((a) => ({ role_id: a.role_id, scope_type: a.scope_type, scope_id: a.scope_id }))
           : undefined,
-        initial_permissions: extraPerms.length > 0
-          ? extraPerms.map((p) => ({ module_action_id: p.module_action_id, scope_type: p.scope_type, scope_id: p.scope_id }))
+        initial_permissions: finalPermissions.length > 0
+          ? finalPermissions.map((p) => ({ module_action_id: p.module_action_id, scope_type: p.scope_type, scope_id: p.scope_id }))
           : undefined,
       });
       addToast('User created successfully', 'success');
@@ -216,7 +317,7 @@ export default function UserCreatePage() {
                     <div>
                       <span className="text-sm font-medium text-gray-900">{a.role_name}</span>
                       {a.is_system && <span className="ml-2 text-xs text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full">System</span>}
-                      <div className="text-xs text-gray-500 mt-0.5">{a.scope_type.replace(/_/g, ' ').toLowerCase()}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">{formatScopeLabel(a.scope_label, a.scope_type, a.scope_id)}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400">{previewRoleIndex === i ? 'Hide' : 'View'} permissions</span>
@@ -249,10 +350,9 @@ export default function UserCreatePage() {
 
             {pickerRoleId && (
               <>
-                <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-2">Assign at scope:</p>
-                  <ScopePicker scopeType={pickerScopeType} scopeId={pickerScopeId}
-                    onScopeTypeChange={setPickerScopeType} onScopeIdChange={setPickerScopeId} />
+                <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-xs text-gray-500 mb-3">Assign at one or more scopes:</p>
+                  <HierarchyScopeSelector value={pickerScopes} onChange={setPickerScopes} />
                 </div>
                 {pickerRole && modules.length > 0 && (
                   <div className="mt-3 border border-dashed border-gray-300 rounded-lg p-4 bg-gray-50/30">
@@ -292,9 +392,8 @@ export default function UserCreatePage() {
                 </div>
                 {permActionId && (
                   <div className="p-3 bg-white rounded-lg border border-gray-200">
-                    <p className="text-xs text-gray-500 mb-2">Apply at scope:</p>
-                    <ScopePicker scopeType={permScopeType} scopeId={permScopeId}
-                      onScopeTypeChange={setPermScopeType} onScopeIdChange={setPermScopeId} />
+                    <p className="text-xs text-gray-500 mb-3">Apply at one or more scopes:</p>
+                    <HierarchyScopeSelector value={permScopes} onChange={setPermScopes} />
                   </div>
                 )}
                 {permActionId && (
@@ -311,7 +410,7 @@ export default function UserCreatePage() {
                   <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
                       <div className="text-sm font-medium text-gray-900">{p.action_label}</div>
-                      <div className="text-xs text-gray-500">{p.module_name} · {p.scope_type.replace(/_/g, ' ').toLowerCase()}</div>
+                      <div className="text-xs text-gray-500">{p.module_name} · {formatScopeLabel(p.scope_label, p.scope_type, p.scope_id)}</div>
                     </div>
                     <button onClick={() => handleRemovePerm(i)}
                       className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors">

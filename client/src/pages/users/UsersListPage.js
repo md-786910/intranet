@@ -13,12 +13,12 @@ import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import { formatDate } from '../../utils/formatters';
 import { usePermission } from '../../hooks/usePermission';
-
-const DEFAULT_ORGANISATION_ID = 1;
+import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 
 export default function UsersListPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { currentOrganisationId } = useCurrentOrganisation();
   const { page, limit, setPage } = usePagination();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -30,7 +30,7 @@ export default function UsersListPage() {
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const params = { page, limit, scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID };
+      const params = { page, limit, scope_type: 'ORGANISATION', scope_id: currentOrganisationId };
       if (debouncedSearch) params.search = debouncedSearch;
       if (statusFilter) params.status = statusFilter;
       const res = await userService.getUsers(params);
@@ -40,7 +40,7 @@ export default function UsersListPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, debouncedSearch, statusFilter, addToast]);
+  }, [page, limit, debouncedSearch, statusFilter, addToast, currentOrganisationId]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 

@@ -7,20 +7,24 @@ import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { documentService } from '../../services/documentService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate, formatFileSize } from '../../utils/formatters';
-
-const DEFAULT_ORGANISATION_ID = 1;
+import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
+import { usePermission } from '../../hooks/usePermission';
 
 export default function DocumentDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { currentOrganisationId } = useCurrentOrganisation();
+  const { hasPermission: canPublishDocuments } = usePermission('DOCUMENTS', 'PUBLISH');
+  const { hasPermission: canEditDocuments } = usePermission('DOCUMENTS', 'EDIT');
+  const { hasPermission: canDeleteDocuments } = usePermission('DOCUMENTS', 'DELETE');
   const [doc, setDoc] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const fetchDoc = () => {
-    documentService.getDocument(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
+    documentService.getDocument(id)
       .then((res) => setDoc(res.data?.data))
       .catch(() => addToast('Failed to load document', 'error'))
       .finally(() => setLoading(false));
@@ -31,7 +35,7 @@ export default function DocumentDetailPage() {
   const handlePublish = async () => {
     setActionLoading(true);
     try {
-      await documentService.publishDocument(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID });
+      await documentService.publishDocument(id, { scope_type: 'ORGANISATION', scope_id: currentOrganisationId });
       addToast('Document published', 'success');
       fetchDoc();
     } catch (err) {
@@ -64,11 +68,11 @@ export default function DocumentDetailPage() {
         title={doc.title}
         actions={
           <div className="flex gap-2">
-            {doc.status === 'DRAFT' && (
+            {canPublishDocuments && doc.status === 'DRAFT' && (
               <Button onClick={handlePublish} loading={actionLoading}>Publish</Button>
             )}
-            <Button variant="secondary" onClick={() => navigate(`/documents/${id}/edit`)}>Edit</Button>
-            <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>Delete</Button>
+            {canEditDocuments && <Button variant="secondary" onClick={() => navigate(`/documents/${id}/edit`)}>Edit</Button>}
+            {canDeleteDocuments && <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>Delete</Button>}
           </div>
         }
       />
@@ -79,6 +83,19 @@ export default function DocumentDetailPage() {
           <span className="text-sm text-gray-500">By {doc.author?.first_name} {doc.author?.last_name}</span>
         </div>
         {doc.summary && <p className="text-gray-600">{doc.summary}</p>}
+
+        {doc.audienceRules?.length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Audience</h3>
+            <div className="flex flex-wrap gap-2">
+              {doc.audienceRules.map((rule) => (
+                <span key={rule.audience_rule_id} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">
+                  {rule.target_scope_type}: {rule.target_scope_id}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Version History */}
         <div>

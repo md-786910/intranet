@@ -8,6 +8,7 @@ import { TYPE_COLORS, TYPE_ICONS, NODE_TYPE_LABELS } from '../../components/org/
 import { orgService, transformOrgTree } from '../../services/orgService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
+import { usePermission } from '../../hooks/usePermission';
 
 const CHILD_TYPE_MAP = {
   ORGANISATION: 'OFFICE_LOCATION',
@@ -45,10 +46,36 @@ function getDeleteEndpoint(t) {
     : t === 'DEPARTMENT' ? orgService.deleteDepartment : null;
 }
 
+function getManageScopeForCreate(parentNode, childType) {
+  if (!parentNode || !childType) return null;
+
+  if (childType === 'OFFICE_LOCATION') {
+    return { scope_type: 'ORGANISATION', scope_id: parentNode.id };
+  }
+
+  if (childType === 'VERTICAL') {
+    return { scope_type: 'OFFICE_LOCATION', scope_id: parentNode.id };
+  }
+
+  if (childType === 'DEPARTMENT') {
+    return { scope_type: 'VERTICAL', scope_id: parentNode.id };
+  }
+
+  return null;
+}
+
+function getManageScopeForNode(node) {
+  if (!node) return null;
+  return { scope_type: node.type, scope_id: node.id };
+}
+
 const EMPTY_FORM = { name: '', code: '', address: '', city: '', country: '', timezone: '' };
 
 export default function OrganisationPage() {
   const { addToast } = useToast();
+  const { hasPermission: canManageOfficeLocations } = usePermission('ADMIN', 'MANAGE_OFFICE_LOCATIONS');
+  const { hasPermission: canManageVerticals } = usePermission('ADMIN', 'MANAGE_VERTICALS');
+  const { hasPermission: canManageDepartments } = usePermission('ADMIN', 'MANAGE_DEPARTMENTS');
   const [tree, setTree] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -82,6 +109,24 @@ export default function OrganisationPage() {
 
   useEffect(() => { fetchTree(); }, [fetchTree]);
 
+  const canManageNodeType = useCallback((nodeType) => (
+    nodeType === 'OFFICE_LOCATION' ? canManageOfficeLocations
+      : nodeType === 'VERTICAL' ? (canManageVerticals || canManageOfficeLocations)
+      : nodeType === 'DEPARTMENT' ? (canManageDepartments || canManageVerticals || canManageOfficeLocations)
+      : false
+  ), [canManageDepartments, canManageOfficeLocations, canManageVerticals]);
+
+  const canAddChildToNode = useCallback((node) => {
+    const childType = CHILD_TYPE_MAP[node.type];
+    if (!childType) return false;
+    if (childType === 'OFFICE_LOCATION') return canManageOfficeLocations;
+    if (childType === 'VERTICAL') return canManageOfficeLocations || canManageVerticals;
+    if (childType === 'DEPARTMENT') return canManageOfficeLocations || canManageVerticals;
+    return false;
+  }, [canManageNodeType]);
+
+  const canEditNode = useCallback((node) => canManageNodeType(node.type), [canManageNodeType]);
+
   // ── Panel actions ──
   const openView = (node) => {
     setSelected(node);
@@ -92,6 +137,10 @@ export default function OrganisationPage() {
   const openEdit = (node) => {
     const target = node || selected;
     if (!target || target.type === 'ORGANISATION') return;
+    if (!canManageNodeType(target.type)) {
+      addToast(`You do not have permission to manage ${NODE_TYPE_LABELS[target.type].toLowerCase()}s`, 'error');
+      return;
+    }
     setSelected(target);
     setForm({
       name: target.name || '', code: target.code || '',
@@ -106,6 +155,10 @@ export default function OrganisationPage() {
   const openCreate = (parentNode) => {
     const childType = CHILD_TYPE_MAP[parentNode.type];
     if (!childType) return;
+    if (!canManageNodeType(childType)) {
+      addToast(`You do not have permission to create ${NODE_TYPE_LABELS[childType].toLowerCase()}s`, 'error');
+      return;
+    }
     setCreateParent(parentNode);
     setCreateNodeType(childType);
     setForm(EMPTY_FORM);
@@ -143,18 +196,22 @@ export default function OrganisationPage() {
           VERTICAL: { office_location_id: createParent.id },
           DEPARTMENT: { vertical_id: createParent.id },
         };
+        const manageScope = getManageScopeForCreate(createParent, createNodeType);
         await getCreateEndpoint(createNodeType)({
           name: form.name.trim(),
           code: form.code.trim() || undefined,
           ...parentFkMap[createNodeType],
           ...locationFields,
+          ...manageScope,
         });
         addToast(`${NODE_TYPE_LABELS[createNodeType]} created`, 'success');
       } else {
+        const manageScope = getManageScopeForNode(selected);
         await getUpdateEndpoint(selected.type)(selected.id, {
           name: form.name.trim(),
           code: form.code.trim() || undefined,
           ...locationFields,
+          ...manageScope,
         });
         addToast(`${NODE_TYPE_LABELS[selected.type]} updated`, 'success');
       }
@@ -172,7 +229,7 @@ export default function OrganisationPage() {
     if (!selected || selected.type === 'ORGANISATION') return;
     setDeleting(true);
     try {
-      await getDeleteEndpoint(selected.type)(selected.id);
+      await getDeleteEndpoint(selected.type)(selected.id, getManageScopeForNode(selected));
       addToast(`${NODE_TYPE_LABELS[selected.type]} deleted`, 'success');
       closePanel();
       setSelected(null);
@@ -218,6 +275,8 @@ export default function OrganisationPage() {
           onAdd={openCreate}
           onEdit={openEdit}
           onRetry={fetchTree}
+          canAddNode={canAddChildToNode}
+          canEditNode={canEditNode}
         />
       </div>
 
@@ -321,14 +380,14 @@ export default function OrganisationPage() {
                   </div>
 
                   {/* Add child */}
-                  {selected.type !== 'DEPARTMENT' && (
+                  {selected.type !== 'DEPARTMENT' && canAddChildToNode(selected) && (
                     <Button variant="secondary" size="sm" onClick={() => openCreate(selected)}>
                       + Add {CHILD_LABEL_MAP[selected.type]}
                     </Button>
                   )}
 
                   {/* Delete zone */}
-                  {selected.type !== 'ORGANISATION' && (
+                  {selected.type !== 'ORGANISATION' && canEditNode(selected) && (
                     <div className="pt-4 mt-2 border-t border-gray-200">
                       {!confirmDelete ? (
                         <button
@@ -407,7 +466,7 @@ export default function OrganisationPage() {
 
             {/* ── Panel Footer ── */}
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50/50">
-              {panelMode === 'view' && selected?.type !== 'ORGANISATION' && (
+              {panelMode === 'view' && selected?.type !== 'ORGANISATION' && canEditNode(selected) && (
                 <Button variant="primary" className="w-full" onClick={() => openEdit(selected)}>
                   Edit {NODE_TYPE_LABELS[selected?.type]}
                 </Button>

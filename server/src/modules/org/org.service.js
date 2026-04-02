@@ -1,12 +1,13 @@
 const hierarchyService = require('../../services/hierarchy.service');
+const organisationContextService = require('../../services/organisation-context.service');
 const auditService = require('../../services/audit.service');
 const cacheService = require('../../services/cache.service');
 const ApiError = require('../../utils/ApiError');
-const { DEFAULT_ORGANISATION_ID } = require('../../utils/constants');
 
 const orgService = {
   async getFullTree() {
-    return hierarchyService.getFullTree(DEFAULT_ORGANISATION_ID);
+    const organisationId = await organisationContextService.getCurrentOrganisationId();
+    return hierarchyService.getFullTree(organisationId);
   },
 
   async getNodeById(id) {
@@ -99,8 +100,9 @@ const orgService = {
     const { sequelize } = require('../../database/models');
     const transaction = await sequelize.transaction();
     try {
+      const organisationId = await organisationContextService.getCurrentOrganisationId();
       const office = await hierarchyService.createOfficeLocation({
-        organisation_id: DEFAULT_ORGANISATION_ID,
+        organisation_id: organisationId,
         name: data.name,
         code: data.code || null,
         address: data.address || null,
@@ -119,6 +121,7 @@ const orgService = {
 
       await transaction.commit();
       await cacheService.deletePattern('bh:org:tree:*');
+      organisationContextService.invalidateCache();
       return office;
     } catch (error) {
       await transaction.rollback();

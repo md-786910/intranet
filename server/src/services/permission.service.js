@@ -196,6 +196,131 @@ const permissionService = {
   },
 
   /**
+   * Get the union of all granted permissions for a user across every assigned scope.
+   * Used for navigation/bootstrap so scoped assignments still expose the correct menus.
+   */
+  async getAllGrantedPermissions(userId) {
+    const cacheKey = `perms:${userId}:ALL`;
+    const cached = await cacheService.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
+    try {
+      const { sequelize } = require('../database/models');
+
+      const permissions = await sequelize.query(`
+        SELECT DISTINCT m.code AS module, ma.action_code AS action
+        FROM user_role_assignment ura
+        JOIN role_permission rp ON rp.role_id = ura.role_id AND rp.effect = 'ALLOW'
+        JOIN module_action ma ON ma.module_action_id = rp.module_action_id
+        JOIN module m ON m.module_id = ma.module_id
+        WHERE ura.user_id = :userId
+          AND (ura.starts_at IS NULL OR ura.starts_at <= NOW())
+          AND (ura.ends_at IS NULL OR ura.ends_at > NOW())
+
+        UNION
+
+        SELECT DISTINCT m.code AS module, ma.action_code AS action
+        FROM user_permission up
+        JOIN module_action ma ON ma.module_action_id = up.module_action_id
+        JOIN module m ON m.module_id = ma.module_id
+        WHERE up.user_id = :userId
+          AND up.effect = 'ALLOW'
+
+        ORDER BY module, action
+      `, {
+        replacements: { userId },
+        type: QueryTypes.SELECT,
+      });
+
+      const permMap = {};
+      permissions.forEach(({ module, action }) => {
+        if (!permMap[module]) permMap[module] = [];
+        permMap[module].push(action);
+      });
+
+      await cacheService.set(cacheKey, JSON.stringify(permMap), CACHE_TTL);
+      return permMap;
+    } catch (err) {
+      logger.error('Get all granted permissions error:', err.message);
+      return {};
+    }
+  },
+
+  /**
+   * Check whether a user has a permission at any assigned scope.
+   * Used for read/navigation endpoints that do not carry a concrete scope.
+   */
+  async hasPermissionAnywhere(userId, moduleCode, actionCode) {
+    const cacheKey = `perm:${userId}:${moduleCode}:${actionCode}:ANY`;
+    const cached = await cacheService.get(cacheKey);
+    if (cached !== null) return cached === 'true';
+
+    try {
+      const permissions = await this.getAllGrantedPermissions(userId);
+      const allowed = Array.isArray(permissions[moduleCode]) && permissions[moduleCode].includes(actionCode);
+      await cacheService.set(cacheKey, String(allowed), CACHE_TTL);
+      return allowed;
+    } catch (err) {
+      logger.error('Has permission anywhere error:', err.message);
+      return false;
+    }
+  },
+
+  /**
+   * Hierarchy-aware admin management fallback.
+   * Office managers can manage the full subtree beneath their office.
+   * Vertical managers can manage departments beneath their vertical.
+   */
+  async checkAdminHierarchyPermission(userId, actionCode, scopeType, scopeId) {
+    if (!scopeType || !scopeId) return false;
+
+    try {
+      const ancestors = await scopeService.resolveAncestors(scopeType, scopeId);
+      if (!ancestors) return false;
+
+      if (actionCode === 'MANAGE_VERTICALS') {
+        if (!ancestors.office_location_id) return false;
+        return this.checkPermission(
+          userId,
+          'ADMIN',
+          'MANAGE_OFFICE_LOCATIONS',
+          'OFFICE_LOCATION',
+          ancestors.office_location_id,
+        );
+      }
+
+      if (actionCode === 'MANAGE_DEPARTMENTS') {
+        if (ancestors.vertical_id) {
+          const canManageVertical = await this.checkPermission(
+            userId,
+            'ADMIN',
+            'MANAGE_VERTICALS',
+            'VERTICAL',
+            ancestors.vertical_id,
+          );
+
+          if (canManageVertical) return true;
+        }
+
+        if (ancestors.office_location_id) {
+          return this.checkPermission(
+            userId,
+            'ADMIN',
+            'MANAGE_OFFICE_LOCATIONS',
+            'OFFICE_LOCATION',
+            ancestors.office_location_id,
+          );
+        }
+      }
+
+      return false;
+    } catch (err) {
+      logger.error('Admin hierarchy permission check error:', err.message);
+      return false;
+    }
+  },
+
+  /**
    * Invalidate all permission caches for a user.
    */
   async invalidateUserCache(userId) {

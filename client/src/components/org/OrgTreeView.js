@@ -37,7 +37,17 @@ const TYPE_STATS = [
   { type: 'DEPARTMENT', label: 'Departments', color: 'bg-gray-100 text-gray-600' },
 ];
 
-export default function OrgTreeView({ tree = [], selectedId, onSelect, onAdd, onEdit, loading, onRetry }) {
+export default function OrgTreeView({
+  tree = [],
+  selectedId,
+  onSelect,
+  onAdd,
+  onEdit,
+  loading,
+  onRetry,
+  canAddNode,
+  canEditNode,
+}) {
   const [search, setSearch] = useState('');
   const [expandAll, setExpandAll] = useState(undefined);
 
@@ -145,6 +155,8 @@ export default function OrgTreeView({ tree = [], selectedId, onSelect, onAdd, on
               onEdit={onEdit}
               expandAll={expandAll}
               isLast={idx === filteredTree.length - 1}
+              canAddNode={canAddNode}
+              canEditNode={canEditNode}
             />
           ))
         )}

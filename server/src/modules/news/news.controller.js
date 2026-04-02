@@ -2,12 +2,12 @@ const catchAsync = require('../../utils/catchAsync');
 const newsService = require('./news.service');
 
 const list = catchAsync(async (req, res) => {
-  const result = await newsService.list(req.query);
+  const result = await newsService.list(req.query, req.user.user_id);
   res.status(200).json({ status: 'success', data: result });
 });
 
 const getById = catchAsync(async (req, res) => {
-  const article = await newsService.getById(req.params.id);
+  const article = await newsService.getById(req.params.id, req.user.user_id);
   res.status(200).json({ status: 'success', data: article });
 });
 

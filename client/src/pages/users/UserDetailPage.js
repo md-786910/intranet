@@ -4,6 +4,7 @@ import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Select from '../../components/common/Select';
 import ScopePicker from '../../components/common/ScopePicker';
+import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
 import StatusBadge from '../../components/common/StatusBadge';
 import Badge from '../../components/common/Badge';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
@@ -13,8 +14,39 @@ import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
+import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
+import { useOrgTree } from '../../hooks/useOrgTree';
 
 const DEFAULT_ORGANISATION_ID = 1;
+
+function findScopeLabel(tree, scopeType, scopeId) {
+  const orgNode = tree[0];
+  if (!orgNode || !scopeType || !scopeId) return null;
+
+  if (scopeType === 'ORGANISATION' && orgNode.id === Number(scopeId)) {
+    return `Organisation: ${orgNode.name}`;
+  }
+
+  for (const office of orgNode.children || []) {
+    if (scopeType === 'OFFICE_LOCATION' && office.id === Number(scopeId)) {
+      return `Office Location: ${office.name} · ${orgNode.name}`;
+    }
+
+    for (const vertical of office.children || []) {
+      if (scopeType === 'VERTICAL' && vertical.id === Number(scopeId)) {
+        return `Vertical: ${vertical.name} · ${office.name} · ${orgNode.name}`;
+      }
+
+      for (const department of vertical.children || []) {
+        if (scopeType === 'DEPARTMENT' && department.id === Number(scopeId)) {
+          return `Department: ${department.name} · ${vertical.name} · ${office.name}`;
+        }
+      }
+    }
+  }
+
+  return null;
+}
 
 function extractPermissionIds(role) {
   if (!role?.permissions) return new Set();
@@ -76,7 +108,7 @@ function RoleCard({ assignment, allRoles, modules, onRemove, removing }) {
 }
 
 // ── Direct Permission Row ──
-function DirectPermissionRow({ perm, onRemove, removing }) {
+function DirectPermissionRow({ perm, onRemove, removing, scopeLabel }) {
   const moduleCode = perm.moduleAction?.module?.code || '';
   const actionCode = perm.moduleAction?.action_code || '';
   const moduleName = perm.moduleAction?.module?.name || moduleCode;
@@ -87,7 +119,7 @@ function DirectPermissionRow({ perm, onRemove, removing }) {
       <div>
         <div className="text-sm font-medium text-gray-900">{label}</div>
         <div className="text-xs text-gray-500">
-          {moduleName} · {perm.scope_type.replace(/_/g, ' ')} #{perm.scope_id}
+          {moduleName} · {scopeLabel || `${perm.scope_type.replace(/_/g, ' ')} #${perm.scope_id}`}
         </div>
       </div>
       <Button variant="ghost" size="sm" onClick={() => onRemove(perm.user_permission_id)}
@@ -103,6 +135,8 @@ export default function UserDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { currentOrganisationId } = useCurrentOrganisation();
+  const { tree: orgTree } = useOrgTree();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('profile');
@@ -125,8 +159,7 @@ export default function UserDetailPage() {
   const [showPermForm, setShowPermForm] = useState(false);
   const [permModuleId, setPermModuleId] = useState('');
   const [permActionId, setPermActionId] = useState('');
-  const [permScopeType, setPermScopeType] = useState('ORGANISATION');
-  const [permScopeId, setPermScopeId] = useState(DEFAULT_ORGANISATION_ID);
+  const [permScopes, setPermScopes] = useState([]);
   const [addingPerm, setAddingPerm] = useState(false);
   const [removingPerm, setRemovingPerm] = useState(null);
 
@@ -189,14 +222,38 @@ export default function UserDetailPage() {
     if (!permActionId) return;
     setAddingPerm(true);
     try {
-      await userService.assignPermission(id, {
-        module_action_id: Number(permActionId),
-        scope_type: permScopeType,
-        scope_id: permScopeId || DEFAULT_ORGANISATION_ID,
-      });
-      addToast('Permission granted', 'success');
+      const scopesToAssign = permScopes.length > 0
+        ? permScopes
+        : [{ scope_type: 'ORGANISATION', scope_id: currentOrganisationId || DEFAULT_ORGANISATION_ID }];
+
+      const existingPermissions = new Set(
+        (user?.directPermissions || []).map((perm) => `${perm.module_action_id}:${perm.scope_type}:${perm.scope_id}`),
+      );
+
+      const nextScopes = scopesToAssign.filter((scope) => (
+        !existingPermissions.has(`${Number(permActionId)}:${scope.scope_type}:${scope.scope_id}`)
+      ));
+
+      if (nextScopes.length === 0) {
+        addToast('Permission already assigned at the selected scope', 'error');
+        return;
+      }
+
+      await Promise.all(
+        nextScopes.map((scope) => userService.assignPermission(id, {
+          module_action_id: Number(permActionId),
+          scope_type: scope.scope_type,
+          scope_id: scope.scope_id,
+        })),
+      );
+
+      addToast(
+        nextScopes.length === 1 ? 'Permission granted' : `${nextScopes.length} permissions granted`,
+        'success',
+      );
       setPermActionId('');
       setPermModuleId('');
+      setPermScopes([]);
       setShowPermForm(false);
       fetchUser();
     } catch (err) {
@@ -230,10 +287,9 @@ export default function UserDetailPage() {
     if (!permModuleId) return [];
     const mod = modules.find((m) => m.module_id === Number(permModuleId));
     if (!mod) return [];
-    const existingIds = new Set((user?.directPermissions || []).map((p) => p.module_action_id));
-    return mod.actions.filter((a) => !existingIds.has(a.module_action_id))
+    return mod.actions
       .map((a) => { const { label } = getPermLabel(mod.code, a.action_code); return { value: String(a.module_action_id), label }; });
-  }, [permModuleId, modules, user?.directPermissions]);
+  }, [permModuleId, modules]);
 
   const directPermCount = user?.directPermissions?.length || 0;
 
@@ -366,7 +422,7 @@ export default function UserDetailPage() {
                   <h4 className="text-sm font-semibold text-gray-900">Grant an Extra Permission</h4>
                   <div className="grid grid-cols-2 gap-3">
                     <Select label="Module" name="perm_module" value={permModuleId}
-                      onChange={(e) => { setPermModuleId(e.target.value); setPermActionId(''); }}
+                      onChange={(e) => { setPermModuleId(e.target.value); setPermActionId(''); setPermScopes([]); }}
                       options={moduleOptions} placeholder="Select module..." />
                     <Select label="Action" name="perm_action" value={permActionId}
                       onChange={(e) => setPermActionId(e.target.value)}
@@ -377,8 +433,7 @@ export default function UserDetailPage() {
                   {permActionId && (
                     <div className="p-3 bg-white rounded-lg border border-gray-200">
                       <p className="text-xs text-gray-500 mb-2">Apply at scope:</p>
-                      <ScopePicker scopeType={permScopeType} scopeId={permScopeId}
-                        onScopeTypeChange={setPermScopeType} onScopeIdChange={setPermScopeId} />
+                      <HierarchyScopeSelector value={permScopes} onChange={setPermScopes} />
                     </div>
                   )}
                   {permActionId && (
@@ -397,6 +452,7 @@ export default function UserDetailPage() {
                 <div className="space-y-2">
                   {user.directPermissions.map((perm) => (
                     <DirectPermissionRow key={perm.user_permission_id} perm={perm}
+                      scopeLabel={findScopeLabel(orgTree, perm.scope_type, perm.scope_id)}
                       onRemove={handleRemovePermission} removing={removingPerm} />
                   ))}
                 </div>
@@ -411,10 +467,11 @@ export default function UserDetailPage() {
                 <p className="text-sm text-gray-500">No department memberships</p>
               ) : (
                 user.departmentMemberships.map((m) => (
-                  <div key={m.department_membership_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div key={m.membership_id || m.department_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
                       <div className="font-medium text-gray-900">{m.department?.name}</div>
-                      <div className="text-xs text-gray-500">{m.department?.path}</div>
+                      <div className="text-xs text-gray-500">{m.path || m.department?.path || 'Department scope'}</div>
+                      {m.source && <div className="text-xs text-gray-400 mt-1">{m.source}</div>}
                     </div>
                     {m.is_primary && <Badge variant="success" size="sm">Primary</Badge>}
                   </div>

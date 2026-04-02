@@ -2,12 +2,12 @@ const catchAsync = require('../../utils/catchAsync');
 const documentsService = require('./documents.service');
 
 const list = catchAsync(async (req, res) => {
-  const result = await documentsService.list(req.query);
+  const result = await documentsService.list(req.query, req.user.user_id);
   res.status(200).json({ status: 'success', data: result });
 });
 
 const getById = catchAsync(async (req, res) => {
-  const doc = await documentsService.getById(req.params.id);
+  const doc = await documentsService.getById(req.params.id, req.user.user_id);
   res.status(200).json({ status: 'success', data: doc });
 });
 

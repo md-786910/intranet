@@ -10,14 +10,14 @@ import { newsService } from '../../services/newsService';
 import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
+import { usePermission } from '../../hooks/usePermission';
 import { formatDate, truncate } from '../../utils/formatters';
-
-const DEFAULT_ORGANISATION_ID = 1;
 const STATUS_TABS = ['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED'];
 
 export default function NewsListPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { hasPermission: canCreateNews } = usePermission('NEWS', 'CREATE');
   const { page, limit, setPage } = usePagination();
   const [search, setSearch] = useState('');
   const [statusTab, setStatusTab] = useState('ALL');
@@ -28,7 +28,7 @@ export default function NewsListPage() {
   const fetchArticles = useCallback(async () => {
     try {
       setLoading(true);
-      const params = { page, limit, scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID };
+      const params = { page, limit };
       if (debouncedSearch) params.search = debouncedSearch;
       if (statusTab !== 'ALL') params.status = statusTab;
       const res = await newsService.getArticles(params);
@@ -63,7 +63,7 @@ export default function NewsListPage() {
       <PageHeader
         title="News"
         subtitle="Manage news articles"
-        actions={<Button onClick={() => navigate('/news/create')}>Create Article</Button>}
+        actions={canCreateNews ? <Button onClick={() => navigate('/news/create')}>Create Article</Button> : null}
       />
       {/* Status tabs */}
       <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-lg w-fit">

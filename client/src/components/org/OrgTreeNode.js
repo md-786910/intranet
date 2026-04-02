@@ -29,12 +29,24 @@ const TYPE_ICONS = {
 
 export { TYPE_COLORS, TYPE_ICONS, NODE_TYPE_LABELS };
 
-export default function OrgTreeNode({ node, depth = 0, isLast = false, selectedId, onSelect, onAdd, onEdit, expandAll }) {
+export default function OrgTreeNode({
+  node,
+  depth = 0,
+  isLast = false,
+  selectedId,
+  onSelect,
+  onAdd,
+  onEdit,
+  expandAll,
+  canAddNode,
+  canEditNode,
+}) {
   const [expanded, setExpanded] = useState(true);
   const hasChildren = node.children && node.children.length > 0;
   const childCount = node.children?.length || 0;
   const isSelected = selectedId === node.id;
-  const canAddChild = node.type !== 'DEPARTMENT';
+  const canAddChild = node.type !== 'DEPARTMENT' && (canAddNode ? canAddNode(node) : true);
+  const canEditCurrentNode = node.type !== 'ORGANISATION' && (canEditNode ? canEditNode(node) : true);
   const childLabel = CHILD_TYPE_LABELS[node.type];
   const typeColor = TYPE_COLORS[node.type] || TYPE_COLORS.DEPARTMENT;
   const iconPath = TYPE_ICONS[node.type] || TYPE_ICONS.DEPARTMENT;
@@ -112,7 +124,7 @@ export default function OrgTreeNode({ node, depth = 0, isLast = false, selectedI
               </svg>
             </button>
           )}
-          {node.type !== 'ORGANISATION' && onEdit && (
+          {canEditCurrentNode && onEdit && (
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(node); }}
               className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
@@ -145,6 +157,8 @@ export default function OrgTreeNode({ node, depth = 0, isLast = false, selectedI
                   onAdd={onAdd}
                   onEdit={onEdit}
                   expandAll={expandAll}
+                  canAddNode={canAddNode}
+                  canEditNode={canEditNode}
                 />
               </div>
             );

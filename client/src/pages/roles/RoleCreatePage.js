@@ -9,8 +9,7 @@ import PermissionMatrix from '../../components/roles/PermissionMatrix';
 import { roleService } from '../../services/roleService';
 import { useToast } from '../../hooks/useToast';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
-
-const DEFAULT_ORGANISATION_ID = 1;
+import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 
 function generateCode(name) {
   return name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -20,6 +19,7 @@ export default function RoleCreatePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { addToast } = useToast();
+  const { currentOrganisationId } = useCurrentOrganisation();
   const cloneFrom = location.state?.cloneFrom || null;
 
   const [modules, setModules] = useState([]);
@@ -34,7 +34,8 @@ export default function RoleCreatePage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    roleService.getModules({ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
+    if (!currentOrganisationId) return;
+    roleService.getModules({ scope_type: 'ORGANISATION', scope_id: currentOrganisationId })
       .then((res) => {
         const mods = res.data?.data || [];
         setModules(mods);
@@ -46,7 +47,7 @@ export default function RoleCreatePage() {
         }
       })
       .catch(() => addToast('Failed to load modules', 'error'));
-  }, [addToast, cloneFrom]);
+  }, [addToast, cloneFrom, currentOrganisationId]);
 
   const handleNameChange = (e) => {
     const name = e.target.value;
@@ -76,6 +77,10 @@ export default function RoleCreatePage() {
 
   const handleSave = async () => {
     if (!validate()) return;
+    if (!currentOrganisationId) {
+      addToast('No active organisation available', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const permissions = [...selectedPermissions].map(id => ({ module_action_id: id, effect: 'ALLOW' }));
@@ -83,7 +88,7 @@ export default function RoleCreatePage() {
         name: form.name,
         code: form.code,
         description: form.description,
-        scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID,
+        scope_type: 'ORGANISATION', scope_id: currentOrganisationId,
         permissions,
       });
       addToast('Role created successfully', 'success');

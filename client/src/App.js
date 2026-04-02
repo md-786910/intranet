@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { OrganisationProvider } from './contexts/OrganisationContext';
 import { PermissionProvider } from './contexts/PermissionContext';
+import { PermissionContext } from './contexts/PermissionContext';
 import { ToastProvider } from './contexts/ToastContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import AdminLayout from './components/layout/AdminLayout';
@@ -32,13 +34,28 @@ import PushCreatePage from './pages/push/PushCreatePage';
 import PushDetailPage from './pages/push/PushDetailPage';
 import AnalyticsPage from './pages/analytics/AnalyticsPage';
 
+function HomeRedirect() {
+  const { hasPermission } = useContext(PermissionContext);
+
+  if (hasPermission('ADMIN', 'VIEW_ANALYTICS')) return <Navigate to="/dashboard" replace />;
+  if (hasPermission('NEWS', 'VIEW')) return <Navigate to="/news" replace />;
+  if (hasPermission('DOCUMENTS', 'VIEW')) return <Navigate to="/documents" replace />;
+  if (hasPermission('PUSH', 'VIEW')) return <Navigate to="/push" replace />;
+  if (hasPermission('ADMIN', 'MANAGE_USERS')) return <Navigate to="/users" replace />;
+  if (hasPermission('ADMIN', 'MANAGE_ROLES')) return <Navigate to="/roles" replace />;
+  if (hasPermission('ADMIN', 'MANAGE_OFFICE_LOCATIONS')) return <Navigate to="/organisation" replace />;
+
+  return <Navigate to="/login" replace />;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <PermissionProvider>
-          <ToastProvider>
-            <Routes>
+        <OrganisationProvider>
+          <PermissionProvider>
+            <ToastProvider>
+              <Routes>
               {/* Public routes */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -86,11 +103,12 @@ function App() {
               </Route>
 
               {/* Default redirect */}
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
-          </ToastProvider>
-        </PermissionProvider>
+              <Route path="/" element={<HomeRedirect />} />
+              <Route path="*" element={<HomeRedirect />} />
+              </Routes>
+            </ToastProvider>
+          </PermissionProvider>
+        </OrganisationProvider>
       </AuthProvider>
     </BrowserRouter>
   );

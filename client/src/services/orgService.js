@@ -4,13 +4,13 @@ export const orgService = {
   getOrgTree: () => api.get('/org/tree'),
   createOfficeLocation: (data) => api.post('/org/office-locations', data),
   updateOfficeLocation: (id, data) => api.put(`/org/office-locations/${id}`, data),
-  deleteOfficeLocation: (id) => api.delete(`/org/office-locations/${id}`),
+  deleteOfficeLocation: (id, data) => api.delete(`/org/office-locations/${id}`, { data }),
   createVertical: (data) => api.post('/org/verticals', data),
   updateVertical: (id, data) => api.put(`/org/verticals/${id}`, data),
-  deleteVertical: (id) => api.delete(`/org/verticals/${id}`),
+  deleteVertical: (id, data) => api.delete(`/org/verticals/${id}`, { data }),
   createDepartment: (data) => api.post('/org/departments', data),
   updateDepartment: (id, data) => api.put(`/org/departments/${id}`, data),
-  deleteDepartment: (id) => api.delete(`/org/departments/${id}`),
+  deleteDepartment: (id, data) => api.delete(`/org/departments/${id}`, { data }),
 };
 
 /**

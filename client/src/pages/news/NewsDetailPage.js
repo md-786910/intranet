@@ -7,20 +7,24 @@ import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { newsService } from '../../services/newsService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
-
-const DEFAULT_ORGANISATION_ID = 1;
+import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
+import { usePermission } from '../../hooks/usePermission';
 
 export default function NewsDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { currentOrganisationId } = useCurrentOrganisation();
+  const { hasPermission: canPublishNews } = usePermission('NEWS', 'PUBLISH');
+  const { hasPermission: canEditNews } = usePermission('NEWS', 'EDIT');
+  const { hasPermission: canDeleteNews } = usePermission('NEWS', 'DELETE');
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const fetchArticle = () => {
-    newsService.getArticle(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
+    newsService.getArticle(id)
       .then((res) => setArticle(res.data?.data))
       .catch(() => addToast('Failed to load article', 'error'))
       .finally(() => setLoading(false));
@@ -31,7 +35,7 @@ export default function NewsDetailPage() {
   const handlePublish = async () => {
     setActionLoading(true);
     try {
-      await newsService.publishArticle(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID });
+      await newsService.publishArticle(id, { scope_type: 'ORGANISATION', scope_id: currentOrganisationId });
       addToast('Article published', 'success');
       fetchArticle();
     } catch (err) {
@@ -44,7 +48,7 @@ export default function NewsDetailPage() {
   const handleArchive = async () => {
     setActionLoading(true);
     try {
-      await newsService.archiveArticle(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID });
+      await newsService.archiveArticle(id, { scope_type: 'ORGANISATION', scope_id: currentOrganisationId });
       addToast('Article archived', 'success');
       fetchArticle();
     } catch (err) {
@@ -77,14 +81,14 @@ export default function NewsDetailPage() {
         title={article.title}
         actions={
           <div className="flex gap-2">
-            {article.status === 'DRAFT' && (
+            {canPublishNews && article.status === 'DRAFT' && (
               <Button onClick={handlePublish} loading={actionLoading}>Publish</Button>
             )}
-            {article.status === 'PUBLISHED' && (
+            {canEditNews && article.status === 'PUBLISHED' && (
               <Button variant="secondary" onClick={handleArchive} loading={actionLoading}>Archive</Button>
             )}
-            <Button variant="secondary" onClick={() => navigate(`/news/${id}/edit`)}>Edit</Button>
-            <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>Delete</Button>
+            {canEditNews && <Button variant="secondary" onClick={() => navigate(`/news/${id}/edit`)}>Edit</Button>}
+            {canDeleteNews && <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>Delete</Button>}
           </div>
         }
       />

@@ -11,8 +11,7 @@ import { roleService } from '../../services/roleService';
 import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
-
-const DEFAULT_ORGANISATION_ID = 1;
+import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 
 function groupPermissionsByModule(permissions) {
   if (!permissions?.length) return [];
@@ -89,6 +88,7 @@ const ROLE_DESCRIPTIONS = {
 export default function RolesListPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { currentOrganisationId } = useCurrentOrganisation();
   const { page, limit, setPage } = usePagination();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search);
@@ -102,7 +102,7 @@ export default function RolesListPage() {
     try {
       setLoading(true);
       const res = await roleService.getRoles({
-        page, limit: 100, search: debouncedSearch, scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID,
+        page, limit: 100, search: debouncedSearch, scope_type: 'ORGANISATION', scope_id: currentOrganisationId,
       });
       const data = res.data?.data || { roles: [], pagination: {} };
       setAllRoles(data.roles || []);
@@ -112,7 +112,7 @@ export default function RolesListPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, debouncedSearch, addToast]);
+  }, [page, limit, debouncedSearch, addToast, currentOrganisationId]);
 
   useEffect(() => { fetchRoles(); }, [fetchRoles]);
 

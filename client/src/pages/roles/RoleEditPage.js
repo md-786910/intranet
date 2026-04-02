@@ -11,13 +11,13 @@ import { roleService } from '../../services/roleService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
-
-const DEFAULT_ORGANISATION_ID = 1;
+import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 
 export default function RoleEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { currentOrganisationId } = useCurrentOrganisation();
   const [modules, setModules] = useState([]);
   const [role, setRole] = useState(null);
   const [form, setForm] = useState({ name: '', description: '' });
@@ -29,9 +29,10 @@ export default function RoleEditPage() {
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
+    if (!currentOrganisationId) return;
     Promise.all([
-      roleService.getRole(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID }),
-      roleService.getModules({ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID }),
+      roleService.getRole(id, { scope_type: 'ORGANISATION', scope_id: currentOrganisationId }),
+      roleService.getModules({ scope_type: 'ORGANISATION', scope_id: currentOrganisationId }),
     ]).then(([roleRes, modulesRes]) => {
       const r = roleRes.data?.data;
       setRole(r);
@@ -41,7 +42,7 @@ export default function RoleEditPage() {
       setModules(modulesRes.data?.data || []);
     }).catch(() => addToast('Failed to load role', 'error'))
       .finally(() => setLoading(false));
-  }, [id, addToast]);
+  }, [id, addToast, currentOrganisationId]);
 
   const handleClone = () => {
     navigate('/roles/create', { state: { cloneFrom: role } });
@@ -60,7 +61,7 @@ export default function RoleEditPage() {
       await roleService.updateRole(id, {
         name: form.name,
         description: form.description,
-        scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID,
+        scope_type: 'ORGANISATION', scope_id: currentOrganisationId,
         permissions,
       });
       addToast('Role updated successfully', 'success');

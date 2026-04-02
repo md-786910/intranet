@@ -34,6 +34,7 @@ const createNewsSchema = {
     cover_image_id: idPattern.optional().allow(null),
     owning_scope_type: scopeTypePattern.optional(),
     owning_scope_id: idPattern.optional(),
+    audience_targets: Joi.array().items(scopeTarget).optional(),
   }),
 };
 
@@ -49,6 +50,7 @@ const updateNewsSchema = {
     cover_image_id: idPattern.optional().allow(null),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
+    audience_targets: Joi.array().items(scopeTarget).optional(),
   }),
 };
 

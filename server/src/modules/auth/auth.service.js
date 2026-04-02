@@ -7,7 +7,6 @@ const tokenService = require("../../services/token.service");
 const auditService = require("../../services/audit.service");
 const permissionService = require("../../services/permission.service");
 const logger = require("../../config/logger");
-const { DEFAULT_ORGANISATION_ID } = require("../../utils/constants");
 
 const LOCK_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_FAILED_ATTEMPTS = 5;
@@ -105,11 +104,7 @@ const authService = {
       userAgent,
     });
 
-    // Get user permissions at root org
-    const permissions = await permissionService.getEffectivePermissions(
-      user.user_id,
-      'ORGANISATION', DEFAULT_ORGANISATION_ID,
-    );
+    const permissions = await permissionService.getAllGrantedPermissions(user.user_id);
 
     await auditService.log({
       user_id: user.user_id,
@@ -278,10 +273,7 @@ const authService = {
       throw ApiError.notFound("User not found");
     }
 
-    const permissions = await permissionService.getEffectivePermissions(
-      userId,
-      'ORGANISATION', DEFAULT_ORGANISATION_ID,
-    );
+    const permissions = await permissionService.getAllGrantedPermissions(userId);
 
     return {
       user: user.toSafeJSON(),

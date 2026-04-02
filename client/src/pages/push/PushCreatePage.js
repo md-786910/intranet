@@ -6,12 +6,12 @@ import Input from '../../components/common/Input';
 import Textarea from '../../components/common/Textarea';
 import { pushService } from '../../services/pushService';
 import { useToast } from '../../hooks/useToast';
-
-const DEFAULT_ORGANISATION_ID = 1;
+import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 
 export default function PushCreatePage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { currentOrganisationId } = useCurrentOrganisation();
   const [form, setForm] = useState({ title: '', body: '', scheduled_at: '' });
   const [saving, setSaving] = useState(false);
 
@@ -22,13 +22,18 @@ export default function PushCreatePage() {
       addToast('Title and body are required', 'error');
       return;
     }
+    if (!currentOrganisationId) {
+      addToast('No active organisation available', 'error');
+      return;
+    }
     setSaving(true);
     try {
       await pushService.createCampaign({
         title: form.title,
         body: form.body,
-        owning_scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID,
-        audience_targets: [{ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID }],
+        owning_scope_type: 'ORGANISATION',
+        owning_scope_id: currentOrganisationId,
+        audience_targets: [{ scope_type: 'ORGANISATION', scope_id: currentOrganisationId }],
         scheduled_at: form.scheduled_at || null,
       });
       addToast('Campaign created', 'success');

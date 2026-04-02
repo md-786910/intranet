@@ -2,19 +2,79 @@ const ApiError = require('../../utils/ApiError');
 const auditService = require('../../services/audit.service');
 const { DEFAULT_TENANT_ID } = require('../../utils/constants');
 const { parsePagination, buildPagination } = require('../../utils/pagination');
+const permissionService = require('../../services/permission.service');
+const scopeService = require('../../services/scope.service');
 
 function generateSlug(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+async function canManageDocuments(userId) {
+  const [canCreate, canEdit, canDelete, canPublish] = await Promise.all([
+    permissionService.hasPermissionAnywhere(userId, 'DOCUMENTS', 'CREATE'),
+    permissionService.hasPermissionAnywhere(userId, 'DOCUMENTS', 'EDIT'),
+    permissionService.hasPermissionAnywhere(userId, 'DOCUMENTS', 'DELETE'),
+    permissionService.hasPermissionAnywhere(userId, 'DOCUMENTS', 'PUBLISH'),
+  ]);
+
+  return canCreate || canEdit || canDelete || canPublish;
+}
+
+async function getUserAudienceScopeKeys(userId) {
+  const { UserRoleAssignment, UserPermission, DepartmentMembership } = require('../../database/models');
+  const scopeKeys = new Set();
+
+  const addAncestors = async (scopeType, scopeId) => {
+    if (!scopeType || !scopeId) return;
+    const ancestors = await scopeService.resolveAncestors(scopeType, scopeId);
+    if (!ancestors) return;
+
+    if (ancestors.organisation_id) scopeKeys.add(`ORGANISATION:${ancestors.organisation_id}`);
+    if (ancestors.office_location_id) scopeKeys.add(`OFFICE_LOCATION:${ancestors.office_location_id}`);
+    if (ancestors.vertical_id) scopeKeys.add(`VERTICAL:${ancestors.vertical_id}`);
+    if (ancestors.department_id) scopeKeys.add(`DEPARTMENT:${ancestors.department_id}`);
+  };
+
+  const [roleAssignments, directPermissions, departmentMemberships] = await Promise.all([
+    UserRoleAssignment.findAll({ where: { user_id: userId }, attributes: ['scope_type', 'scope_id'] }),
+    UserPermission.findAll({ where: { user_id: userId, effect: 'ALLOW' }, attributes: ['scope_type', 'scope_id'] }),
+    DepartmentMembership.findAll({ where: { user_id: userId }, attributes: ['department_id'] }),
+  ]);
+
+  for (const assignment of roleAssignments) await addAncestors(assignment.scope_type, assignment.scope_id);
+  for (const permission of directPermissions) await addAncestors(permission.scope_type, permission.scope_id);
+  for (const membership of departmentMemberships) await addAncestors('DEPARTMENT', membership.department_id);
+
+  return scopeKeys;
+}
+
+function documentMatchesAudience(doc, userAudienceScopeKeys) {
+  const audienceRules = doc.audienceRules || [];
+  if (audienceRules.length === 0) return true;
+
+  return audienceRules.some((rule) =>
+    userAudienceScopeKeys.has(`${rule.target_scope_type}:${rule.target_scope_id}`));
+}
+
 const documentsService = {
-  async list(query) {
-    const { DocumentItem, UserAccount, Category } = require('../../database/models');
+  async list(query, userId) {
+    const { DocumentItem, UserAccount, Category, ContentAudienceRule } = require('../../database/models');
     const { Op } = require('sequelize');
     const { page, limit, offset } = parsePagination(query);
+    const managing = await canManageDocuments(userId);
 
     const where = { deleted_at: null };
-    if (query.status) where.status = query.status;
+    if (managing) {
+      if (query.status) where.status = query.status;
+    } else {
+      if (query.status && query.status !== 'PUBLISHED') {
+        return {
+          documents: [],
+          pagination: buildPagination(page, limit, 0),
+        };
+      }
+      where.status = 'PUBLISHED';
+    }
     if (query.category_id) where.category_id = query.category_id;
     if (query.search) {
       where[Op.or] = [
@@ -23,24 +83,52 @@ const documentsService = {
       ];
     }
 
-    const { rows, count } = await DocumentItem.findAndCountAll({
+    const include = [
+      { model: UserAccount, as: 'author', attributes: ['user_id', 'first_name', 'last_name', 'email'] },
+      { model: Category, as: 'category', attributes: ['category_id', 'name', 'slug'], required: false },
+    ];
+
+    if (!managing) {
+      include.push({
+        model: ContentAudienceRule,
+        as: 'audienceRules',
+        where: { entity_type: 'DOCUMENT' },
+        required: false,
+      });
+    }
+
+    if (managing) {
+      const { rows, count } = await DocumentItem.findAndCountAll({
+        where,
+        limit,
+        offset,
+        include,
+        order: [['created_at', 'DESC']],
+      });
+
+      return {
+        documents: rows,
+        pagination: buildPagination(page, limit, count),
+      };
+    }
+
+    const userAudienceScopeKeys = await getUserAudienceScopeKeys(userId);
+    const rows = await DocumentItem.findAll({
       where,
-      limit,
-      offset,
-      include: [
-        { model: UserAccount, as: 'author', attributes: ['user_id', 'first_name', 'last_name', 'email'] },
-        { model: Category, as: 'category', attributes: ['category_id', 'name', 'slug'] },
-      ],
+      include,
       order: [['created_at', 'DESC']],
     });
 
+    const visibleDocuments = rows.filter((doc) => documentMatchesAudience(doc, userAudienceScopeKeys));
+    const paginatedDocuments = visibleDocuments.slice(offset, offset + limit);
+
     return {
-      documents: rows,
-      pagination: buildPagination(page, limit, count),
+      documents: paginatedDocuments,
+      pagination: buildPagination(page, limit, visibleDocuments.length),
     };
   },
 
-  async getById(id) {
+  async getById(id, userId = null) {
     const { DocumentItem, UserAccount, Category, DocumentVersion, ContentAudienceRule } = require('../../database/models');
 
     const doc = await DocumentItem.findByPk(id, {
@@ -63,11 +151,24 @@ const documentsService = {
     });
 
     if (!doc) throw ApiError.notFound('Document not found');
+
+    if (userId) {
+      const managing = await canManageDocuments(userId);
+      if (!managing) {
+        if (doc.status !== 'PUBLISHED') throw ApiError.notFound('Document not found');
+
+        const userAudienceScopeKeys = await getUserAudienceScopeKeys(userId);
+        if (!documentMatchesAudience(doc, userAudienceScopeKeys)) {
+          throw ApiError.notFound('Document not found');
+        }
+      }
+    }
+
     return doc;
   },
 
   async create(data, authorId) {
-    const { DocumentItem, DocumentVersion, sequelize } = require('../../database/models');
+    const { DocumentItem, DocumentVersion, ContentAudienceRule, sequelize } = require('../../database/models');
     const transaction = await sequelize.transaction();
 
     try {
@@ -97,6 +198,17 @@ const documentsService = {
         uploaded_by: authorId,
       }, { transaction });
 
+      const audienceRules = (data.audience_targets || []).map((target) => ({
+        entity_type: 'DOCUMENT',
+        entity_id: doc.document_item_id,
+        target_scope_type: target.scope_type || 'ORGANISATION',
+        target_scope_id: target.scope_id,
+      }));
+
+      if (audienceRules.length > 0) {
+        await ContentAudienceRule.bulkCreate(audienceRules, { transaction });
+      }
+
       await auditService.log({
         user_id: authorId,
         action: 'DOC_CREATED',
@@ -106,7 +218,7 @@ const documentsService = {
       });
 
       await transaction.commit();
-      return this.getById(doc.document_item_id);
+      return this.getById(doc.document_item_id, authorId);
     } catch (error) {
       await transaction.rollback();
       throw error;
@@ -114,27 +226,50 @@ const documentsService = {
   },
 
   async update(id, data, userId) {
-    const { DocumentItem } = require('../../database/models');
+    const { DocumentItem, ContentAudienceRule, sequelize } = require('../../database/models');
+    const transaction = await sequelize.transaction();
 
-    const doc = await DocumentItem.findByPk(id);
-    if (!doc) throw ApiError.notFound('Document not found');
+    try {
+      const doc = await DocumentItem.findByPk(id, { transaction });
+      if (!doc) throw ApiError.notFound('Document not found');
 
-    const fields = ['title', 'summary', 'category_id'];
-    fields.forEach((f) => {
-      if (data[f] !== undefined) doc[f] = data[f];
-    });
-    if (data.title) doc.slug = generateSlug(data.title) + '-' + Date.now();
+      const fields = ['title', 'summary', 'category_id'];
+      fields.forEach((f) => {
+        if (data[f] !== undefined) doc[f] = data[f];
+      });
+      if (data.title) doc.slug = generateSlug(data.title) + '-' + Date.now();
 
-    await doc.save();
+      await doc.save({ transaction });
 
-    await auditService.log({
-      user_id: userId,
-      action: 'DOC_UPDATED',
-      resource_type: 'DocumentItem',
-      resource_id: id,
-    });
+      if (Array.isArray(data.audience_targets)) {
+        await ContentAudienceRule.destroy({
+          where: { entity_type: 'DOCUMENT', entity_id: id },
+          transaction,
+        });
 
-    return this.getById(id);
+        if (data.audience_targets.length > 0) {
+          await ContentAudienceRule.bulkCreate(data.audience_targets.map((target) => ({
+            entity_type: 'DOCUMENT',
+            entity_id: id,
+            target_scope_type: target.scope_type || 'ORGANISATION',
+            target_scope_id: target.scope_id,
+          })), { transaction });
+        }
+      }
+
+      await auditService.log({
+        user_id: userId,
+        action: 'DOC_UPDATED',
+        resource_type: 'DocumentItem',
+        resource_id: id,
+      });
+
+      await transaction.commit();
+      return this.getById(id, userId);
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   },
 
   async delete(id, userId) {
@@ -171,7 +306,7 @@ const documentsService = {
       resource_id: id,
     });
 
-    return this.getById(id);
+    return this.getById(id, userId);
   },
 
   async listVersions(id) {

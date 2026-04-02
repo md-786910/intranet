@@ -2,6 +2,7 @@ import React, { createContext, useState, useCallback, useEffect } from 'react';
 import api, { setTokens, clearTokens, getRefreshToken } from '../config/api';
 
 export const AuthContext = createContext(null);
+let authBootstrapPromise = null;
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -37,11 +38,14 @@ export function AuthProvider({ children }) {
 
   // Attempt silent refresh on app mount
   useEffect(() => {
-    const tryRefresh = async () => {
+    const bootstrapAuth = async () => {
       const refreshToken = getRefreshToken();
       if (!refreshToken) {
-        setIsLoading(false);
-        return;
+        return {
+          user: null,
+          permissions: {},
+          isAuthenticated: false,
+        };
       }
 
       try {
@@ -52,17 +56,42 @@ export function AuthProvider({ children }) {
         // Fetch user profile
         const meResponse = await api.get('/auth/me');
         const { user: userData, permissions: perms } = meResponse.data.data;
-        setUser(userData);
-        setPermissions(perms || {});
-        setIsAuthenticated(true);
+        return {
+          user: userData,
+          permissions: perms || {},
+          isAuthenticated: true,
+        };
       } catch {
         clearTokens();
-      } finally {
-        setIsLoading(false);
+        return {
+          user: null,
+          permissions: {},
+          isAuthenticated: false,
+        };
       }
     };
 
-    tryRefresh();
+    if (!authBootstrapPromise) {
+      authBootstrapPromise = bootstrapAuth();
+    }
+
+    let isMounted = true;
+
+    authBootstrapPromise
+      .then((result) => {
+        if (!isMounted) return;
+        setUser(result.user);
+        setPermissions(result.permissions);
+        setIsAuthenticated(result.isAuthenticated);
+      })
+      .finally(() => {
+        if (!isMounted) return;
+        setIsLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const value = {
