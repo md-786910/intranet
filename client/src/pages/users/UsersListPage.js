@@ -12,6 +12,7 @@ import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import { formatDate } from '../../utils/formatters';
+import { usePermission } from '../../hooks/usePermission';
 
 const DEFAULT_ORGANISATION_ID = 1;
 
@@ -24,6 +25,7 @@ export default function UsersListPage() {
   const debouncedSearch = useDebounce(search);
   const [data, setData] = useState({ users: [], pagination: {} });
   const [loading, setLoading] = useState(true);
+  const { hasPermission: canManageUsers } = usePermission('ADMIN', 'MANAGE_USERS');
 
   const fetchUsers = useCallback(async () => {
     try {
