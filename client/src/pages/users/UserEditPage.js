@@ -2,31 +2,34 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
+import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
 import ScopePicker from '../../components/common/ScopePicker';
-import StatusBadge from '../../components/common/StatusBadge';
 import Badge from '../../components/common/Badge';
-import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PermissionMatrix from '../../components/roles/PermissionMatrix';
 import { getPermLabel } from '../../components/roles/PermissionMatrix';
 import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
 import { useToast } from '../../hooks/useToast';
-import { formatDate } from '../../utils/formatters';
+import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
 
 const DEFAULT_ORGANISATION_ID = 1;
+
+const STATUS_OPTIONS = [
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'INACTIVE', label: 'Inactive' },
+  { value: 'LOCKED', label: 'Locked' },
+];
 
 function extractPermissionIds(role) {
   if (!role?.permissions) return new Set();
   return new Set(
-    role.permissions
-      .filter((p) => p.effect === 'ALLOW')
-      .map((p) => p.moduleAction?.module_action_id)
-      .filter(Boolean)
+    role.permissions.filter((p) => p.effect === 'ALLOW')
+      .map((p) => p.moduleAction?.module_action_id).filter(Boolean)
   );
 }
 
-// ── Role Assignment Card ──
+// ── Role Card (reused from detail page pattern) ──
 function RoleCard({ assignment, allRoles, modules, onRemove, removing }) {
   const [showPerms, setShowPerms] = useState(false);
   const role = allRoles.find((r) => r.role_id === assignment.role_id || r.role_id === assignment.role?.role_id);
@@ -38,12 +41,8 @@ function RoleCard({ assignment, allRoles, modules, onRemove, removing }) {
       <div className="flex items-center justify-between p-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-900">
-              {assignment.role?.name || role?.name || 'Unknown Role'}
-            </span>
-            {(assignment.role?.is_system || role?.is_system) && (
-              <Badge variant="info" size="sm">System</Badge>
-            )}
+            <span className="text-sm font-medium text-gray-900">{assignment.role?.name || role?.name || 'Unknown'}</span>
+            {(assignment.role?.is_system || role?.is_system) && <Badge variant="info" size="sm">System</Badge>}
           </div>
           <div className="text-xs text-gray-500 mt-0.5">
             {assignment.scope_type.replace(/_/g, ' ')} #{assignment.scope_id}
@@ -60,9 +59,7 @@ function RoleCard({ assignment, allRoles, modules, onRemove, removing }) {
           {!assignment.role?.is_system && !role?.is_system && (
             <Button variant="ghost" size="sm" onClick={() => onRemove(assignment.assignment_id)}
               loading={removing === assignment.assignment_id}
-              className="text-red-500 hover:text-red-700 hover:bg-red-50">
-              Remove
-            </Button>
+              className="text-red-500 hover:text-red-700 hover:bg-red-50">Remove</Button>
           )}
         </div>
       </div>
@@ -75,53 +72,36 @@ function RoleCard({ assignment, allRoles, modules, onRemove, removing }) {
   );
 }
 
-// ── Direct Permission Row ──
-function DirectPermissionRow({ perm, onRemove, removing }) {
-  const moduleCode = perm.moduleAction?.module?.code || '';
-  const actionCode = perm.moduleAction?.action_code || '';
-  const moduleName = perm.moduleAction?.module?.name || moduleCode;
-  const { label } = getPermLabel(moduleCode, actionCode);
-
-  return (
-    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-      <div>
-        <div className="text-sm font-medium text-gray-900">{label}</div>
-        <div className="text-xs text-gray-500">
-          {moduleName} · {perm.scope_type.replace(/_/g, ' ')} #{perm.scope_id}
-        </div>
-      </div>
-      <Button variant="ghost" size="sm" onClick={() => onRemove(perm.user_permission_id)}
-        loading={removing === perm.user_permission_id}
-        className="text-red-500 hover:text-red-700 hover:bg-red-50">
-        Remove
-      </Button>
-    </div>
-  );
-}
-
-export default function UserDetailPage() {
+export default function UserEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToast } = useToast();
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('profile');
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
-  // Roles & modules
+  const [tab, setTab] = useState('profile');
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+
+  // Profile form
+  const [form, setForm] = useState({
+    first_name: '', last_name: '', phone: '', status: 'ACTIVE',
+    job_title: '', employee_id: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  // Roles + modules
   const [allRoles, setAllRoles] = useState([]);
   const [modules, setModules] = useState([]);
   const [removing, setRemoving] = useState(null);
 
-  // Assign role form
+  // Assign role
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [assignRoleId, setAssignRoleId] = useState('');
   const [assignScopeType, setAssignScopeType] = useState('ORGANISATION');
   const [assignScopeId, setAssignScopeId] = useState(DEFAULT_ORGANISATION_ID);
   const [assigning, setAssigning] = useState(false);
 
-  // Direct permission form
+  // Direct permissions
   const [showPermForm, setShowPermForm] = useState(false);
   const [permModuleId, setPermModuleId] = useState('');
   const [permActionId, setPermActionId] = useState('');
@@ -130,10 +110,19 @@ export default function UserDetailPage() {
   const [addingPerm, setAddingPerm] = useState(false);
   const [removingPerm, setRemovingPerm] = useState(null);
 
+  // ── Fetch ──
   const fetchUser = useCallback(() => {
     setLoading(true);
     userService.getUser(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
-      .then((res) => setUser(res.data?.data))
+      .then((res) => {
+        const u = res.data?.data;
+        setUser(u);
+        setForm({
+          first_name: u.first_name || '', last_name: u.last_name || '',
+          phone: u.phone || '', status: u.status || 'ACTIVE',
+          job_title: u.profile?.job_title || '', employee_id: u.profile?.employee_id || '',
+        });
+      })
       .catch(() => addToast('Failed to load user', 'error'))
       .finally(() => setLoading(false));
   }, [id, addToast]);
@@ -145,77 +134,83 @@ export default function UserDetailPage() {
     roleService.getModules().then((res) => setModules(res.data?.data || [])).catch(() => {});
   }, []);
 
-  const handleDeactivate = async () => {
-    setDeleting(true);
-    try {
-      await userService.deleteUser(id);
-      addToast('User deactivated', 'success');
-      navigate('/users');
-    } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to deactivate', 'error');
-    } finally { setDeleting(false); setDeleteOpen(false); }
+  // ── Profile handlers ──
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: null });
   };
 
+  const handleSaveProfile = async () => {
+    const newErrors = {};
+    if (!form.first_name) newErrors.first_name = 'First name is required';
+    if (!form.last_name) newErrors.last_name = 'Last name is required';
+    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+
+    setSaving(true);
+    try {
+      await userService.updateUser(id, {
+        first_name: form.first_name, last_name: form.last_name,
+        phone: form.phone || undefined, status: form.status,
+        profile: { job_title: form.job_title || undefined, employee_id: form.employee_id || undefined },
+      });
+      addToast('Profile updated', 'success');
+      fetchUser();
+    } catch (err) {
+      addToast(getErrorMessage(err, 'Failed to update'), 'error');
+      const ve = extractValidationErrors(err);
+      if (Object.keys(ve).length > 0) setErrors(ve);
+    } finally { setSaving(false); }
+  };
+
+  // ── Role handlers ──
   const handleAssignRole = async () => {
     if (!assignRoleId) return;
     setAssigning(true);
     try {
       await userService.assignRole(id, {
-        role_id: Number(assignRoleId),
-        scope_type: assignScopeType,
+        role_id: Number(assignRoleId), scope_type: assignScopeType,
         scope_id: assignScopeId || DEFAULT_ORGANISATION_ID,
       });
-      addToast('Role assigned successfully', 'success');
-      setAssignRoleId('');
-      setShowAssignForm(false);
-      fetchUser();
-    } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to assign role', 'error');
-    } finally { setAssigning(false); }
+      addToast('Role assigned', 'success');
+      setAssignRoleId(''); setShowAssignForm(false); fetchUser();
+    } catch (err) { addToast(err.response?.data?.message || 'Failed', 'error'); }
+    finally { setAssigning(false); }
   };
 
   const handleRemoveRole = async (assignmentId) => {
     setRemoving(assignmentId);
     try {
       await userService.removeRole(id, assignmentId);
-      addToast('Role removed', 'success');
-      fetchUser();
-    } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to remove role', 'error');
-    } finally { setRemoving(null); }
+      addToast('Role removed', 'success'); fetchUser();
+    } catch (err) { addToast(err.response?.data?.message || 'Failed', 'error'); }
+    finally { setRemoving(null); }
   };
 
-  const handleAssignPermission = async () => {
+  // ── Permission handlers ──
+  const handleAssignPerm = async () => {
     if (!permActionId) return;
     setAddingPerm(true);
     try {
       await userService.assignPermission(id, {
-        module_action_id: Number(permActionId),
-        scope_type: permScopeType,
+        module_action_id: Number(permActionId), scope_type: permScopeType,
         scope_id: permScopeId || DEFAULT_ORGANISATION_ID,
       });
       addToast('Permission granted', 'success');
-      setPermActionId('');
-      setPermModuleId('');
-      setShowPermForm(false);
-      fetchUser();
-    } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to assign permission', 'error');
-    } finally { setAddingPerm(false); }
+      setPermActionId(''); setPermModuleId(''); setShowPermForm(false); fetchUser();
+    } catch (err) { addToast(err.response?.data?.message || 'Failed', 'error'); }
+    finally { setAddingPerm(false); }
   };
 
-  const handleRemovePermission = async (permissionId) => {
+  const handleRemovePerm = async (permissionId) => {
     setRemovingPerm(permissionId);
     try {
       await userService.removePermission(id, permissionId);
-      addToast('Permission removed', 'success');
-      fetchUser();
-    } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to remove permission', 'error');
-    } finally { setRemovingPerm(null); }
+      addToast('Permission removed', 'success'); fetchUser();
+    } catch (err) { addToast(err.response?.data?.message || 'Failed', 'error'); }
+    finally { setRemovingPerm(null); }
   };
 
-  // Derived
+  // ── Derived ──
   const assignableRoleOptions = useMemo(() => {
     const assigned = new Set((user?.roleAssignments || []).map((a) => a.role_id || a.role?.role_id));
     return allRoles.filter((r) => !assigned.has(r.role_id))
@@ -237,30 +232,18 @@ export default function UserDetailPage() {
 
   const directPermCount = user?.directPermissions?.length || 0;
 
-  if (loading) return <div className="animate-pulse h-96 bg-gray-100 rounded-xl" />;
+  if (loading) return <div className="animate-pulse h-64 bg-gray-100 rounded-xl" />;
   if (!user) return <div className="text-center py-12 text-gray-500">User not found</div>;
 
   const tabs = [
     { key: 'profile', label: 'Profile' },
     { key: 'roles', label: `Roles (${user.roleAssignments?.length || 0})` },
     { key: 'permissions', label: `Extra Permissions (${directPermCount})` },
-    { key: 'departments', label: `Departments (${user.departmentMemberships?.length || 0})` },
   ];
 
   return (
     <div>
-      <PageHeader
-        title={`${user.first_name} ${user.last_name}`}
-        subtitle={user.email}
-        actions={
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" onClick={() => navigate(`/users/${id}/edit`)}>Edit</Button>
-            {user.status === 'ACTIVE' && (
-              <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>Deactivate</Button>
-            )}
-          </div>
-        }
-      />
+      <PageHeader title={`Edit: ${user.first_name} ${user.last_name}`} subtitle={user.email} />
 
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="border-b border-gray-200 px-6">
@@ -269,26 +252,41 @@ export default function UserDetailPage() {
               <button key={t.key} onClick={() => setTab(t.key)}
                 className={`py-3 text-sm font-medium border-b-2 transition-colors ${
                   tab === t.key ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}>
-                {t.label}
-              </button>
+                }`}>{t.label}</button>
             ))}
           </nav>
         </div>
 
         <div className="p-6">
-          {/* ═══ PROFILE ═══ */}
+          {/* ═══ PROFILE TAB ═══ */}
           {tab === 'profile' && (
-            <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div><dt className="text-gray-500">Status</dt><dd className="mt-1"><StatusBadge status={user.status} /></dd></div>
-              <div><dt className="text-gray-500">Phone</dt><dd className="mt-1 font-medium">{user.phone || '—'}</dd></div>
-              <div><dt className="text-gray-500">Job Title</dt><dd className="mt-1 font-medium">{user.profile?.job_title || '—'}</dd></div>
-              <div><dt className="text-gray-500">Employee ID</dt><dd className="mt-1 font-medium">{user.profile?.employee_id || '—'}</dd></div>
-              <div><dt className="text-gray-500">Created</dt><dd className="mt-1 font-medium">{formatDate(user.created_at)}</dd></div>
-            </dl>
+            <div className="max-w-lg space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="First Name" name="first_name" required value={form.first_name}
+                  error={errors.first_name} onChange={handleChange} />
+                <Input label="Last Name" name="last_name" required value={form.last_name}
+                  error={errors.last_name} onChange={handleChange} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Phone" name="phone" value={form.phone} onChange={handleChange} />
+                <Select label="Status" name="status" value={form.status}
+                  onChange={handleChange} options={STATUS_OPTIONS} />
+              </div>
+              <div className="border-t border-gray-100 pt-5">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Profile</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <Input label="Job Title" name="job_title" value={form.job_title} onChange={handleChange} />
+                  <Input label="Employee ID" name="employee_id" value={form.employee_id} onChange={handleChange} />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                <Button variant="secondary" onClick={() => navigate(`/users/${id}`)}>Cancel</Button>
+                <Button onClick={handleSaveProfile} loading={saving}>Save Changes</Button>
+              </div>
+            </div>
           )}
 
-          {/* ═══ ROLES ═══ */}
+          {/* ═══ ROLES TAB ═══ */}
           {tab === 'roles' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -302,11 +300,9 @@ export default function UserDetailPage() {
 
               {showAssignForm && (
                 <div className="border border-dashed border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-3">
-                  <h4 className="text-sm font-semibold text-gray-900">Assign a New Role</h4>
                   <Select label="Role" name="assign_role" value={assignRoleId}
                     onChange={(e) => setAssignRoleId(e.target.value)}
                     options={assignableRoleOptions} placeholder="Select a role..." />
-
                   {assignRoleId && (
                     <>
                       <div className="p-3 bg-white rounded-lg border border-gray-200">
@@ -319,7 +315,6 @@ export default function UserDetailPage() {
                       </div>
                     </>
                   )}
-
                   {assignPickerRole && modules.length > 0 && (
                     <div className="border border-gray-200 rounded-lg p-4 bg-white">
                       <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
@@ -344,17 +339,13 @@ export default function UserDetailPage() {
             </div>
           )}
 
-          {/* ═══ EXTRA PERMISSIONS ═══ */}
+          {/* ═══ EXTRA PERMISSIONS TAB ═══ */}
           {tab === 'permissions' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500">
-                    {directPermCount} extra permission{directPermCount !== 1 ? 's' : ''} assigned
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    Individual permissions granted beyond what their roles provide.
-                  </p>
+                  <p className="text-sm text-gray-500">{directPermCount} extra permission{directPermCount !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Individual permissions beyond what roles provide.</p>
                 </div>
                 <Button variant="secondary" size="sm" onClick={() => setShowPermForm(!showPermForm)}>
                   {showPermForm ? 'Cancel' : '+ Add Permission'}
@@ -363,7 +354,6 @@ export default function UserDetailPage() {
 
               {showPermForm && (
                 <div className="border border-dashed border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-3">
-                  <h4 className="text-sm font-semibold text-gray-900">Grant an Extra Permission</h4>
                   <div className="grid grid-cols-2 gap-3">
                     <Select label="Module" name="perm_module" value={permModuleId}
                       onChange={(e) => { setPermModuleId(e.target.value); setPermActionId(''); }}
@@ -383,51 +373,39 @@ export default function UserDetailPage() {
                   )}
                   {permActionId && (
                     <div className="flex justify-end">
-                      <Button onClick={handleAssignPermission} loading={addingPerm} size="md">Grant Permission</Button>
+                      <Button onClick={handleAssignPerm} loading={addingPerm} size="md">Grant Permission</Button>
                     </div>
                   )}
                 </div>
               )}
 
               {directPermCount === 0 ? (
-                <p className="text-sm text-gray-400 py-4 text-center">
-                  No extra permissions. Use this to grant individual permissions without assigning a full role.
-                </p>
+                <p className="text-sm text-gray-400 py-4 text-center">No extra permissions.</p>
               ) : (
                 <div className="space-y-2">
-                  {user.directPermissions.map((perm) => (
-                    <DirectPermissionRow key={perm.user_permission_id} perm={perm}
-                      onRemove={handleRemovePermission} removing={removingPerm} />
-                  ))}
+                  {user.directPermissions.map((perm) => {
+                    const moduleCode = perm.moduleAction?.module?.code || '';
+                    const actionCode = perm.moduleAction?.action_code || '';
+                    const moduleName = perm.moduleAction?.module?.name || moduleCode;
+                    const { label } = getPermLabel(moduleCode, actionCode);
+                    return (
+                      <div key={perm.user_permission_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{label}</div>
+                          <div className="text-xs text-gray-500">{moduleName} · {perm.scope_type.replace(/_/g, ' ')} #{perm.scope_id}</div>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => handleRemovePerm(perm.user_permission_id)}
+                          loading={removingPerm === perm.user_permission_id}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50">Remove</Button>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* ═══ DEPARTMENTS ═══ */}
-          {tab === 'departments' && (
-            <div className="space-y-3">
-              {user.departmentMemberships?.length === 0 ? (
-                <p className="text-sm text-gray-500">No department memberships</p>
-              ) : (
-                user.departmentMemberships.map((m) => (
-                  <div key={m.department_membership_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="font-medium text-gray-900">{m.department?.name}</div>
-                      <div className="text-xs text-gray-500">{m.department?.path}</div>
-                    </div>
-                    {m.is_primary && <Badge variant="success" size="sm">Primary</Badge>}
-                  </div>
-                ))
               )}
             </div>
           )}
         </div>
       </div>
-
-      <ConfirmDialog isOpen={deleteOpen} onCancel={() => setDeleteOpen(false)} onConfirm={handleDeactivate}
-        loading={deleting} title="Deactivate User"
-        message={`Deactivate "${user.first_name} ${user.last_name}"? They will lose access immediately.`} />
     </div>
   );
 }

@@ -51,23 +51,42 @@ const permissionService = {
         return false;
       }
 
+      // Build direct permission scope conditions (same ancestor chain)
+      const directConditions = [];
+      if (ancestors.organisation_id != null) {
+        directConditions.push(`(up.scope_type = 'ORGANISATION' AND up.scope_id = :orgId)`);
+      }
+      if (ancestors.office_location_id != null) {
+        directConditions.push(`(up.scope_type = 'OFFICE_LOCATION' AND up.scope_id = :officeId)`);
+      }
+      if (ancestors.vertical_id != null) {
+        directConditions.push(`(up.scope_type = 'VERTICAL' AND up.scope_id = :verticalId)`);
+      }
+      if (ancestors.department_id != null) {
+        directConditions.push(`(up.scope_type = 'DEPARTMENT' AND up.scope_id = :deptId)`);
+      }
+
       const [result] = await sequelize.query(`
         SELECT EXISTS (
           SELECT 1
           FROM user_role_assignment ura
-          JOIN role_permission rp
-            ON rp.role_id = ura.role_id
-           AND rp.effect = 'ALLOW'
-          JOIN module_action ma
-            ON ma.module_action_id = rp.module_action_id
-           AND ma.action_code = :actionCode
-          JOIN module m
-            ON m.module_id = ma.module_id
-           AND m.code = :moduleCode
+          JOIN role_permission rp ON rp.role_id = ura.role_id AND rp.effect = 'ALLOW'
+          JOIN module_action ma ON ma.module_action_id = rp.module_action_id AND ma.action_code = :actionCode
+          JOIN module m ON m.module_id = ma.module_id AND m.code = :moduleCode
           WHERE ura.user_id = :userId
             AND (${conditions.join(' OR ')})
             AND (ura.starts_at IS NULL OR ura.starts_at <= NOW())
             AND (ura.ends_at IS NULL OR ura.ends_at > NOW())
+
+          UNION ALL
+
+          SELECT 1
+          FROM user_permission up
+          JOIN module_action ma ON ma.module_action_id = up.module_action_id AND ma.action_code = :actionCode
+          JOIN module m ON m.module_id = ma.module_id AND m.code = :moduleCode
+          WHERE up.user_id = :userId
+            AND up.effect = 'ALLOW'
+            ${directConditions.length > 0 ? `AND (${directConditions.join(' OR ')})` : ''}
         ) AS has_permission
       `, {
         replacements,
@@ -120,21 +139,43 @@ const permissionService = {
 
       if (conditions.length === 0) return {};
 
+      // Build direct permission scope conditions
+      const directConditions = [];
+      if (ancestors.organisation_id != null) {
+        directConditions.push(`(up.scope_type = 'ORGANISATION' AND up.scope_id = :orgId)`);
+      }
+      if (ancestors.office_location_id != null) {
+        directConditions.push(`(up.scope_type = 'OFFICE_LOCATION' AND up.scope_id = :officeId)`);
+      }
+      if (ancestors.vertical_id != null) {
+        directConditions.push(`(up.scope_type = 'VERTICAL' AND up.scope_id = :verticalId)`);
+      }
+      if (ancestors.department_id != null) {
+        directConditions.push(`(up.scope_type = 'DEPARTMENT' AND up.scope_id = :deptId)`);
+      }
+
       const permissions = await sequelize.query(`
         SELECT DISTINCT m.code AS module, ma.action_code AS action
         FROM user_role_assignment ura
-        JOIN role_permission rp
-          ON rp.role_id = ura.role_id
-         AND rp.effect = 'ALLOW'
-        JOIN module_action ma
-          ON ma.module_action_id = rp.module_action_id
-        JOIN module m
-          ON m.module_id = ma.module_id
+        JOIN role_permission rp ON rp.role_id = ura.role_id AND rp.effect = 'ALLOW'
+        JOIN module_action ma ON ma.module_action_id = rp.module_action_id
+        JOIN module m ON m.module_id = ma.module_id
         WHERE ura.user_id = :userId
           AND (${conditions.join(' OR ')})
           AND (ura.starts_at IS NULL OR ura.starts_at <= NOW())
           AND (ura.ends_at IS NULL OR ura.ends_at > NOW())
-        ORDER BY m.code, ma.action_code
+
+        UNION
+
+        SELECT DISTINCT m.code AS module, ma.action_code AS action
+        FROM user_permission up
+        JOIN module_action ma ON ma.module_action_id = up.module_action_id
+        JOIN module m ON m.module_id = ma.module_id
+        WHERE up.user_id = :userId
+          AND up.effect = 'ALLOW'
+          ${directConditions.length > 0 ? `AND (${directConditions.join(' OR ')})` : ''}
+
+        ORDER BY module, action
       `, {
         replacements,
         type: QueryTypes.SELECT,

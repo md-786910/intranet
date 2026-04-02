@@ -95,6 +95,10 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'user_id',
       as: 'departmentMemberships',
     });
+    UserAccount.hasMany(models.UserPermission, {
+      foreignKey: 'user_id',
+      as: 'directPermissions',
+    });
     UserAccount.hasMany(models.RefreshToken, {
       foreignKey: 'user_id',
       as: 'refreshTokens',

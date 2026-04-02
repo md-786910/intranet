@@ -50,6 +50,20 @@ const removeDepartment = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
+const assignDirectPermission = catchAsync(async (req, res) => {
+  const permission = await usersService.assignDirectPermission(
+    req.params.id, req.body, req.user.user_id
+  );
+  res.status(201).json({ status: 'success', data: permission });
+});
+
+const removeDirectPermission = catchAsync(async (req, res) => {
+  const result = await usersService.removeDirectPermission(
+    req.params.id, req.params.permissionId, req.user.user_id
+  );
+  res.status(200).json({ status: 'success', data: result });
+});
+
 const importCsv = catchAsync(async (req, res) => {
   const result = await usersService.importCsv(req.body.users, req.user.user_id);
   res.status(200).json({ status: 'success', data: result });
@@ -63,6 +77,8 @@ module.exports = {
   deactivate,
   assignRole,
   unassignRole,
+  assignDirectPermission,
+  removeDirectPermission,
   assignDepartment,
   removeDepartment,
   importCsv,

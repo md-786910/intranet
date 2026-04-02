@@ -57,7 +57,9 @@ const PERMISSION_LABELS = {
   },
 };
 
-function getPermLabel(moduleCode, actionCode) {
+export { PERMISSION_LABELS };
+
+export function getPermLabel(moduleCode, actionCode) {
   const mod = PERMISSION_LABELS[moduleCode];
   if (mod && mod[actionCode]) return mod[actionCode];
   // Fallback: humanize the action code

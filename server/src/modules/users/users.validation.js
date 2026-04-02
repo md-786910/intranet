@@ -4,12 +4,10 @@ const idPattern = Joi.number().integer().positive();
 const scopeTypePattern = Joi.string().valid('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT');
 
 const passwordPattern = Joi.string()
-  .min(8)
+  .min(6)
   .max(128)
-  .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?])/)
   .messages({
-    'string.min': 'Password must be at least 8 characters',
-    'string.pattern.base': 'Password must contain at least 1 uppercase, 1 lowercase, 1 digit, and 1 special character',
+    'string.min': 'Password must be at least 6 characters',
   });
 
 const listUsersSchema = {
@@ -54,6 +52,13 @@ const createUserSchema = {
     initial_roles: Joi.array().items(
       Joi.object({
         role_id: idPattern.required(),
+        scope_type: scopeTypePattern.required(),
+        scope_id: idPattern.required(),
+      })
+    ).optional(),
+    initial_permissions: Joi.array().items(
+      Joi.object({
+        module_action_id: idPattern.required(),
         scope_type: scopeTypePattern.required(),
         scope_id: idPattern.required(),
       })
@@ -105,6 +110,24 @@ const assignDepartmentSchema = {
   }),
 };
 
+const assignPermissionSchema = {
+  params: Joi.object({
+    id: idPattern.required(),
+  }),
+  body: Joi.object({
+    module_action_id: idPattern.required(),
+    scope_type: scopeTypePattern.required(),
+    scope_id: idPattern.required(),
+  }),
+};
+
+const removePermissionParam = {
+  params: Joi.object({
+    id: idPattern.required(),
+    permissionId: idPattern.required(),
+  }),
+};
+
 module.exports = {
   listUsersSchema,
   idParam,
@@ -112,4 +135,6 @@ module.exports = {
   updateUserSchema,
   assignRoleSchema,
   assignDepartmentSchema,
+  assignPermissionSchema,
+  removePermissionParam,
 };

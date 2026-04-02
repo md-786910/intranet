@@ -10,5 +10,7 @@ export const userService = {
   removeRole: (userId, assignmentId) => api.delete(`/users/${userId}/roles/${assignmentId}`),
   addDepartment: (userId, data) => api.post(`/users/${userId}/departments`, data),
   removeDepartment: (userId, deptId) => api.delete(`/users/${userId}/departments/${deptId}`),
+  assignPermission: (userId, data) => api.post(`/users/${userId}/permissions`, data),
+  removePermission: (userId, permId) => api.delete(`/users/${userId}/permissions/${permId}`),
   importUsers: (data) => api.post('/users/import', data),
 };

@@ -16,6 +16,7 @@ import OrganisationPage from './pages/organisation/OrganisationPage';
 import UsersListPage from './pages/users/UsersListPage';
 import UserCreatePage from './pages/users/UserCreatePage';
 import UserDetailPage from './pages/users/UserDetailPage';
+import UserEditPage from './pages/users/UserEditPage';
 import RolesListPage from './pages/roles/RolesListPage';
 import RoleCreatePage from './pages/roles/RoleCreatePage';
 import RoleEditPage from './pages/roles/RoleEditPage';
@@ -57,6 +58,7 @@ function App() {
                 <Route path="/users" element={<UsersListPage />} />
                 <Route path="/users/create" element={<UserCreatePage />} />
                 <Route path="/users/:id" element={<UserDetailPage />} />
+                <Route path="/users/:id/edit" element={<UserEditPage />} />
 
                 {/* Roles */}
                 <Route path="/roles" element={<RolesListPage />} />

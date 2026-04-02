@@ -52,7 +52,7 @@ const usersService = {
   },
 
   async getById(id) {
-    const { UserAccount, PersonProfile, UserRoleAssignment, Role, DepartmentMembership, Department } = require('../../database/models');
+    const { UserAccount, PersonProfile, UserRoleAssignment, Role, DepartmentMembership, Department, UserPermission, ModuleAction, Module } = require('../../database/models');
 
     const user = await UserAccount.findByPk(id, {
       attributes: { exclude: ['password_hash'] },
@@ -72,6 +72,20 @@ const usersService = {
             { model: Department, as: 'department', attributes: ['id', 'name', 'code'] },
           ],
         },
+        {
+          model: UserPermission,
+          as: 'directPermissions',
+          include: [{
+            model: ModuleAction,
+            as: 'moduleAction',
+            attributes: ['module_action_id', 'action_code', 'name'],
+            include: [{
+              model: Module,
+              as: 'module',
+              attributes: ['module_id', 'code', 'name'],
+            }],
+          }],
+        },
       ],
     });
 
@@ -80,7 +94,7 @@ const usersService = {
   },
 
   async create(data, actorUserId) {
-    const { UserAccount, PersonProfile, UserRoleAssignment, sequelize } = require('../../database/models');
+    const { UserAccount, PersonProfile, UserRoleAssignment, UserPermission, sequelize } = require('../../database/models');
     const transaction = await sequelize.transaction();
 
     try {
@@ -125,6 +139,20 @@ const usersService = {
           scope_id: role.scope_id,
           assigned_by: actorUserId,
         }, { transaction });
+      }
+
+      // Create initial direct permissions if provided
+      if (data.initial_permissions && data.initial_permissions.length > 0) {
+        for (const perm of data.initial_permissions) {
+          await UserPermission.create({
+            user_id: user.user_id,
+            module_action_id: perm.module_action_id,
+            effect: 'ALLOW',
+            scope_type: perm.scope_type || 'ORGANISATION',
+            scope_id: perm.scope_id,
+            assigned_by: actorUserId,
+          }, { transaction });
+        }
       }
 
       await auditService.log({
@@ -249,7 +277,7 @@ const usersService = {
 
     const assignment = await UserRoleAssignment.findByPk(assignmentId);
     if (!assignment) throw ApiError.notFound('Role assignment not found');
-    if (assignment.user_id !== userId) throw ApiError.badRequest('Assignment does not belong to this user');
+    if (Number(assignment.user_id) !== Number(userId)) throw ApiError.badRequest('Assignment does not belong to this user');
 
     await assignment.destroy();
 
@@ -265,6 +293,65 @@ const usersService = {
     });
 
     return { message: 'Role unassigned successfully' };
+  },
+
+  async assignDirectPermission(userId, data, actorUserId) {
+    const { UserPermission } = require('../../database/models');
+
+    const existing = await UserPermission.findOne({
+      where: {
+        user_id: userId,
+        module_action_id: data.module_action_id,
+        scope_type: data.scope_type,
+        scope_id: data.scope_id,
+      },
+    });
+    if (existing) throw ApiError.conflict('Permission already assigned at this scope');
+
+    const permission = await UserPermission.create({
+      user_id: userId,
+      module_action_id: data.module_action_id,
+      effect: 'ALLOW',
+      scope_type: data.scope_type,
+      scope_id: data.scope_id,
+      assigned_by: actorUserId,
+    });
+
+    await cacheService.deletePattern(`bh:perm:${userId}:*`);
+    await cacheService.deletePattern(`bh:perms:${userId}:*`);
+
+    await auditService.log({
+      user_id: actorUserId,
+      action: 'PERMISSION_ASSIGNED',
+      resource_type: 'UserPermission',
+      resource_id: permission.user_permission_id,
+      details: { target_user_id: userId, module_action_id: data.module_action_id },
+    });
+
+    return permission;
+  },
+
+  async removeDirectPermission(userId, permissionId, actorUserId) {
+    const { UserPermission } = require('../../database/models');
+
+    const permission = await UserPermission.findByPk(permissionId);
+    if (!permission) throw ApiError.notFound('Permission not found');
+    if (Number(permission.user_id) !== Number(userId)) throw ApiError.badRequest('Permission does not belong to this user');
+
+    await permission.destroy();
+
+    await cacheService.deletePattern(`bh:perm:${userId}:*`);
+    await cacheService.deletePattern(`bh:perms:${userId}:*`);
+
+    await auditService.log({
+      user_id: actorUserId,
+      action: 'PERMISSION_REMOVED',
+      resource_type: 'UserPermission',
+      resource_id: permissionId,
+      details: { target_user_id: userId },
+    });
+
+    return { message: 'Permission removed successfully' };
   },
 
   async assignDepartment(userId, data, actorUserId) {

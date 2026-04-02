@@ -75,6 +75,24 @@ router.delete(
   controller.unassignRole
 );
 
+// POST /api/v1/users/:id/permissions
+router.post(
+  '/:id/permissions',
+  authorize('ADMIN', 'MANAGE_USERS'),
+  validate(schemas.assignPermissionSchema),
+  auditLogger('PERMISSION_ASSIGNED'),
+  controller.assignDirectPermission
+);
+
+// DELETE /api/v1/users/:id/permissions/:permissionId
+router.delete(
+  '/:id/permissions/:permissionId',
+  authorize('ADMIN', 'MANAGE_USERS'),
+  validate(schemas.removePermissionParam),
+  auditLogger('PERMISSION_REMOVED'),
+  controller.removeDirectPermission
+);
+
 // POST /api/v1/users/:id/departments
 router.post(
   '/:id/departments',
