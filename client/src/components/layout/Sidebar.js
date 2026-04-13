@@ -39,7 +39,7 @@ function MenuItem({ item }) {
 
 export default function Sidebar() {
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 min-h-screen px-4 py-6">
+    <aside className="w-64 bg-white border-r border-gray-200 h-full overflow-y-auto px-4 py-6">
       <div className="mb-8 px-3">
         <h1 className="text-xl font-bold text-primary-800">Brighthouse</h1>
         <p className="text-xs text-gray-500 mt-1">Admin Panel</p>
