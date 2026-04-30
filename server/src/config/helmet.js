@@ -1,5 +1,10 @@
 const helmet = require('helmet');
 
+const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 const helmetConfig = helmet({
   contentSecurityPolicy: {
     directives: {
@@ -7,7 +12,7 @@ const helmetConfig = helmet({
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind needs unsafe-inline
       imgSrc: ["'self'", 'data:', 'blob:'],
-      connectSrc: ["'self'", process.env.CORS_ORIGIN || 'http://localhost:3000'],
+      connectSrc: ["'self'", ...corsOrigins],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
       frameSrc: ["'none'"],
