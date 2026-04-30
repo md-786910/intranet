@@ -23,7 +23,11 @@ const upload = multer({
 
 router.use(authenticate);
 
+router.get('/', validate(schemas.listSchema), controller.list);
 router.post('/upload', upload.single('file'), controller.upload);
+router.post('/bulk-delete', validate(schemas.bulkDeleteSchema), controller.bulkRemove);
+router.post('/bulk-restore', validate(schemas.bulkRestoreSchema), controller.bulkRestore);
+router.post('/bulk-purge', validate(schemas.bulkRestoreSchema), controller.bulkPurge);
 router.get('/:id', validate(schemas.idParam), controller.getById);
 router.delete('/:id', validate(schemas.idParam), controller.remove);
 

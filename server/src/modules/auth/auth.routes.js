@@ -43,4 +43,21 @@ router.put(
 // GET /api/v1/auth/me
 router.get("/me", authenticate, controller.getMe);
 
+// GET /api/v1/auth/invitations/:token/validate (public)
+router.get(
+  "/invitations/:token/validate",
+  authLimiter,
+  validate(schemas.invitationTokenParam),
+  controller.validateInvitation,
+);
+
+// POST /api/v1/auth/invitations/:token/accept (public)
+router.post(
+  "/invitations/:token/accept",
+  authLimiter,
+  validate(schemas.acceptInvitationSchema),
+  auditLogger("EMPLOYEE_INVITE_ACCEPTED"),
+  controller.acceptInvitation,
+);
+
 module.exports = router;

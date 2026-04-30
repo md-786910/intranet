@@ -43,6 +43,7 @@ const moduleActions = {
     { code: 'MANAGE_VERTICALS', name: 'Manage Verticals' },
     { code: 'MANAGE_DEPARTMENTS', name: 'Manage Departments' },
     { code: 'MANAGE_USERS', name: 'Manage Users' },
+    { code: 'MANAGE_EMPLOYEES', name: 'Manage Employees' },
     { code: 'MANAGE_ROLES', name: 'Manage Roles' },
     { code: 'VIEW_ANALYTICS', name: 'View Admin Analytics' },
     { code: 'VIEW_AUDIT_LOG', name: 'View Audit Log' },

@@ -36,6 +36,11 @@ const archive = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: article });
 });
 
+const unpublish = catchAsync(async (req, res) => {
+  const article = await newsService.unpublish(req.params.id, req.user.user_id);
+  res.status(200).json({ status: 'success', data: article });
+});
+
 const setAudience = catchAsync(async (req, res) => {
   const article = await newsService.setAudience(
     req.params.id, req.body.targets, req.user.user_id
@@ -43,4 +48,14 @@ const setAudience = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: article });
 });
 
-module.exports = { list, getById, create, update, remove, publish, archive, setAudience };
+const bulkRestore = catchAsync(async (req, res) => {
+  const result = await newsService.bulkRestore(req.body.ids, req.user.user_id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
+const bulkPurge = catchAsync(async (req, res) => {
+  const result = await newsService.bulkPurge(req.body.ids, req.user.user_id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
+module.exports = { list, getById, create, update, remove, publish, unpublish, archive, setAudience, bulkRestore, bulkPurge };

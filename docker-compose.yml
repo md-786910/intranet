@@ -2,7 +2,6 @@ services:
   # ---------- PostgreSQL ----------
   postgres:
     image: postgres:16-alpine
-    container_name: bh_postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME:-brighthouse}
@@ -24,7 +23,6 @@ services:
   # ---------- Redis ----------
   redis:
     image: redis:7-alpine
-    container_name: bh_redis
     restart: unless-stopped
     command: >
       redis-server
@@ -50,7 +48,6 @@ services:
       context: ./server
       dockerfile: Dockerfile
       target: development
-    container_name: bh_server
     restart: unless-stopped
     depends_on:
       postgres:
@@ -58,29 +55,8 @@ services:
       redis:
         condition: service_healthy
     environment:
-      NODE_ENV: ${NODE_ENV:-development}
-      PORT: ${PORT:-4000}
       DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-brighthouse}
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
-      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
-      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
-      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
-      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
-      AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-5}
-      OWNER_EMAIL: ${OWNER_EMAIL:-owner@brighthouse.local}
-      OWNER_PASSWORD: ${OWNER_PASSWORD:-ChangeMe123!}
-      OWNER_FIRST_NAME: ${OWNER_FIRST_NAME:-Platform}
-      OWNER_LAST_NAME: ${OWNER_LAST_NAME:-Owner}
     ports:
       - "${PORT:-4000}:${PORT:-4000}"
     volumes:
@@ -89,7 +65,7 @@ services:
       - ./server/src/database/migrations:/app/src/database/migrations
       - ./server/src/database/seeders:/app/src/database/seeders
       - ./.env:/app/.env:ro
-      - server_uploads:/app/uploads
+      - ./server/uploads:/app/uploads
       - server_node_modules:/app/node_modules
     networks:
       - bh_network
@@ -98,8 +74,6 @@ volumes:
   pg_data:
     driver: local
   redis_data:
-    driver: local
-  server_uploads:
     driver: local
   server_node_modules:
     driver: local

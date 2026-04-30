@@ -1,11 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
-import Textarea from '../../components/common/Textarea';
+import Select from '../../components/common/Select';
+import MultiSelect from '../../components/common/MultiSelect';
+import RichTextEditor from '../../components/common/RichTextEditor';
+import FilePicker from '../../components/common/FilePicker';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
+import { PRIORITY_OPTIONS } from '../../components/common/PriorityBadge';
 import { newsService } from '../../services/newsService';
+import { categoryService } from '../../services/categoryService';
 import { useToast } from '../../hooks/useToast';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
@@ -16,10 +21,38 @@ export default function NewsCreatePage() {
   const { addToast } = useToast();
   const { currentOrganisationId } = useCurrentOrganisation();
   const { hasPermission: canCreateNews } = usePermission('NEWS', 'CREATE');
-  const [form, setForm] = useState({ title: '', summary: '', body: '', cover_image_url: '' });
+  const [form, setForm] = useState({
+    title: '', summary: '', body: '', category_id: '', priority: 'NORMAL',
+  });
+  const [cover, setCover] = useState(null);
+  const [relatedIds, setRelatedIds] = useState([]); // array of string ids for MultiSelect
   const [audienceTargets, setAudienceTargets] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [otherArticles, setOtherArticles] = useState([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    let cancelled = false;
+    categoryService.list({ entity_type: 'NEWS', limit: 200 })
+      .then((res) => {
+        if (cancelled) return;
+        setCategories(res.data?.data?.categories || []);
+      })
+      .catch(() => { /* silent */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    newsService.getArticles({ status: 'PUBLISHED', limit: 100 })
+      .then((res) => {
+        if (cancelled) return;
+        setOtherArticles(res.data?.data?.articles || []);
+      })
+      .catch(() => { /* silent */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -35,7 +68,14 @@ export default function NewsCreatePage() {
     setErrors({});
     try {
       await newsService.createArticle({
-        ...form,
+        title: form.title,
+        summary: form.summary || null,
+        body: form.body,
+        category_id: form.category_id ? Number(form.category_id) : null,
+        priority: form.priority || 'NORMAL',
+        cover_image_url: cover?.url || null,
+        cover_image_id: cover?.media_asset_id || null,
+        related_news_ids: relatedIds.map((v) => Number(v)).filter(Boolean),
         owning_scope_type: 'ORGANISATION',
         owning_scope_id: currentOrganisationId,
         audience_targets: audienceTargets.map((target) => ({
@@ -48,7 +88,6 @@ export default function NewsCreatePage() {
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to create article');
       addToast(message, 'error');
-      
       const validationErrors = extractValidationErrors(err);
       if (Object.keys(validationErrors).length > 0) {
         setErrors(validationErrors);
@@ -64,14 +103,69 @@ export default function NewsCreatePage() {
 
   return (
     <div>
-      <PageHeader title="Create Article" subtitle="Write a news article" />
-      <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-3xl space-y-4">
+      <PageHeader title="Create Article" subtitle="Write a news article" backTo="/news" />
+      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
         <Input label="Title" name="title" required value={form.title} error={errors.title} onChange={handleChange} />
         <Input label="Summary" name="summary" value={form.summary} error={errors.summary} onChange={handleChange}
           placeholder="Brief summary (optional)" />
-        <Textarea label="Body" name="body" required value={form.body} error={errors.body} onChange={handleChange} rows={12} />
-        <Input label="Cover Image URL" name="cover_image_url" value={form.cover_image_url} error={errors.cover_image_url} onChange={handleChange}
-          placeholder="https://..." />
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Body <span className="text-red-500">*</span>
+          </label>
+          <RichTextEditor
+            value={form.body}
+            onChange={(html) => {
+              setForm((prev) => ({ ...prev, body: html }));
+              if (errors.body) setErrors({ ...errors, body: null });
+            }}
+            error={errors.body}
+            imageContext="news"
+            placeholder="Write the article body…"
+          />
+        </div>
+
+        <FilePicker
+          label="Cover image"
+          mode="image"
+          context="news"
+          value={cover}
+          onChange={setCover}
+          helpText="Upload, pick from the media library, or paste a remote URL."
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Select
+            label="Category"
+            name="category_id"
+            value={form.category_id}
+            onChange={handleChange}
+            error={errors.category_id}
+            placeholder="Select category (optional)"
+            options={categories.map((c) => ({ value: String(c.category_id), label: c.name }))}
+          />
+          <Select
+            label="Priority"
+            name="priority"
+            value={form.priority}
+            onChange={handleChange}
+            options={PRIORITY_OPTIONS}
+          />
+        </div>
+
+        <MultiSelect
+          label="Related articles"
+          name="related_news_ids"
+          value={relatedIds}
+          onChange={setRelatedIds}
+          placeholder="Pick up to 10 related articles..."
+          options={otherArticles.map((a) => ({
+            value: String(a.news_item_id),
+            label: a.title,
+          }))}
+          helpText="Surface other articles alongside this one on the detail page."
+        />
+
         <div className="pt-2">
           <div className="mb-3">
             <h3 className="text-sm font-medium text-gray-700">Audience</h3>

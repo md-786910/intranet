@@ -5,7 +5,9 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Textarea from '../../components/common/Textarea';
 import Select from '../../components/common/Select';
+import FilePicker from '../../components/common/FilePicker';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
+import { PRIORITY_OPTIONS } from '../../components/common/PriorityBadge';
 import { documentService } from '../../services/documentService';
 import { useToast } from '../../hooks/useToast';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
@@ -18,10 +20,12 @@ export default function DocumentCreatePage() {
   const { hasPermission: canCreateDocuments } = usePermission('DOCUMENTS', 'CREATE');
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState({
-    title: '', summary: '', category_id: '', file_url: '', file_name: '',
+    title: '', summary: '', category_id: '', priority: 'NORMAL',
   });
+  const [files, setFiles] = useState([]);
   const [audienceTargets, setAudienceTargets] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (!currentOrganisationId) return;
@@ -30,11 +34,17 @@ export default function DocumentCreatePage() {
       .catch(() => {});
   }, [currentOrganisationId]);
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: null });
+  };
 
   const handleSave = async () => {
-    if (!form.title.trim() || !form.file_url.trim() || !form.file_name.trim()) {
-      addToast('Title, file URL, and file name are required', 'error');
+    const nextErrors = {};
+    if (!form.title.trim()) nextErrors.title = 'Title is required';
+    if (!files.length) nextErrors.files = 'Attach at least one file or URL';
+    if (Object.keys(nextErrors).length) {
+      setErrors(nextErrors);
       return;
     }
     if (!currentOrganisationId) {
@@ -42,10 +52,14 @@ export default function DocumentCreatePage() {
       return;
     }
     setSaving(true);
+    setErrors({});
     try {
       await documentService.createDocument({
-        ...form,
+        title: form.title,
+        summary: form.summary || null,
         category_id: form.category_id || undefined,
+        priority: form.priority || 'NORMAL',
+        files,
         owning_scope_type: 'ORGANISATION',
         owning_scope_id: currentOrganisationId,
         audience_targets: audienceTargets.map((target) => ({
@@ -68,18 +82,32 @@ export default function DocumentCreatePage() {
 
   return (
     <div>
-      <PageHeader title="Upload Document" />
-      <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-2xl space-y-4">
-        <Input label="Title" name="title" required value={form.title} onChange={handleChange} />
+      <PageHeader title="Upload Document" backTo="/documents" />
+      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <Input label="Title" name="title" required value={form.title} error={errors.title} onChange={handleChange} />
         <Textarea label="Summary" name="summary" value={form.summary} onChange={handleChange} rows={3} />
-        <Select label="Category" name="category_id" value={form.category_id} onChange={handleChange}
-          placeholder="Select category (optional)"
-          options={categories.map((c) => ({ value: c.category_id, label: c.name }))}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Select label="Category" name="category_id" value={form.category_id} onChange={handleChange}
+            placeholder="Select category (optional)"
+            options={categories.map((c) => ({ value: c.category_id, label: c.name }))}
+          />
+          <Select label="Priority" name="priority" value={form.priority} onChange={handleChange}
+            options={PRIORITY_OPTIONS}
+          />
+        </div>
+
+        <FilePicker
+          label="Files"
+          required
+          mode="file"
+          multiple
+          context="document"
+          value={files}
+          onChange={setFiles}
+          error={errors.files}
+          helpText="Upload from your computer, pick from the media library, or paste remote URLs. Attach multiple if needed."
         />
-        <Input label="File URL" name="file_url" required value={form.file_url} onChange={handleChange}
-          placeholder="/uploads/filename.pdf" />
-        <Input label="File Name" name="file_name" required value={form.file_name} onChange={handleChange}
-          placeholder="document.pdf" />
+
         <div className="pt-2">
           <div className="mb-3">
             <h3 className="text-sm font-medium text-gray-700">Audience</h3>

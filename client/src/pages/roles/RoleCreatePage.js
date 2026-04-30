@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
@@ -108,17 +108,10 @@ export default function RoleCreatePage() {
 
   return (
     <div>
-      {/* Back link */}
-      <Link to="/roles" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-4">
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-        </svg>
-        Back to Roles
-      </Link>
-
       <PageHeader
         title="Create New Role"
         subtitle="Define a role and assign permissions."
+        backTo="/roles"
         actions={cloneFrom && <Badge variant="info" size="md">Cloned from: {cloneFrom.name}</Badge>}
       />
 

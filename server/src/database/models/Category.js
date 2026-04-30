@@ -9,6 +9,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: true,
     },
+    entity_type: {
+      type: DataTypes.ENUM('NEWS', 'DOCUMENT'),
+      allowNull: false,
+    },
     name: {
       type: DataTypes.STRING(255),
       allowNull: false,
@@ -44,6 +48,10 @@ module.exports = (sequelize, DataTypes) => {
     },
   });
 
+  Category.ENTITY_NEWS = 'NEWS';
+  Category.ENTITY_DOCUMENT = 'DOCUMENT';
+  Category.ENTITY_TYPES = ['NEWS', 'DOCUMENT'];
+
   Category.associate = (models) => {
     Category.belongsTo(models.Category, {
       as: 'parent',
@@ -56,6 +64,10 @@ module.exports = (sequelize, DataTypes) => {
     Category.hasMany(models.DocumentItem, {
       foreignKey: 'category_id',
       as: 'documents',
+    });
+    Category.hasMany(models.NewsItem, {
+      foreignKey: 'category_id',
+      as: 'newsItems',
     });
   };
 

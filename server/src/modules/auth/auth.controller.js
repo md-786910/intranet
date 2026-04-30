@@ -1,5 +1,6 @@
 const catchAsync = require('../../utils/catchAsync');
 const authService = require('./auth.service');
+const employeesService = require('../employees/employees.service');
 
 const login = catchAsync(async (req, res) => {
   const { email, password } = req.body;
@@ -76,10 +77,27 @@ const getMe = catchAsync(async (req, res) => {
   });
 });
 
+const validateInvitation = catchAsync(async (req, res) => {
+  const result = await employeesService.validateInvitation(req.params.token);
+  res.status(200).json({ status: 'success', data: result });
+});
+
+const acceptInvitation = catchAsync(async (req, res) => {
+  const result = await employeesService.acceptInvitation(
+    req.params.token,
+    req.body.password,
+    req.ip,
+    req.headers['user-agent'],
+  );
+  res.status(200).json({ status: 'success', data: result });
+});
+
 module.exports = {
   login,
   refresh,
   logout,
   changePassword,
   getMe,
+  validateInvitation,
+  acceptInvitation,
 };

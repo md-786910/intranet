@@ -21,6 +21,9 @@ router.post('/', authorize('DOCUMENTS', 'CREATE'), validate(schemas.createDocSch
 router.put('/:id', authorize('DOCUMENTS', 'EDIT'), validate(schemas.updateDocSchema), auditLogger('DOC_UPDATED'), controller.update);
 router.delete('/:id', authorize('DOCUMENTS', 'DELETE'), auditLogger('DOC_DELETED'), controller.remove);
 router.post('/:id/publish', authorize('DOCUMENTS', 'PUBLISH'), auditLogger('DOC_PUBLISHED'), controller.publish);
+router.post('/:id/unpublish', authorize('DOCUMENTS', 'PUBLISH'), auditLogger('DOC_UNPUBLISHED'), controller.unpublish);
+router.post('/bulk-restore', authorize('DOCUMENTS', 'DELETE'), validate(schemas.bulkIdsSchema), auditLogger('DOC_RESTORED'), controller.bulkRestore);
+router.post('/bulk-purge', authorize('DOCUMENTS', 'DELETE'), validate(schemas.bulkIdsSchema), auditLogger('DOC_PURGED'), controller.bulkPurge);
 
 // ── Versions ──
 router.get('/:id/versions', authorize('DOCUMENTS', 'VIEW'), validate(schemas.idParam), controller.listVersions);

@@ -64,6 +64,7 @@ export default function PushDetailPage() {
     <div>
       <PageHeader
         title={campaign.title}
+        backTo="/push"
         actions={
           <div className="flex gap-2">
             {['DRAFT', 'SCHEDULED'].includes(campaign.status) && (

@@ -29,6 +29,15 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(128),
       allowNull: true,
     },
+    media_asset_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    files: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: [],
+    },
     changelog: {
       type: DataTypes.TEXT,
       allowNull: true,
@@ -52,6 +61,10 @@ module.exports = (sequelize, DataTypes) => {
     DocumentVersion.belongsTo(models.UserAccount, {
       foreignKey: 'uploaded_by',
       as: 'uploader',
+    });
+    DocumentVersion.belongsTo(models.MediaAsset, {
+      foreignKey: 'media_asset_id',
+      as: 'media',
     });
   };
 

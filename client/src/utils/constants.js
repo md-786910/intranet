@@ -35,6 +35,7 @@ export const STATUS_VARIANTS = {
   ACTIVE: 'success',
   INACTIVE: 'warning',
   LOCKED: 'danger',
+  INVITED: 'info',
   DRAFT: 'default',
   PUBLISHED: 'success',
   ARCHIVED: 'warning',

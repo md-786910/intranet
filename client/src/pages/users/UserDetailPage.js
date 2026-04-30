@@ -308,6 +308,7 @@ export default function UserDetailPage() {
       <PageHeader
         title={`${user.first_name} ${user.last_name}`}
         subtitle={user.email}
+        backTo="/users"
         actions={
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={() => navigate(`/users/${id}/edit`)}>Edit</Button>

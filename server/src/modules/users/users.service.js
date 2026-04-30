@@ -21,7 +21,7 @@ function buildDepartmentPath(department) {
 
 const usersService = {
   async list(query) {
-    const { UserAccount, PersonProfile, DepartmentMembership } = require('../../database/models');
+    const { UserAccount, PersonProfile, DepartmentMembership, sequelize } = require('../../database/models');
     const { Op } = require('sequelize');
     const { page, limit, offset } = parsePagination(query);
 
@@ -34,6 +34,23 @@ const usersService = {
         { last_name: { [Op.iLike]: `%${query.search}%` } },
       ];
     }
+
+    // Hide pure members (invited via /employees flow with only EMPLOYEE role).
+    // Promoted members (any non-EMPLOYEE role assigned) reappear here.
+    where[Op.and] = [
+      sequelize.literal(`(
+        NOT EXISTS (
+          SELECT 1 FROM employee_invitation ei
+           WHERE ei.user_id = "UserAccount"."user_id"
+        )
+        OR EXISTS (
+          SELECT 1 FROM user_role_assignment ura
+            JOIN role r ON r.role_id = ura.role_id
+           WHERE ura.user_id = "UserAccount"."user_id"
+             AND r.code <> 'EMPLOYEE'
+        )
+      )`),
+    ];
 
     const include = [
       { model: PersonProfile, as: 'profile', required: false },

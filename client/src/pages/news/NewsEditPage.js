@@ -3,9 +3,14 @@ import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
-import Textarea from '../../components/common/Textarea';
+import Select from '../../components/common/Select';
+import MultiSelect from '../../components/common/MultiSelect';
+import RichTextEditor from '../../components/common/RichTextEditor';
+import FilePicker from '../../components/common/FilePicker';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
+import { PRIORITY_OPTIONS } from '../../components/common/PriorityBadge';
 import { newsService } from '../../services/newsService';
+import { categoryService } from '../../services/categoryService';
 import { useToast } from '../../hooks/useToast';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { usePermission } from '../../hooks/usePermission';
@@ -16,8 +21,12 @@ export default function NewsEditPage() {
   const { addToast } = useToast();
   const { currentOrganisationId } = useCurrentOrganisation();
   const { hasPermission: canEditNews } = usePermission('NEWS', 'EDIT');
-  const [form, setForm] = useState({ title: '', summary: '', body: '', cover_image_url: '' });
+  const [form, setForm] = useState({ title: '', summary: '', body: '', category_id: '', priority: 'NORMAL' });
+  const [cover, setCover] = useState(null);
+  const [relatedIds, setRelatedIds] = useState([]);
   const [audienceTargets, setAudienceTargets] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [otherArticles, setOtherArticles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -25,7 +34,26 @@ export default function NewsEditPage() {
     newsService.getArticle(id)
       .then((res) => {
         const a = res.data?.data;
-        setForm({ title: a.title, summary: a.summary || '', body: a.body || '', cover_image_url: a.cover_image_url || '' });
+        setForm({
+          title: a.title,
+          summary: a.summary || '',
+          body: a.body || '',
+          category_id: a.category_id ? String(a.category_id) : '',
+          priority: a.priority || 'NORMAL',
+        });
+        if (a.cover_image_url) {
+          setCover({
+            url: a.cover_image_url,
+            name: (a.cover_image_url.split('/').pop()) || 'cover',
+            mime: 'image/*',
+            size: null,
+            media_asset_id: a.cover_image_id || null,
+            source: a.cover_image_id ? 'upload' : 'url',
+          });
+        } else {
+          setCover(null);
+        }
+        setRelatedIds((a.related_news_ids || []).map((rid) => String(rid)));
         setAudienceTargets((a.audienceRules || []).map((rule) => ({
           scope_type: rule.target_scope_type,
           scope_id: rule.target_scope_id,
@@ -36,6 +64,28 @@ export default function NewsEditPage() {
       .finally(() => setLoading(false));
   }, [id, addToast]);
 
+  useEffect(() => {
+    let cancelled = false;
+    categoryService.list({ entity_type: 'NEWS', limit: 200 })
+      .then((res) => {
+        if (cancelled) return;
+        setCategories(res.data?.data?.categories || []);
+      })
+      .catch(() => { /* silent */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    newsService.getArticles({ status: 'PUBLISHED', limit: 100 })
+      .then((res) => {
+        if (cancelled) return;
+        setOtherArticles(res.data?.data?.articles || []);
+      })
+      .catch(() => { /* silent */ });
+    return () => { cancelled = true; };
+  }, []);
+
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSave = async () => {
@@ -43,7 +93,14 @@ export default function NewsEditPage() {
     setSaving(true);
     try {
       await newsService.updateArticle(id, {
-        ...form,
+        title: form.title,
+        summary: form.summary || null,
+        body: form.body,
+        category_id: form.category_id ? Number(form.category_id) : null,
+        priority: form.priority || 'NORMAL',
+        cover_image_url: cover?.url || null,
+        cover_image_id: cover?.media_asset_id || null,
+        related_news_ids: relatedIds.map((v) => Number(v)).filter(Boolean),
         scope_type: 'ORGANISATION',
         scope_id: currentOrganisationId,
         audience_targets: audienceTargets.map((target) => ({
@@ -66,14 +123,67 @@ export default function NewsEditPage() {
 
   if (loading) return <div className="animate-pulse h-96 bg-gray-100 rounded-xl" />;
 
+  // Don't offer this article as one of its own related entries.
+  const relatedOptions = otherArticles
+    .filter((a) => String(a.news_item_id) !== String(id))
+    .map((a) => ({ value: String(a.news_item_id), label: a.title }));
+
   return (
     <div>
-      <PageHeader title="Edit Article" />
-      <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-3xl space-y-4">
+      <PageHeader title="Edit Article" backTo={`/news/${id}`} />
+      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
         <Input label="Title" name="title" required value={form.title} onChange={handleChange} />
         <Input label="Summary" name="summary" value={form.summary} onChange={handleChange} />
-        <Textarea label="Body" name="body" required value={form.body} onChange={handleChange} rows={12} />
-        <Input label="Cover Image URL" name="cover_image_url" value={form.cover_image_url} onChange={handleChange} />
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Body <span className="text-red-500">*</span>
+          </label>
+          <RichTextEditor
+            value={form.body}
+            onChange={(html) => setForm((p) => ({ ...p, body: html }))}
+            imageContext="news"
+            placeholder="Write the article body…"
+          />
+        </div>
+
+        <FilePicker
+          label="Cover image"
+          mode="image"
+          context="news"
+          value={cover}
+          onChange={setCover}
+          helpText="Upload, pick from the media library, or paste a remote URL."
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Select
+            label="Category"
+            name="category_id"
+            value={form.category_id}
+            onChange={handleChange}
+            placeholder="Select category (optional)"
+            options={categories.map((c) => ({ value: String(c.category_id), label: c.name }))}
+          />
+          <Select
+            label="Priority"
+            name="priority"
+            value={form.priority}
+            onChange={handleChange}
+            options={PRIORITY_OPTIONS}
+          />
+        </div>
+
+        <MultiSelect
+          label="Related articles"
+          name="related_news_ids"
+          value={relatedIds}
+          onChange={setRelatedIds}
+          placeholder="Pick up to 10 related articles..."
+          options={relatedOptions}
+          helpText="Surface other articles alongside this one on the detail page."
+        />
+
         <div className="pt-2">
           <div className="mb-3">
             <h3 className="text-sm font-medium text-gray-700">Audience</h3>

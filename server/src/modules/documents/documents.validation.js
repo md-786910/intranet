@@ -8,6 +8,16 @@ const scopeTarget = Joi.object({
   scope_id: idPattern.required(),
 });
 
+const fileEntry = Joi.object({
+  url: Joi.string().required(),
+  name: Joi.string().required(),
+  size: Joi.number().integer().min(0).optional().allow(null),
+  mime: Joi.string().optional().allow('', null),
+  source: Joi.string().valid('upload', 'library', 'url').optional(),
+});
+
+const priorityPattern = Joi.string().valid('LOW', 'NORMAL', 'HIGH', 'URGENT');
+
 const listDocsSchema = {
   query: Joi.object({
     page: Joi.number().integer().min(1).default(1),
@@ -17,6 +27,7 @@ const listDocsSchema = {
     category_id: idPattern.optional(),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
+    trash: Joi.boolean().optional(),
   }),
 };
 
@@ -37,15 +48,20 @@ const createDocSchema = {
     title: Joi.string().trim().min(1).max(255).required(),
     summary: Joi.string().trim().max(2000).optional().allow('', null),
     category_id: idPattern.optional().allow(null),
+    priority: priorityPattern.optional(),
     owning_scope_type: scopeTypePattern.optional(),
     owning_scope_id: idPattern.optional(),
     audience_targets: Joi.array().items(scopeTarget).optional(),
-    file_url: Joi.string().required(),
-    file_name: Joi.string().required(),
+    // Preferred new shape — JSONB array of files. Old single-file fields
+    // remain optional so legacy clients still work, but at least one of the
+    // two paths must be present.
+    files: Joi.array().items(fileEntry).min(1).optional(),
+    file_url: Joi.string().optional().allow('', null),
+    file_name: Joi.string().optional().allow('', null),
     file_size: Joi.number().integer().optional(),
-    mime_type: Joi.string().optional(),
+    mime_type: Joi.string().optional().allow('', null),
     changelog: Joi.string().trim().max(500).optional().allow('', null),
-  }),
+  }).or('files', 'file_url'),
 };
 
 const updateDocSchema = {
@@ -56,6 +72,7 @@ const updateDocSchema = {
     title: Joi.string().trim().min(1).max(255).optional(),
     summary: Joi.string().trim().max(2000).optional().allow('', null),
     category_id: idPattern.optional().allow(null),
+    priority: priorityPattern.optional(),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
     audience_targets: Joi.array().items(scopeTarget).optional(),
@@ -67,14 +84,15 @@ const createVersionSchema = {
     id: idPattern.required(),
   }),
   body: Joi.object({
-    file_url: Joi.string().required(),
-    file_name: Joi.string().required(),
+    files: Joi.array().items(fileEntry).min(1).optional(),
+    file_url: Joi.string().optional().allow('', null),
+    file_name: Joi.string().optional().allow('', null),
     file_size: Joi.number().integer().optional(),
-    mime_type: Joi.string().optional(),
+    mime_type: Joi.string().optional().allow('', null),
     changelog: Joi.string().trim().max(500).optional().allow('', null),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
-  }),
+  }).or('files', 'file_url'),
 };
 
 const createCategorySchema = {
@@ -101,6 +119,12 @@ const updateCategorySchema = {
   }),
 };
 
+const bulkIdsSchema = {
+  body: Joi.object({
+    ids: Joi.array().items(idPattern).min(1).max(100).required(),
+  }),
+};
+
 module.exports = {
   listDocsSchema,
   idParam,
@@ -110,4 +134,5 @@ module.exports = {
   createVersionSchema,
   createCategorySchema,
   updateCategorySchema,
+  bulkIdsSchema,
 };

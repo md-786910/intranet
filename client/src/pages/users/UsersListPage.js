@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Table from '../../components/common/Table';
@@ -26,6 +26,7 @@ export default function UsersListPage() {
   const [data, setData] = useState({ users: [], pagination: {} });
   const [loading, setLoading] = useState(true);
   const { hasPermission: canManageUsers } = usePermission('ADMIN', 'MANAGE_USERS');
+  const { hasPermission: canManageEmployees } = usePermission('ADMIN', 'MANAGE_EMPLOYEES');
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -99,6 +100,15 @@ export default function UsersListPage() {
         limit={data.pagination.limit}
         onPageChange={setPage}
       />
+
+      {canManageEmployees && (
+        <div className="mt-6 pt-4 border-t border-gray-200 text-sm text-gray-500">
+          Looking for employees?{' '}
+          <Link to="/employees" className="font-medium text-primary-600 hover:text-primary-700">
+            View member list &rarr;
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

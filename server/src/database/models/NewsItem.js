@@ -34,10 +34,24 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: true,
     },
+    category_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     status: {
       type: DataTypes.ENUM('DRAFT', 'PUBLISHED', 'ARCHIVED'),
       defaultValue: 'DRAFT',
       allowNull: false,
+    },
+    priority: {
+      type: DataTypes.ENUM('LOW', 'NORMAL', 'HIGH', 'URGENT'),
+      defaultValue: 'NORMAL',
+      allowNull: false,
+    },
+    related_news_ids: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: [],
     },
     author_id: {
       type: DataTypes.INTEGER,
@@ -65,6 +79,9 @@ module.exports = (sequelize, DataTypes) => {
     },
   }, {
     tableName: 'news_item',
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
     defaultScope: {
       where: { deleted_at: null },
     },
@@ -83,6 +100,10 @@ module.exports = (sequelize, DataTypes) => {
     NewsItem.belongsTo(models.MediaAsset, {
       foreignKey: 'cover_image_id',
       as: 'coverImage',
+    });
+    NewsItem.belongsTo(models.Category, {
+      foreignKey: 'category_id',
+      as: 'category',
     });
     NewsItem.hasMany(models.NewsAttachment, {
       foreignKey: 'news_item_id',

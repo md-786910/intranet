@@ -21,10 +21,12 @@ const authRoutes = require('./modules/auth/auth.routes');
 const orgRoutes = require('./modules/org/org.routes');
 const rolesRoutes = require('./modules/roles/roles.routes');
 const usersRoutes = require('./modules/users/users.routes');
+const employeesRoutes = require('./modules/employees/employees.routes');
 const newsRoutes = require('./modules/news/news.routes');
 const documentsRoutes = require('./modules/documents/documents.routes');
 const pushRoutes = require('./modules/push/push.routes');
 const mediaRoutes = require('./modules/media/media.routes');
+const categoriesRoutes = require('./modules/categories/categories.routes');
 const analyticsRoutes = require('./modules/analytics/analytics.routes');
 
 const app = express();
@@ -70,14 +72,27 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/org', orgRoutes);
 app.use('/api/v1/roles', rolesRoutes);
 app.use('/api/v1/users', usersRoutes);
+app.use('/api/v1/employees', employeesRoutes);
 app.use('/api/v1/news', newsRoutes);
 app.use('/api/v1/documents', documentsRoutes);
 app.use('/api/v1/push', pushRoutes);
 app.use('/api/v1/media', mediaRoutes);
+app.use('/api/v1/categories', categoriesRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
 
-// Serve uploaded files
-app.use('/uploads', require('express').static(require('path').join(__dirname, '..', 'uploads')));
+// Serve uploaded files. Strip frame-blocking headers so the client (running on a
+// different dev origin) can preview PDFs / CSVs / text in an iframe. Helmet's
+// default X-Frame-Options=SAMEORIGIN otherwise rejects cross-origin iframes,
+// which is what blocks PDF preview in the Media drawer.
+app.use(
+  '/uploads',
+  (req, res, next) => {
+    res.removeHeader('X-Frame-Options');
+    res.removeHeader('Content-Security-Policy');
+    next();
+  },
+  require('express').static(require('path').join(__dirname, '..', 'uploads')),
+);
 
 // ── 404 handler ──
 app.all('*', (req, res, next) => {

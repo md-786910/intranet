@@ -4,10 +4,14 @@ const createDOMPurify = require('dompurify');
 const window = new JSDOM('').window;
 const DOMPurify = createDOMPurify(window);
 
-/**
- * Recursively sanitize all string values in an object.
- * Strips HTML tags and trims whitespace.
- */
+// Path/field tuples that legitimately carry rich HTML and should bypass the
+// global tag-stripping. Each route is responsible for sanitising the field
+// itself with a narrower whitelist (see server/src/utils/sanitiseRichText.js).
+const RICH_TEXT_EXEMPTIONS = [
+  { method: 'POST', pathRegex: /^\/api\/v1\/news\/?$/, fields: ['body'] },
+  { method: 'PUT', pathRegex: /^\/api\/v1\/news\/\d+\/?$/, fields: ['body'] },
+];
+
 const sanitizeValue = (value) => {
   if (typeof value === 'string') {
     return DOMPurify.sanitize(value, { ALLOWED_TAGS: [] }).trim();
@@ -29,13 +33,29 @@ const sanitizeObject = (obj) => {
   return sanitized;
 };
 
-/**
- * Express middleware: sanitize req.body, req.query, req.params.
- * Strips all HTML tags from string inputs to prevent XSS.
- */
+const sanitizeBodyWithExemptions = (obj, exemptFields) => {
+  const sanitized = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (exemptFields.includes(key)) {
+      // Pass through unchanged — the route must run sanitiseRichText() on it.
+      sanitized[key] = value;
+    } else {
+      sanitized[key] = sanitizeValue(value);
+    }
+  }
+  return sanitized;
+};
+
+const findExemption = (req) => RICH_TEXT_EXEMPTIONS.find(
+  (rule) => rule.method === req.method && rule.pathRegex.test(req.path),
+);
+
 const sanitize = (req, res, next) => {
   if (req.body && typeof req.body === 'object') {
-    req.body = sanitizeObject(req.body);
+    const exemption = findExemption(req);
+    req.body = exemption
+      ? sanitizeBodyWithExemptions(req.body, exemption.fields)
+      : sanitizeObject(req.body);
   }
   if (req.query && typeof req.query === 'object') {
     req.query = sanitizeObject(req.query);

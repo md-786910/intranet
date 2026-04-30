@@ -33,7 +33,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     status: {
-      type: DataTypes.ENUM('ACTIVE', 'INACTIVE', 'LOCKED'),
+      type: DataTypes.ENUM('ACTIVE', 'INACTIVE', 'LOCKED', 'INVITED'),
       defaultValue: 'ACTIVE',
       allowNull: false,
     },
@@ -102,6 +102,10 @@ module.exports = (sequelize, DataTypes) => {
     UserAccount.hasMany(models.RefreshToken, {
       foreignKey: 'user_id',
       as: 'refreshTokens',
+    });
+    UserAccount.hasMany(models.EmployeeInvitation, {
+      foreignKey: 'user_id',
+      as: 'invitations',
     });
   };
 

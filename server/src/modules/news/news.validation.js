@@ -2,6 +2,8 @@ const Joi = require('joi');
 
 const idPattern = Joi.number().integer().positive();
 const scopeTypePattern = Joi.string().valid('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT');
+const priorityPattern = Joi.string().valid('LOW', 'NORMAL', 'HIGH', 'URGENT');
+const relatedIdsPattern = Joi.array().items(idPattern).max(10);
 
 const scopeTarget = Joi.object({
   scope_type: scopeTypePattern.required(),
@@ -16,6 +18,13 @@ const listNewsSchema = {
     status: Joi.string().valid('DRAFT', 'PUBLISHED', 'ARCHIVED').optional(),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
+    trash: Joi.boolean().optional(),
+  }),
+};
+
+const bulkIdsSchema = {
+  body: Joi.object({
+    ids: Joi.array().items(idPattern).min(1).max(100).required(),
   }),
 };
 
@@ -30,8 +39,11 @@ const createNewsSchema = {
     title: Joi.string().trim().min(1).max(255).required(),
     summary: Joi.string().trim().max(500).optional().allow('', null),
     body: Joi.string().required(),
-    cover_image_url: Joi.string().uri().optional().allow('', null),
+    cover_image_url: Joi.string().uri({ allowRelative: true }).optional().allow('', null),
     cover_image_id: idPattern.optional().allow(null),
+    category_id: idPattern.optional().allow(null),
+    priority: priorityPattern.optional(),
+    related_news_ids: relatedIdsPattern.optional(),
     owning_scope_type: scopeTypePattern.optional(),
     owning_scope_id: idPattern.optional(),
     audience_targets: Joi.array().items(scopeTarget).optional(),
@@ -46,8 +58,11 @@ const updateNewsSchema = {
     title: Joi.string().trim().min(1).max(255).optional(),
     summary: Joi.string().trim().max(500).optional().allow('', null),
     body: Joi.string().optional(),
-    cover_image_url: Joi.string().uri().optional().allow('', null),
+    cover_image_url: Joi.string().uri({ allowRelative: true }).optional().allow('', null),
     cover_image_id: idPattern.optional().allow(null),
+    category_id: idPattern.optional().allow(null),
+    priority: priorityPattern.optional(),
+    related_news_ids: relatedIdsPattern.optional(),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
     audience_targets: Joi.array().items(scopeTarget).optional(),
@@ -71,4 +86,5 @@ module.exports = {
   createNewsSchema,
   updateNewsSchema,
   setAudienceSchema,
+  bulkIdsSchema,
 };

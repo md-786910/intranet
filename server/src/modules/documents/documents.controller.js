@@ -31,6 +31,21 @@ const publish = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: doc });
 });
 
+const unpublish = catchAsync(async (req, res) => {
+  const doc = await documentsService.unpublish(req.params.id, req.user.user_id);
+  res.status(200).json({ status: 'success', data: doc });
+});
+
+const bulkRestore = catchAsync(async (req, res) => {
+  const result = await documentsService.bulkRestore(req.body.ids, req.user.user_id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
+const bulkPurge = catchAsync(async (req, res) => {
+  const result = await documentsService.bulkPurge(req.body.ids, req.user.user_id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
 const listVersions = catchAsync(async (req, res) => {
   const versions = await documentsService.listVersions(req.params.id);
   res.status(200).json({ status: 'success', data: versions });
@@ -62,7 +77,8 @@ const deleteCategory = catchAsync(async (req, res) => {
 });
 
 module.exports = {
-  list, getById, create, update, remove, publish,
+  list, getById, create, update, remove, publish, unpublish,
+  bulkRestore, bulkPurge,
   listVersions, createVersion,
   listCategories, createCategory, updateCategory, deleteCategory,
 };

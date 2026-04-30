@@ -38,6 +38,9 @@ const authService = {
     if (user.status === "INACTIVE") {
       throw ApiError.unauthorized("Invalid credentials");
     }
+    if (user.status === "INVITED") {
+      throw ApiError.unauthorized("Account not activated. Please use the invitation link sent to your email.");
+    }
 
     // Check account lockout
     if (user.locked_until && new Date(user.locked_until) > new Date()) {

@@ -31,6 +31,11 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 'DRAFT',
       allowNull: false,
     },
+    priority: {
+      type: DataTypes.ENUM('LOW', 'NORMAL', 'HIGH', 'URGENT'),
+      defaultValue: 'NORMAL',
+      allowNull: false,
+    },
     author_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -47,12 +52,19 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
+    unpublished_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
     deleted_at: {
       type: DataTypes.DATE,
       allowNull: true,
     },
   }, {
     tableName: 'document_item',
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
     defaultScope: {
       where: { deleted_at: null },
     },

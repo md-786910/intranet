@@ -274,9 +274,9 @@ export default function UserCreatePage() {
 
   return (
     <div>
-      <PageHeader title="Create User" subtitle="Add a new user account." />
+      <PageHeader title="Create User" subtitle="Add a new user account." backTo="/users" />
 
-      <div className="bg-white rounded-xl border border-gray-200 max-w-2xl">
+      <div className="bg-white rounded-xl border border-gray-200">
         <div className="p-6 space-y-5">
           {/* ── Account ── */}
           <div className="grid grid-cols-2 gap-4">

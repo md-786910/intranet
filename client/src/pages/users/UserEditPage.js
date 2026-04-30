@@ -243,7 +243,7 @@ export default function UserEditPage() {
 
   return (
     <div>
-      <PageHeader title={`Edit: ${user.first_name} ${user.last_name}`} subtitle={user.email} />
+      <PageHeader title={`Edit: ${user.first_name} ${user.last_name}`} subtitle={user.email} backTo={`/users/${id}`} />
 
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="border-b border-gray-200 px-6">

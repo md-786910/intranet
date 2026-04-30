@@ -11,6 +11,7 @@ import AdminLayout from './components/layout/AdminLayout';
 // Auth
 import LoginPage from './pages/auth/LoginPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import InvitationAcceptPage from './pages/auth/InvitationAcceptPage';
 
 // Pages
 import DashboardPage from './pages/dashboard/DashboardPage';
@@ -19,6 +20,10 @@ import UsersListPage from './pages/users/UsersListPage';
 import UserCreatePage from './pages/users/UserCreatePage';
 import UserDetailPage from './pages/users/UserDetailPage';
 import UserEditPage from './pages/users/UserEditPage';
+import EmployeesListPage from './pages/employees/EmployeesListPage';
+import EmployeeCreatePage from './pages/employees/EmployeeCreatePage';
+import EmployeeDetailPage from './pages/employees/EmployeeDetailPage';
+import EmployeeEditPage from './pages/employees/EmployeeEditPage';
 import RolesListPage from './pages/roles/RolesListPage';
 import RoleCreatePage from './pages/roles/RoleCreatePage';
 import RoleEditPage from './pages/roles/RoleEditPage';
@@ -29,10 +34,13 @@ import NewsEditPage from './pages/news/NewsEditPage';
 import DocumentsListPage from './pages/documents/DocumentsListPage';
 import DocumentCreatePage from './pages/documents/DocumentCreatePage';
 import DocumentDetailPage from './pages/documents/DocumentDetailPage';
+import DocumentEditPage from './pages/documents/DocumentEditPage';
 import PushListPage from './pages/push/PushListPage';
 import PushCreatePage from './pages/push/PushCreatePage';
 import PushDetailPage from './pages/push/PushDetailPage';
 import AnalyticsPage from './pages/analytics/AnalyticsPage';
+import MediaGalleryPage from './pages/media/MediaGalleryPage';
+import CategoriesPage from './pages/categories/CategoriesPage';
 
 function HomeRedirect() {
   const { hasPermission } = useContext(PermissionContext);
@@ -41,6 +49,7 @@ function HomeRedirect() {
   if (hasPermission('NEWS', 'VIEW')) return <Navigate to="/news" replace />;
   if (hasPermission('DOCUMENTS', 'VIEW')) return <Navigate to="/documents" replace />;
   if (hasPermission('PUSH', 'VIEW')) return <Navigate to="/push" replace />;
+  if (hasPermission('ADMIN', 'MANAGE_EMPLOYEES')) return <Navigate to="/employees" replace />;
   if (hasPermission('ADMIN', 'MANAGE_USERS')) return <Navigate to="/users" replace />;
   if (hasPermission('ADMIN', 'MANAGE_ROLES')) return <Navigate to="/roles" replace />;
   if (hasPermission('ADMIN', 'MANAGE_OFFICE_LOCATIONS')) return <Navigate to="/organisation" replace />;
@@ -59,6 +68,7 @@ function App() {
               {/* Public routes */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/invitations/:token" element={<InvitationAcceptPage />} />
 
               {/* Protected routes */}
               <Route
@@ -77,6 +87,12 @@ function App() {
                 <Route path="/users/:id" element={<UserDetailPage />} />
                 <Route path="/users/:id/edit" element={<UserEditPage />} />
 
+                {/* Employees */}
+                <Route path="/employees" element={<EmployeesListPage />} />
+                <Route path="/employees/create" element={<EmployeeCreatePage />} />
+                <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+                <Route path="/employees/:id/edit" element={<EmployeeEditPage />} />
+
                 {/* Roles */}
                 <Route path="/roles" element={<RolesListPage />} />
                 <Route path="/roles/create" element={<RoleCreatePage />} />
@@ -92,11 +108,18 @@ function App() {
                 <Route path="/documents" element={<DocumentsListPage />} />
                 <Route path="/documents/create" element={<DocumentCreatePage />} />
                 <Route path="/documents/:id" element={<DocumentDetailPage />} />
+                <Route path="/documents/:id/edit" element={<DocumentEditPage />} />
 
                 {/* Push */}
                 <Route path="/push" element={<PushListPage />} />
                 <Route path="/push/create" element={<PushCreatePage />} />
                 <Route path="/push/:id" element={<PushDetailPage />} />
+
+                {/* Media */}
+                <Route path="/media" element={<MediaGalleryPage />} />
+
+                {/* Categories */}
+                <Route path="/categories" element={<CategoriesPage />} />
 
                 {/* Analytics */}
                 <Route path="/analytics" element={<AnalyticsPage />} />

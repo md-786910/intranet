@@ -4,6 +4,39 @@ const { DEFAULT_TENANT_ID } = require('../../utils/constants');
 const { parsePagination, buildPagination } = require('../../utils/pagination');
 const permissionService = require('../../services/permission.service');
 const scopeService = require('../../services/scope.service');
+const { sanitiseRichText } = require('../../utils/sanitiseRichText');
+
+// Normalise client-supplied related-news ids: dedupe, drop self, cap at 10.
+function normaliseRelatedIds(ids, selfId) {
+  if (!Array.isArray(ids)) return undefined;
+  const seen = new Set();
+  const out = [];
+  for (const raw of ids) {
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n <= 0) continue;
+    if (selfId && n === selfId) continue;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
+// Resolve related_news_ids into populated cards. Skips ids that no longer
+// exist (deleted/never-existed) so dead links never render.
+async function loadRelatedNews(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return [];
+  const { NewsItem } = require('../../database/models');
+  const { Op } = require('sequelize');
+  const rows = await NewsItem.findAll({
+    where: { news_item_id: { [Op.in]: ids } },
+    attributes: ['news_item_id', 'title', 'slug', 'status', 'published_at'],
+  });
+  const byId = new Map(rows.map((r) => [r.news_item_id, r]));
+  // Preserve the user's selection order.
+  return ids.map((id) => byId.get(id)).filter(Boolean);
+}
 
 function generateSlug(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -79,12 +112,15 @@ function articleMatchesAudience(article, userAudienceScopeKeys) {
 
 const newsService = {
   async list(query, userId) {
-    const { NewsItem, UserAccount, ContentAudienceRule } = require('../../database/models');
+    const { NewsItem, UserAccount, ContentAudienceRule, Category } = require('../../database/models');
     const { Op } = require('sequelize');
     const { page, limit, offset } = parsePagination(query);
     const managing = await canManageNews(userId);
+    const trash = managing && (query.trash === true || query.trash === 'true');
 
-    const where = { deleted_at: null };
+    const where = trash
+      ? { deleted_at: { [Op.ne]: null } }
+      : { deleted_at: null };
     if (managing) {
       if (query.status) where.status = query.status;
     } else {
@@ -103,11 +139,19 @@ const newsService = {
       ];
     }
 
-    const include = [{
-      model: UserAccount,
-      as: 'author',
-      attributes: ['user_id', 'first_name', 'last_name', 'email'],
-    }];
+    const include = [
+      {
+        model: UserAccount,
+        as: 'author',
+        attributes: ['user_id', 'first_name', 'last_name', 'email'],
+      },
+      {
+        model: Category,
+        as: 'category',
+        attributes: ['category_id', 'name', 'slug'],
+        required: false,
+      },
+    ];
 
     if (!managing) {
       include.push({
@@ -119,17 +163,40 @@ const newsService = {
     }
 
     if (managing) {
-      const { rows, count } = await NewsItem.findAndCountAll({
-        where,
-        limit,
-        offset,
-        include,
-        order: [['created_at', 'DESC']],
+      const { sequelize } = require('../../database/models');
+      const countWhere = { ...where };
+      delete countWhere.status;
+
+      const Model = trash ? NewsItem.unscoped() : NewsItem;
+      const [{ rows, count }, statusBreakdown] = await Promise.all([
+        Model.findAndCountAll({
+          where,
+          limit,
+          offset,
+          include,
+          order: trash
+            ? [['deleted_at', 'DESC']]
+            : [['created_at', 'DESC']],
+        }),
+        Model.findAll({
+          where: countWhere,
+          attributes: ['status', [sequelize.fn('COUNT', sequelize.col('news_item_id')), 'count']],
+          group: ['status'],
+          raw: true,
+        }),
+      ]);
+
+      const statusCounts = { ALL: 0, DRAFT: 0, PUBLISHED: 0, ARCHIVED: 0 };
+      statusBreakdown.forEach((row) => {
+        const c = Number(row.count);
+        statusCounts[row.status] = c;
+        statusCounts.ALL += c;
       });
 
       return {
         articles: rows,
         pagination: buildPagination(page, limit, count),
+        status_counts: statusCounts,
       };
     }
 
@@ -146,11 +213,17 @@ const newsService = {
     return {
       articles: paginatedArticles,
       pagination: buildPagination(page, limit, visibleArticles.length),
+      status_counts: {
+        ALL: visibleArticles.length,
+        DRAFT: 0,
+        PUBLISHED: visibleArticles.length,
+        ARCHIVED: 0,
+      },
     };
   },
 
   async getById(id, userId = null) {
-    const { NewsItem, UserAccount, ContentAudienceRule } = require('../../database/models');
+    const { NewsItem, UserAccount, ContentAudienceRule, Category } = require('../../database/models');
 
     const article = await NewsItem.findByPk(id, {
       include: [
@@ -158,6 +231,12 @@ const newsService = {
           model: UserAccount,
           as: 'author',
           attributes: ['user_id', 'first_name', 'last_name', 'email'],
+        },
+        {
+          model: Category,
+          as: 'category',
+          attributes: ['category_id', 'name', 'slug'],
+          required: false,
         },
         {
           model: ContentAudienceRule,
@@ -184,6 +263,12 @@ const newsService = {
       }
     }
 
+    // Hydrate related-news cards. Sequelize attaches them to the JSON view via
+    // `setDataValue` so the controller's res.json picks them up alongside the
+    // existing fields.
+    const relatedNews = await loadRelatedNews(article.related_news_ids || []);
+    article.setDataValue('relatedNews', relatedNews);
+
     return article;
   },
 
@@ -199,9 +284,12 @@ const newsService = {
         title: data.title,
         slug,
         summary: data.summary || null,
-        body: data.body,
+        body: sanitiseRichText(data.body || ''),
         cover_image_url: data.cover_image_url || null,
         cover_image_id: data.cover_image_id || null,
+        category_id: data.category_id || null,
+        priority: data.priority || 'NORMAL',
+        related_news_ids: normaliseRelatedIds(data.related_news_ids) || [],
         status: 'DRAFT',
         author_id: authorId,
         owning_scope_type: data.owning_scope_type || 'ORGANISATION',
@@ -243,10 +331,19 @@ const newsService = {
       const article = await NewsItem.findByPk(id, { transaction });
       if (!article) throw ApiError.notFound('News article not found');
 
-      const fields = ['title', 'summary', 'body', 'cover_image_url', 'cover_image_id'];
+      const fields = ['title', 'summary', 'cover_image_url', 'cover_image_id', 'category_id', 'priority'];
       fields.forEach((f) => {
         if (data[f] !== undefined) article[f] = data[f];
       });
+
+      if (data.body !== undefined) {
+        article.body = sanitiseRichText(data.body || '');
+      }
+
+      if (data.related_news_ids !== undefined) {
+        const next = normaliseRelatedIds(data.related_news_ids, Number(id));
+        if (next !== undefined) article.related_news_ids = next;
+      }
 
       if (data.title) article.slug = generateSlug(data.title) + '-' + Date.now();
 
@@ -288,17 +385,77 @@ const newsService = {
 
     const article = await NewsItem.findByPk(id);
     if (!article) throw ApiError.notFound('News article not found');
+    if (article.status === 'PUBLISHED') {
+      throw ApiError.badRequest('Archive this article before moving it to the trash');
+    }
 
     await article.update({ deleted_at: new Date() });
 
     await auditService.log({
       user_id: userId,
-      action: 'NEWS_DELETED',
+      action: 'NEWS_TRASHED',
       resource_type: 'NewsItem',
       resource_id: id,
     });
 
-    return { message: 'News article deleted successfully' };
+    return { message: 'Article moved to trash' };
+  },
+
+  async bulkRestore(ids, userId) {
+    const { NewsItem } = require('../../database/models');
+    const { Op } = require('sequelize');
+
+    const articles = await NewsItem.unscoped().findAll({
+      where: { news_item_id: { [Op.in]: ids }, deleted_at: { [Op.ne]: null } },
+    });
+
+    let restored = 0;
+    for (const article of articles) {
+      await article.update({ deleted_at: null });
+      restored += 1;
+    }
+
+    if (restored > 0) {
+      await auditService.log({
+        user_id: userId,
+        action: 'NEWS_RESTORED',
+        resource_type: 'NewsItem',
+        resource_id: articles[0]?.news_item_id || null,
+        details: { count: restored },
+      });
+    }
+
+    return { restored };
+  },
+
+  async bulkPurge(ids, userId) {
+    const { NewsItem, ContentAudienceRule } = require('../../database/models');
+    const { Op } = require('sequelize');
+
+    const articles = await NewsItem.unscoped().findAll({
+      where: { news_item_id: { [Op.in]: ids }, deleted_at: { [Op.ne]: null } },
+    });
+
+    let purged = 0;
+    for (const article of articles) {
+      await ContentAudienceRule.destroy({
+        where: { entity_type: 'NEWS', entity_id: article.news_item_id },
+      });
+      await article.destroy({ force: true });
+      purged += 1;
+    }
+
+    if (purged > 0) {
+      await auditService.log({
+        user_id: userId,
+        action: 'NEWS_PURGED',
+        resource_type: 'NewsItem',
+        resource_id: null,
+        details: { count: purged },
+      });
+    }
+
+    return { purged };
   },
 
   async publish(id, userId) {
@@ -331,6 +488,27 @@ const newsService = {
     await auditService.log({
       user_id: userId,
       action: 'NEWS_ARCHIVED',
+      resource_type: 'NewsItem',
+      resource_id: id,
+    });
+
+    return this.getById(id);
+  },
+
+  async unpublish(id, userId) {
+    const { NewsItem } = require('../../database/models');
+
+    const article = await NewsItem.findByPk(id);
+    if (!article) throw ApiError.notFound('News article not found');
+    if (article.status !== 'PUBLISHED') {
+      throw ApiError.badRequest('Only published articles can be unpublished');
+    }
+
+    await article.update({ status: 'DRAFT', published_at: null });
+
+    await auditService.log({
+      user_id: userId,
+      action: 'NEWS_UNPUBLISHED',
       resource_type: 'NewsItem',
       resource_id: id,
     });

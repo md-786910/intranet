@@ -16,7 +16,26 @@ const idParam = {
   }),
 };
 
+const listSchema = {
+  query: Joi.object({
+    page: Joi.number().integer().min(1).default(1),
+    limit: Joi.number().integer().min(1).max(100).default(20),
+    search: Joi.string().trim().max(255).optional().allow(''),
+    mime_prefix: Joi.string().trim().max(64).optional().allow(''),
+    trash: Joi.boolean().optional(),
+  }),
+};
+
+const bulkIdsSchema = {
+  body: Joi.object({
+    ids: Joi.array().items(idPattern).min(1).max(100).required(),
+  }),
+};
+
 module.exports = {
   uploadSchema,
   idParam,
+  listSchema,
+  bulkDeleteSchema: bulkIdsSchema,
+  bulkRestoreSchema: bulkIdsSchema,
 };

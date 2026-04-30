@@ -9,6 +9,40 @@ function generateSlug(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+// Normalise the `files` array onto a single representative legacy {file_url,
+// file_name, file_size, mime_type} so legacy reads still see a primary file.
+function buildVersionFileFields(data) {
+  let files = Array.isArray(data.files) && data.files.length > 0 ? data.files : null;
+  if (!files && data.file_url) {
+    files = [{
+      url: data.file_url,
+      name: data.file_name || data.file_url.split('/').pop() || 'file',
+      size: data.file_size || null,
+      mime: data.mime_type || null,
+      source: data.media_asset_id ? 'upload' : 'url',
+    }];
+  }
+  if (!files) files = [];
+
+  // Sanitise — keep only the documented keys and coerce numbers.
+  files = files.map((f) => ({
+    url: f.url,
+    name: f.name,
+    size: f.size != null ? Number(f.size) : null,
+    mime: f.mime || null,
+    source: f.source || 'url',
+  }));
+
+  const head = files[0] || null;
+  return {
+    files,
+    file_url: head ? head.url : (data.file_url || ''),
+    file_name: head ? head.name : (data.file_name || 'file'),
+    file_size: head ? head.size : (data.file_size || null),
+    mime_type: head ? head.mime : (data.mime_type || null),
+  };
+}
+
 async function canManageDocuments(userId) {
   const [canCreate, canEdit, canDelete, canPublish] = await Promise.all([
     permissionService.hasPermissionAnywhere(userId, 'DOCUMENTS', 'CREATE'),
@@ -62,8 +96,11 @@ const documentsService = {
     const { Op } = require('sequelize');
     const { page, limit, offset } = parsePagination(query);
     const managing = await canManageDocuments(userId);
+    const trash = managing && (query.trash === true || query.trash === 'true');
 
-    const where = { deleted_at: null };
+    const where = trash
+      ? { deleted_at: { [Op.ne]: null } }
+      : { deleted_at: null };
     if (managing) {
       if (query.status) where.status = query.status;
     } else {
@@ -98,17 +135,42 @@ const documentsService = {
     }
 
     if (managing) {
-      const { rows, count } = await DocumentItem.findAndCountAll({
-        where,
-        limit,
-        offset,
-        include,
-        order: [['created_at', 'DESC']],
+      // Counts are scoped by the same filters (search/category/etc.) MINUS the
+      // status filter, so each tab shows what you'd get if you clicked it.
+      const { sequelize } = require('../../database/models');
+      const countWhere = { ...where };
+      delete countWhere.status;
+
+      const Model = trash ? DocumentItem.unscoped() : DocumentItem;
+      const [{ rows, count }, statusBreakdown] = await Promise.all([
+        Model.findAndCountAll({
+          where,
+          limit,
+          offset,
+          include,
+          order: trash
+            ? [['deleted_at', 'DESC']]
+            : [['created_at', 'DESC']],
+        }),
+        Model.findAll({
+          where: countWhere,
+          attributes: ['status', [sequelize.fn('COUNT', sequelize.col('document_item_id')), 'count']],
+          group: ['status'],
+          raw: true,
+        }),
+      ]);
+
+      const statusCounts = { ALL: 0, DRAFT: 0, PUBLISHED: 0, ARCHIVED: 0 };
+      statusBreakdown.forEach((row) => {
+        const c = Number(row.count);
+        statusCounts[row.status] = c;
+        statusCounts.ALL += c;
       });
 
       return {
         documents: rows,
         pagination: buildPagination(page, limit, count),
+        status_counts: statusCounts,
       };
     }
 
@@ -125,11 +187,18 @@ const documentsService = {
     return {
       documents: paginatedDocuments,
       pagination: buildPagination(page, limit, visibleDocuments.length),
+      // Non-managers only ever see PUBLISHED, so other tabs are 0.
+      status_counts: {
+        ALL: visibleDocuments.length,
+        DRAFT: 0,
+        PUBLISHED: visibleDocuments.length,
+        ARCHIVED: 0,
+      },
     };
   },
 
   async getById(id, userId = null) {
-    const { DocumentItem, UserAccount, Category, DocumentVersion, ContentAudienceRule } = require('../../database/models');
+    const { DocumentItem, UserAccount, Category, DocumentVersion, ContentAudienceRule, MediaAsset } = require('../../database/models');
 
     const doc = await DocumentItem.findByPk(id, {
       include: [
@@ -139,7 +208,10 @@ const documentsService = {
           model: DocumentVersion,
           as: 'versions',
           order: [['version_no', 'DESC']],
-          include: [{ model: UserAccount, as: 'uploader', attributes: ['user_id', 'first_name', 'last_name'] }],
+          include: [
+            { model: UserAccount, as: 'uploader', attributes: ['user_id', 'first_name', 'last_name'] },
+            { model: MediaAsset, as: 'media', required: false },
+          ],
         },
         {
           model: ContentAudienceRule,
@@ -180,6 +252,7 @@ const documentsService = {
         slug,
         summary: data.summary || null,
         category_id: data.category_id || null,
+        priority: data.priority || 'NORMAL',
         status: 'DRAFT',
         author_id: authorId,
         owning_scope_type: data.owning_scope_type || 'ORGANISATION',
@@ -187,13 +260,15 @@ const documentsService = {
       }, { transaction });
 
       // Create initial version
+      const versionFiles = buildVersionFileFields(data);
       await DocumentVersion.create({
         document_item_id: doc.document_item_id,
         version_no: 1,
-        file_url: data.file_url,
-        file_name: data.file_name,
-        file_size: data.file_size || null,
-        mime_type: data.mime_type || null,
+        files: versionFiles.files,
+        file_url: versionFiles.file_url,
+        file_name: versionFiles.file_name,
+        file_size: versionFiles.file_size,
+        mime_type: versionFiles.mime_type,
         changelog: data.changelog || 'Initial version',
         uploaded_by: authorId,
       }, { transaction });
@@ -233,7 +308,7 @@ const documentsService = {
       const doc = await DocumentItem.findByPk(id, { transaction });
       if (!doc) throw ApiError.notFound('Document not found');
 
-      const fields = ['title', 'summary', 'category_id'];
+      const fields = ['title', 'summary', 'category_id', 'priority'];
       fields.forEach((f) => {
         if (data[f] !== undefined) doc[f] = data[f];
       });
@@ -277,17 +352,80 @@ const documentsService = {
 
     const doc = await DocumentItem.findByPk(id);
     if (!doc) throw ApiError.notFound('Document not found');
+    if (doc.status === 'PUBLISHED') {
+      throw ApiError.badRequest('Unpublish this document before moving it to the archive');
+    }
 
     await doc.update({ deleted_at: new Date() });
 
     await auditService.log({
       user_id: userId,
-      action: 'DOC_DELETED',
+      action: 'DOC_ARCHIVED',
       resource_type: 'DocumentItem',
       resource_id: id,
     });
 
-    return { message: 'Document deleted successfully' };
+    return { message: 'Document moved to archive' };
+  },
+
+  async bulkRestore(ids, userId) {
+    const { DocumentItem } = require('../../database/models');
+    const { Op } = require('sequelize');
+
+    const docs = await DocumentItem.unscoped().findAll({
+      where: { document_item_id: { [Op.in]: ids }, deleted_at: { [Op.ne]: null } },
+    });
+
+    let restored = 0;
+    for (const doc of docs) {
+      await doc.update({ deleted_at: null });
+      restored += 1;
+    }
+
+    if (restored > 0) {
+      await auditService.log({
+        user_id: userId,
+        action: 'DOC_RESTORED',
+        resource_type: 'DocumentItem',
+        resource_id: docs[0]?.document_item_id || null,
+        details: { count: restored },
+      });
+    }
+
+    return { restored };
+  },
+
+  async bulkPurge(ids, userId) {
+    const { DocumentItem, DocumentVersion, ContentAudienceRule } = require('../../database/models');
+    const { Op } = require('sequelize');
+
+    // Only operate on items already in the archive — published items must
+    // be unpublished and archived first.
+    const docs = await DocumentItem.unscoped().findAll({
+      where: { document_item_id: { [Op.in]: ids }, deleted_at: { [Op.ne]: null } },
+    });
+
+    let purged = 0;
+    for (const doc of docs) {
+      const docId = doc.document_item_id;
+      // Cascade: drop versions and audience rules first so FKs don't block.
+      await DocumentVersion.destroy({ where: { document_item_id: docId } });
+      await ContentAudienceRule.destroy({ where: { entity_type: 'DOCUMENT', entity_id: docId } });
+      await doc.destroy({ force: true });
+      purged += 1;
+    }
+
+    if (purged > 0) {
+      await auditService.log({
+        user_id: userId,
+        action: 'DOC_PURGED',
+        resource_type: 'DocumentItem',
+        resource_id: null,
+        details: { count: purged },
+      });
+    }
+
+    return { purged };
   },
 
   async publish(id, userId) {
@@ -297,7 +435,9 @@ const documentsService = {
     if (!doc) throw ApiError.notFound('Document not found');
     if (doc.status === 'PUBLISHED') throw ApiError.badRequest('Document is already published');
 
-    await doc.update({ status: 'PUBLISHED', published_at: new Date() });
+    // published_at gets a fresh timestamp on every publish; unpublished_at is
+    // cleared because the most recent unpublish is now stale.
+    await doc.update({ status: 'PUBLISHED', published_at: new Date(), unpublished_at: null });
 
     await auditService.log({
       user_id: userId,
@@ -309,12 +449,36 @@ const documentsService = {
     return this.getById(id, userId);
   },
 
+  async unpublish(id, userId) {
+    const { DocumentItem } = require('../../database/models');
+
+    const doc = await DocumentItem.findByPk(id);
+    if (!doc) throw ApiError.notFound('Document not found');
+    if (doc.status !== 'PUBLISHED') throw ApiError.badRequest('Only published documents can be unpublished');
+
+    // Keep published_at as the historical "last published on" stamp, and add
+    // unpublished_at so the detail page can show "Unpublished on X".
+    await doc.update({ status: 'DRAFT', unpublished_at: new Date() });
+
+    await auditService.log({
+      user_id: userId,
+      action: 'DOC_UNPUBLISHED',
+      resource_type: 'DocumentItem',
+      resource_id: id,
+    });
+
+    return this.getById(id, userId);
+  },
+
   async listVersions(id) {
-    const { DocumentVersion, UserAccount } = require('../../database/models');
+    const { DocumentVersion, UserAccount, MediaAsset } = require('../../database/models');
 
     return DocumentVersion.findAll({
       where: { document_item_id: id },
-      include: [{ model: UserAccount, as: 'uploader', attributes: ['user_id', 'first_name', 'last_name'] }],
+      include: [
+        { model: UserAccount, as: 'uploader', attributes: ['user_id', 'first_name', 'last_name'] },
+        { model: MediaAsset, as: 'media', required: false },
+      ],
       order: [['version_no', 'DESC']],
     });
   },
@@ -329,13 +493,15 @@ const documentsService = {
       where: { document_item_id: id },
     });
 
+    const versionFiles = buildVersionFileFields(data);
     const version = await DocumentVersion.create({
       document_item_id: id,
       version_no: (maxVersion || 0) + 1,
-      file_url: data.file_url,
-      file_name: data.file_name,
-      file_size: data.file_size || null,
-      mime_type: data.mime_type || null,
+      files: versionFiles.files,
+      file_url: versionFiles.file_url,
+      file_name: versionFiles.file_name,
+      file_size: versionFiles.file_size,
+      mime_type: versionFiles.mime_type,
       changelog: data.changelog || null,
       uploaded_by: userId,
     });
@@ -351,11 +517,12 @@ const documentsService = {
     return version;
   },
 
-  // Category operations
+  // Category operations — scoped to entity_type DOCUMENT so the dropdown
+  // never shows News categories.
   async listCategories() {
     const { Category } = require('../../database/models');
     return Category.findAll({
-      where: { deleted_at: null },
+      where: { deleted_at: null, entity_type: 'DOCUMENT' },
       order: [['sort_order', 'ASC'], ['name', 'ASC']],
     });
   },
@@ -365,6 +532,7 @@ const documentsService = {
     const slug = generateSlug(data.name);
     return Category.create({
       tenant_id: DEFAULT_TENANT_ID,
+      entity_type: 'DOCUMENT',
       name: data.name,
       slug,
       description: data.description || null,
@@ -375,7 +543,9 @@ const documentsService = {
 
   async updateCategory(id, data) {
     const { Category } = require('../../database/models');
-    const cat = await Category.findByPk(id);
+    const cat = await Category.findOne({
+      where: { category_id: id, entity_type: 'DOCUMENT' },
+    });
     if (!cat) throw ApiError.notFound('Category not found');
 
     const fields = ['name', 'description', 'sort_order'];
@@ -390,7 +560,9 @@ const documentsService = {
 
   async deleteCategory(id) {
     const { Category } = require('../../database/models');
-    const cat = await Category.findByPk(id);
+    const cat = await Category.findOne({
+      where: { category_id: id, entity_type: 'DOCUMENT' },
+    });
     if (!cat) throw ApiError.notFound('Category not found');
     await cat.update({ deleted_at: new Date() });
     return { message: 'Category deleted successfully' };

@@ -47,8 +47,8 @@ export default function PushCreatePage() {
 
   return (
     <div>
-      <PageHeader title="Create Campaign" subtitle="Compose a push notification" />
-      <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-2xl space-y-4">
+      <PageHeader title="Create Campaign" subtitle="Compose a push notification" backTo="/push" />
+      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
         <Input label="Title" name="title" required value={form.title} onChange={handleChange} placeholder="Notification title" />
         <Textarea label="Body" name="body" required value={form.body} onChange={handleChange} rows={4} placeholder="Notification message" />
         <Input label="Schedule (optional)" name="scheduled_at" type="datetime-local" value={form.scheduled_at} onChange={handleChange} />
