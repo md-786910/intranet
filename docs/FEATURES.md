@@ -1,8 +1,8 @@
-# Brighthouse Intranet — Product Documentation
+# BrightNow Intranet — Product Documentation
 
 ## About This Document
 
-This is a **product-level guide** to the Brighthouse Intranet. It is written for:
+This is a **product-level guide** to the BrightNow Intranet. It is written for:
 
 - New team members joining the product
 - Admins and operations staff configuring the system
@@ -15,7 +15,7 @@ It deliberately contains **no code, no commands, no API paths, and no database n
 
 ## Table of Contents
 
-1. [What Brighthouse Intranet Is](#1-what-brighthouse-intranet-is)
+1. [What BrightNow Intranet Is](#1-what-BrightNow-intranet-is)
 2. [Who Uses It](#2-who-uses-it)
 3. [Core Concepts You Should Know First](#3-core-concepts-you-should-know-first)
 4. [Signing In and Staying Secure](#4-signing-in-and-staying-secure)
@@ -38,9 +38,9 @@ It deliberately contains **no code, no commands, no API paths, and no database n
 
 ---
 
-## 1. What Brighthouse Intranet Is
+## 1. What BrightNow Intranet Is
 
-Brighthouse Intranet is a centralised **admin and communication platform** for the organisation. In one place it gives the business:
+BrightNow Intranet is a centralised **admin and communication platform** for the organisation. In one place it gives the business:
 
 - A single source of truth for the **company structure** (offices, verticals, departments).
 - A complete **user directory** with identity and job details.

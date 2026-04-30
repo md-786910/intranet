@@ -1,10 +1,10 @@
-const fs = require('fs');
-const path = require('path');
-const nodemailer = require('nodemailer');
-const logger = require('../config/logger');
+const fs = require("fs");
+const path = require("path");
+const nodemailer = require("nodemailer");
+const logger = require("../config/logger");
 
-const APP_NAME = process.env.APP_NAME || 'Brighthouse';
-const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
+const APP_NAME = process.env.APP_NAME || "BrightNow";
+const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
 
 let cachedTransport = null;
 function getTransport() {
@@ -25,41 +25,58 @@ function getTransport() {
 let cachedInvitationTemplate = null;
 function loadInvitationTemplate() {
   if (cachedInvitationTemplate) return cachedInvitationTemplate;
-  const templatePath = path.join(__dirname, '..', 'emails', 'employee-invitation.html');
-  cachedInvitationTemplate = fs.readFileSync(templatePath, 'utf-8');
+  const templatePath = path.join(
+    __dirname,
+    "..",
+    "emails",
+    "employee-invitation.html",
+  );
+  cachedInvitationTemplate = fs.readFileSync(templatePath, "utf-8");
   return cachedInvitationTemplate;
 }
 
 function renderTemplate(template, vars) {
   return Object.entries(vars).reduce(
-    (acc, [key, value]) => acc.replaceAll(`{{${key}}}`, String(value ?? '')),
+    (acc, [key, value]) => acc.replaceAll(`{{${key}}}`, String(value ?? "")),
     template,
   );
 }
 
 function buildAcceptUrl(token) {
-  return `${APP_BASE_URL.replace(/\/$/, '')}/invitations/${token}`;
+  return `${APP_BASE_URL.replace(/\/$/, "")}/invitations/${token}`;
 }
 
-async function sendEmployeeInvitation({ to, firstName, inviterName, token, expiresAt }) {
+async function sendEmployeeInvitation({
+  to,
+  firstName,
+  inviterName,
+  token,
+  expiresAt,
+}) {
   const acceptUrl = buildAcceptUrl(token);
   const html = renderTemplate(loadInvitationTemplate(), {
     appName: APP_NAME,
-    firstName: firstName || 'there',
-    inviterName: inviterName || 'An administrator',
+    firstName: firstName || "there",
+    inviterName: inviterName || "An administrator",
     acceptUrl,
     expiresAt: new Date(expiresAt).toLocaleDateString(undefined, {
-      year: 'numeric', month: 'long', day: 'numeric',
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     }),
   });
 
   const transport = getTransport();
   if (!transport) {
-    logger.warn(`[email] SMTP not configured — invitation link for ${to}: ${acceptUrl}`);
+    logger.warn(
+      `[email] SMTP not configured — invitation link for ${to}: ${acceptUrl}`,
+    );
     return { delivered: false, acceptUrl };
   }
 
-  const from = process.env.SMTP_FROM || `"${APP_NAME}" <no-reply@${APP_NAME.toLowerCase()}.local>`;
+  const from =
+    process.env.SMTP_FROM ||
+    `"${APP_NAME}" <no-reply@${APP_NAME.toLowerCase()}.local>`;
   await transport.sendMail({
     from,
     to,

@@ -3,7 +3,10 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import Input from "../../components/common/Input";
 import Button from "../../components/common/Button";
-import { extractValidationErrors, getErrorMessage } from "../../utils/errorUtils";
+import {
+  extractValidationErrors,
+  getErrorMessage,
+} from "../../utils/errorUtils";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -28,9 +31,12 @@ export default function LoginPage() {
       await login(email, password);
       navigate(from, { replace: true });
     } catch (err) {
-      const message = getErrorMessage(err, "An error occurred. Please try again.");
+      const message = getErrorMessage(
+        err,
+        "An error occurred. Please try again.",
+      );
       setError(message);
-      
+
       const validationErrors = extractValidationErrors(err);
       if (Object.keys(validationErrors).length > 0) {
         setFieldErrors(validationErrors);
@@ -55,7 +61,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-primary-800">Brighthouse</h1>
+          <h1 className="text-3xl font-bold text-primary-800">BrightNow</h1>
           <p className="mt-2 text-sm text-gray-600">Admin Panel</p>
           <h2 className="mt-6 text-2xl font-semibold text-gray-900">
             Sign in to your account
@@ -99,7 +105,9 @@ export default function LoginPage() {
                   value={password}
                   onChange={handleFieldChange(setPassword, "password")}
                   className={`appearance-none relative block w-full px-3 py-2 pr-10 border rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 sm:text-sm ${
-                    fieldErrors.password ? "border-red-500 ring-red-500" : "border-gray-300"
+                    fieldErrors.password
+                      ? "border-red-500 ring-red-500"
+                      : "border-gray-300"
                   }`}
                   placeholder="Enter your password"
                 />
@@ -145,7 +153,9 @@ export default function LoginPage() {
                 </button>
               </div>
               {fieldErrors.password && (
-                <p className="mt-1 text-xs text-red-600">{fieldErrors.password}</p>
+                <p className="mt-1 text-xs text-red-600">
+                  {fieldErrors.password}
+                </p>
               )}
             </div>
           </div>
