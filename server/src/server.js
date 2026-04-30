@@ -5,7 +5,7 @@ const { sequelize } = require("./database/models");
 const { createRedisClient } = require("./config/redis");
 const logger = require("./config/logger");
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 8000;
 
 const start = async () => {
   // Log resolved DB config for debugging (no secrets)

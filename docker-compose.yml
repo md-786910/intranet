@@ -58,7 +58,7 @@ services:
       DB_HOST: postgres
       REDIS_HOST: redis
     ports:
-      - "${PORT:-4000}:${PORT:-4000}"
+      - "${PORT:-8000}:${PORT:-8000}"
     volumes:
       - ./server/src:/app/src
       - ./server/package.json:/app/package.json

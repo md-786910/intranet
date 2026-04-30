@@ -1,30 +1,30 @@
-import axios from 'axios';
+import axios from "axios";
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api/v1';
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000/api/v1";
 
 const api = axios.create({
   baseURL: API_URL,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
 // Token storage — persisted in localStorage so sessions survive page refresh
-let accessToken = localStorage.getItem('bh_access_token');
-let refreshToken = localStorage.getItem('bh_refresh_token');
+let accessToken = localStorage.getItem("bh_access_token");
+let refreshToken = localStorage.getItem("bh_refresh_token");
 
 export const setTokens = (access, refresh) => {
   accessToken = access;
   refreshToken = refresh;
-  localStorage.setItem('bh_access_token', access);
-  localStorage.setItem('bh_refresh_token', refresh);
+  localStorage.setItem("bh_access_token", access);
+  localStorage.setItem("bh_refresh_token", refresh);
 };
 
 export const clearTokens = () => {
   accessToken = null;
   refreshToken = null;
-  localStorage.removeItem('bh_access_token');
-  localStorage.removeItem('bh_refresh_token');
+  localStorage.removeItem("bh_access_token");
+  localStorage.removeItem("bh_refresh_token");
 };
 
 export const getAccessToken = () => accessToken;
@@ -38,7 +38,7 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 // Response interceptor: handle 401 with silent refresh
@@ -65,8 +65,8 @@ api.interceptors.response.use(
     if (
       error.response?.status !== 401 ||
       originalRequest._retry ||
-      originalRequest.url?.includes('/auth/login') ||
-      originalRequest.url?.includes('/auth/refresh')
+      originalRequest.url?.includes("/auth/login") ||
+      originalRequest.url?.includes("/auth/refresh")
     ) {
       return Promise.reject(error);
     }
@@ -88,14 +88,15 @@ api.interceptors.response.use(
 
     try {
       if (!refreshToken) {
-        throw new Error('No refresh token');
+        throw new Error("No refresh token");
       }
 
       const response = await axios.post(`${API_URL}/auth/refresh`, {
         refreshToken,
       });
 
-      const { accessToken: newAccess, refreshToken: newRefresh } = response.data.data;
+      const { accessToken: newAccess, refreshToken: newRefresh } =
+        response.data.data;
       setTokens(newAccess, newRefresh);
 
       processQueue(null, newAccess);
@@ -105,12 +106,12 @@ api.interceptors.response.use(
     } catch (refreshError) {
       processQueue(refreshError, null);
       clearTokens();
-      window.location.href = '/login';
+      window.location.href = "/login";
       return Promise.reject(refreshError);
     } finally {
       isRefreshing = false;
     }
-  }
+  },
 );
 
 export default api;

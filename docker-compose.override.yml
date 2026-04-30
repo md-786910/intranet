@@ -3,8 +3,6 @@ services:
   pgadmin:
     image: dpage/pgadmin4:latest
     restart: unless-stopped
-    profiles:
-      - tools
     depends_on:
       - postgres
     environment:
@@ -22,8 +20,6 @@ services:
   redis-insight:
     image: redis/redisinsight:latest
     restart: unless-stopped
-    profiles:
-      - tools
     depends_on:
       - redis
     ports:
