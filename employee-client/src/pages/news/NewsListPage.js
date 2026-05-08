@@ -69,7 +69,7 @@ export default function NewsListPage() {
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-unit-lg lg:py-unit-xl bg-background min-h-[calc(100vh-10rem)]">
-      <div className="max-w-7xl mx-auto space-y-unit-xl">
+      <div className="w-full space-y-unit-xl">
         {loading ? (
           <NewsLoadingSkeleton />
         ) : error ? (
