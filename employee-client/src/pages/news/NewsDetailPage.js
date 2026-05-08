@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import MaterialIcon from '../../components/common/MaterialIcon';
 import { Link, useParams } from 'react-router-dom';
 import { newsService } from '../../services/newsService';
 import EmptyState from '../../components/common/EmptyState';
@@ -60,6 +61,15 @@ export default function NewsDetailPage() {
         />
       ) : article ? (
         <>
+          {/* Back arrow — left-aligned */}
+          <Link
+            to="/news"
+            className="inline-flex items-center gap-unit-xs text-on-surface-variant hover:text-primary transition-colors mb-unit-md group"
+          >
+            <MaterialIcon name="arrow_back" className="text-lg group-hover:-translate-x-0.5 transition-transform" />
+            <span className="font-body-sm text-body-sm font-medium">Back to News</span>
+          </Link>
+
           {/* Article Header — narrower reading column */}
           <ArticleHeader article={article} />
 
