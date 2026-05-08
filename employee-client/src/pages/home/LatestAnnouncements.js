@@ -4,6 +4,7 @@ import MaterialIcon from '../../components/common/MaterialIcon';
 import Skeleton from '../../components/common/Skeleton';
 import { newsService } from '../../services/newsService';
 import { categoryPalette } from '../../theme/categoryColors';
+import { formatRelative } from '../../theme/dateFormat';
 
 const LIMIT = 2;
 
@@ -108,7 +109,7 @@ function AnnouncementRow({ article }) {
       <div className="w-20 h-20 bg-primary-container/20 rounded-xl flex-shrink-0 flex items-center justify-center">
         <MaterialIcon name={iconFor(article)} className="text-primary text-3xl" />
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-grow">
         {categoryName && (
           <span
             className={`text-[10px] font-bold ${palette.text} uppercase tracking-widest`}
@@ -122,6 +123,11 @@ function AnnouncementRow({ article }) {
         {article.summary && (
           <p className="text-body-sm text-on-surface-variant mt-1 line-clamp-2">
             {article.summary}
+          </p>
+        )}
+        {(article.published_at || article.created_at) && (
+          <p className="text-[11px] text-zinc-400 mt-2">
+            {formatRelative(article.published_at || article.created_at)}
           </p>
         )}
       </div>
