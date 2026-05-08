@@ -3,7 +3,7 @@ const auditService = require('../../services/audit.service');
 const { DEFAULT_TENANT_ID } = require('../../utils/constants');
 const { parsePagination, buildPagination } = require('../../utils/pagination');
 const permissionService = require('../../services/permission.service');
-const scopeService = require('../../services/scope.service');
+const audienceService = require('../../services/audience.service');
 const { sanitiseRichText } = require('../../utils/sanitiseRichText');
 
 // Normalise client-supplied related-news ids: dedupe, drop self, cap at 10.
@@ -53,62 +53,9 @@ async function canManageNews(userId) {
   return canCreate || canEdit || canDelete || canPublish;
 }
 
-async function getUserAudienceScopeKeys(userId) {
-  const {
-    UserRoleAssignment,
-    UserPermission,
-    DepartmentMembership,
-  } = require('../../database/models');
-
-  const scopeKeys = new Set();
-  const addAncestors = async (scopeType, scopeId) => {
-    if (!scopeType || !scopeId) return;
-    const ancestors = await scopeService.resolveAncestors(scopeType, scopeId);
-    if (!ancestors) return;
-
-    if (ancestors.organisation_id) scopeKeys.add(`ORGANISATION:${ancestors.organisation_id}`);
-    if (ancestors.office_location_id) scopeKeys.add(`OFFICE_LOCATION:${ancestors.office_location_id}`);
-    if (ancestors.vertical_id) scopeKeys.add(`VERTICAL:${ancestors.vertical_id}`);
-    if (ancestors.department_id) scopeKeys.add(`DEPARTMENT:${ancestors.department_id}`);
-  };
-
-  const [roleAssignments, directPermissions, departmentMemberships] = await Promise.all([
-    UserRoleAssignment.findAll({
-      where: { user_id: userId },
-      attributes: ['scope_type', 'scope_id'],
-    }),
-    UserPermission.findAll({
-      where: { user_id: userId, effect: 'ALLOW' },
-      attributes: ['scope_type', 'scope_id'],
-    }),
-    DepartmentMembership.findAll({
-      where: { user_id: userId },
-      attributes: ['department_id'],
-    }),
-  ]);
-
-  for (const assignment of roleAssignments) {
-    await addAncestors(assignment.scope_type, assignment.scope_id);
-  }
-
-  for (const permission of directPermissions) {
-    await addAncestors(permission.scope_type, permission.scope_id);
-  }
-
-  for (const membership of departmentMemberships) {
-    await addAncestors('DEPARTMENT', membership.department_id);
-  }
-
-  return scopeKeys;
-}
-
-function articleMatchesAudience(article, userAudienceScopeKeys) {
-  const audienceRules = article.audienceRules || [];
-  if (audienceRules.length === 0) return true;
-
-  return audienceRules.some((rule) =>
-    userAudienceScopeKeys.has(`${rule.target_scope_type}:${rule.target_scope_id}`));
-}
+const getUserAudienceScopeKeys = (userId) => audienceService.getUserAudienceScopeKeys(userId, 'news');
+const articleMatchesAudience = (article, userAudienceScopeKeys) =>
+  audienceService.matchesAudience(article.audienceRules, userAudienceScopeKeys);
 
 function buildAdminNewsOrder(sequelize, trash) {
   return [

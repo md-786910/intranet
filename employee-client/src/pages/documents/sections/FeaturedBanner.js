@@ -1,44 +1,70 @@
-import React from 'react';
-import { useToast } from '../../../hooks/useToast';
-import { FEATURED_BANNER } from '../data';
+import React, { useEffect, useState } from 'react';
+import Skeleton from '../../../components/common/Skeleton';
+import { documentsService } from '../../../services/documentsService';
 
 export default function FeaturedBanner() {
-  const toast = useToast();
-  const stub = (label) => () => toast.info(`${label} coming soon.`);
-  const b = FEATURED_BANNER;
+  const [doc, setDoc] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    documentsService
+      .featured()
+      .then((res) => {
+        if (cancelled) return;
+        setDoc(res.data?.data || null);
+      })
+      .catch(() => {
+        if (!cancelled) setDoc(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading) return <Skeleton className="h-[400px] rounded-[32px]" />;
+  if (!doc) return null;
+
+  const pill = doc.priority === 'URGENT' ? 'Urgent' : 'Featured';
+  const primary = (doc.versions && doc.versions[0]) || null;
+
+  const open = () => {
+    if (!doc.document_item_id) return;
+    documentsService.recordView(doc.document_item_id).catch(() => {});
+    if (primary?.file_url) window.open(primary.file_url, '_blank', 'noopener');
+  };
 
   return (
-    <section className="relative h-[400px] rounded-[32px] overflow-hidden group">
-      <img
-        alt={b.title}
-        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-        src={b.imageUrl}
-      />
+    <section className="relative h-[400px] rounded-[32px] overflow-hidden bg-gradient-to-br from-primary via-tertiary to-secondary">
       <div className="absolute inset-0 bg-gradient-to-r from-on-background/80 via-on-background/40 to-transparent flex flex-col justify-center px-6 sm:px-12 text-white">
         <span className="bg-primary-container text-on-primary-container font-label-caps text-label-caps px-3 py-1.5 rounded-full w-fit mb-6">
-          {b.pill.toUpperCase()}
+          {pill.toUpperCase()}
         </span>
         <h2 className="text-3xl sm:text-4xl md:text-5xl font-display text-white mb-4 max-w-xl">
-          {b.title}
+          {doc.title}
         </h2>
-        <p className="font-body-lg text-body-lg text-white/80 max-w-md mb-8">
-          {b.description}
-        </p>
+        {doc.summary && (
+          <p className="font-body-lg text-body-lg text-white/80 max-w-md mb-8 line-clamp-3">
+            {doc.summary}
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-4">
           <button
             type="button"
-            onClick={stub('Collection access')}
-            className="bg-white text-on-background px-unit-lg py-3 rounded-xl font-bold hover:bg-surface-variant transition-colors"
+            onClick={open}
+            disabled={!primary?.file_url}
+            className="bg-white text-on-background px-unit-lg py-3 rounded-xl font-bold hover:bg-surface-variant transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {b.primaryCta}
+            {primary?.file_url ? 'Open Document' : 'No File Attached'}
           </button>
-          <button
-            type="button"
-            onClick={stub('Agenda download')}
-            className="bg-white/10 backdrop-blur-md border border-white/20 text-white px-unit-lg py-3 rounded-xl font-bold hover:bg-white/20 transition-colors"
-          >
-            {b.secondaryCta}
-          </button>
+          {doc.category?.name && (
+            <span className="bg-white/10 backdrop-blur-md border border-white/20 text-white px-unit-lg py-3 rounded-xl font-semibold">
+              {doc.category.name}
+            </span>
+          )}
         </div>
       </div>
     </section>

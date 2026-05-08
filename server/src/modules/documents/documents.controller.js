@@ -57,8 +57,33 @@ const createVersion = catchAsync(async (req, res) => {
 });
 
 const listCategories = catchAsync(async (req, res) => {
-  const categories = await documentsService.listCategories();
+  // ?for_user=true → restrict to categories with at least one visible document
+  // for the calling user, with live doc_count attached. Without it, returns
+  // every DOCUMENT category (admin dropdown flow).
+  const forUser = req.query.for_user === 'true';
+  const categories = await documentsService.listCategories(forUser ? req.user.user_id : null);
   res.status(200).json({ status: 'success', data: categories });
+});
+
+const recordView = catchAsync(async (req, res) => {
+  const result = await documentsService.recordView(req.params.id, req.user.user_id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
+const listRecentlyViewed = catchAsync(async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 10, 50);
+  const result = await documentsService.listRecentlyViewed(req.user.user_id, limit);
+  res.status(200).json({ status: 'success', data: result });
+});
+
+const getFeatured = catchAsync(async (req, res) => {
+  const result = await documentsService.getFeatured(req.user.user_id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
+const getStorageSummary = catchAsync(async (req, res) => {
+  const result = await documentsService.getStorageSummary(req.user.user_id);
+  res.status(200).json({ status: 'success', data: result });
 });
 
 const createCategory = catchAsync(async (req, res) => {
@@ -81,4 +106,5 @@ module.exports = {
   bulkRestore, bulkPurge,
   listVersions, createVersion,
   listCategories, createCategory, updateCategory, deleteCategory,
+  recordView, listRecentlyViewed, getFeatured, getStorageSummary,
 };

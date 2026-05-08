@@ -14,9 +14,15 @@ router.post('/categories', authorize('DOCUMENTS', 'CREATE'), validate(schemas.cr
 router.put('/categories/:categoryId', authorize('DOCUMENTS', 'EDIT'), validate(schemas.updateCategorySchema), controller.updateCategory);
 router.delete('/categories/:categoryId', authorize('DOCUMENTS', 'DELETE'), validate(schemas.categoryIdParam), controller.deleteCategory);
 
+// ── Employee dashboard widgets (specific paths, before /:id) ──
+router.get('/recently-viewed', authorize('DOCUMENTS', 'VIEW'), controller.listRecentlyViewed);
+router.get('/featured', authorize('DOCUMENTS', 'VIEW'), controller.getFeatured);
+router.get('/storage-summary', authorize('DOCUMENTS', 'VIEW'), controller.getStorageSummary);
+
 // ── Documents ──
 router.get('/', authorize('DOCUMENTS', 'VIEW'), validate(schemas.listDocsSchema), controller.list);
 router.get('/:id', authorize('DOCUMENTS', 'VIEW'), validate(schemas.idParam), controller.getById);
+router.post('/:id/view', authorize('DOCUMENTS', 'VIEW'), validate(schemas.idParam), controller.recordView);
 router.post('/', authorize('DOCUMENTS', 'CREATE'), validate(schemas.createDocSchema), auditLogger('DOC_CREATED'), controller.create);
 router.put('/:id', authorize('DOCUMENTS', 'EDIT'), validate(schemas.updateDocSchema), auditLogger('DOC_UPDATED'), controller.update);
 router.delete('/:id', authorize('DOCUMENTS', 'DELETE'), auditLogger('DOC_DELETED'), controller.remove);

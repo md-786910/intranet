@@ -3,7 +3,7 @@ const auditService = require('../../services/audit.service');
 const { DEFAULT_TENANT_ID } = require('../../utils/constants');
 const { parsePagination, buildPagination } = require('../../utils/pagination');
 const permissionService = require('../../services/permission.service');
-const scopeService = require('../../services/scope.service');
+const audienceService = require('../../services/audience.service');
 
 function generateSlug(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -54,40 +54,27 @@ async function canManageDocuments(userId) {
   return canCreate || canEdit || canDelete || canPublish;
 }
 
-async function getUserAudienceScopeKeys(userId) {
-  const { UserRoleAssignment, UserPermission, DepartmentMembership } = require('../../database/models');
-  const scopeKeys = new Set();
+const getUserAudienceScopeKeys = (userId) => audienceService.getUserAudienceScopeKeys(userId, 'documents');
+const documentMatchesAudience = (doc, userAudienceScopeKeys) =>
+  audienceService.matchesAudience(doc.audienceRules, userAudienceScopeKeys);
 
-  const addAncestors = async (scopeType, scopeId) => {
-    if (!scopeType || !scopeId) return;
-    const ancestors = await scopeService.resolveAncestors(scopeType, scopeId);
-    if (!ancestors) return;
+// Returns the published, audience-visible documents (with category +
+// audienceRules eager-loaded) for a given user. Used by the dashboard widgets.
+async function getVisibleDocumentsForUser(userId, { extraInclude = [] } = {}) {
+  const { DocumentItem, Category, ContentAudienceRule } = require('../../database/models');
 
-    if (ancestors.organisation_id) scopeKeys.add(`ORGANISATION:${ancestors.organisation_id}`);
-    if (ancestors.office_location_id) scopeKeys.add(`OFFICE_LOCATION:${ancestors.office_location_id}`);
-    if (ancestors.vertical_id) scopeKeys.add(`VERTICAL:${ancestors.vertical_id}`);
-    if (ancestors.department_id) scopeKeys.add(`DEPARTMENT:${ancestors.department_id}`);
-  };
+  const userAudienceScopeKeys = await getUserAudienceScopeKeys(userId);
+  const docs = await DocumentItem.findAll({
+    where: { deleted_at: null, status: 'PUBLISHED' },
+    include: [
+      { model: Category, as: 'category', attributes: ['category_id', 'name', 'slug'], required: false },
+      { model: ContentAudienceRule, as: 'audienceRules', where: { entity_type: 'DOCUMENT' }, required: false },
+      ...extraInclude,
+    ],
+    order: [['created_at', 'DESC']],
+  });
 
-  const [roleAssignments, directPermissions, departmentMemberships] = await Promise.all([
-    UserRoleAssignment.findAll({ where: { user_id: userId }, attributes: ['scope_type', 'scope_id'] }),
-    UserPermission.findAll({ where: { user_id: userId, effect: 'ALLOW' }, attributes: ['scope_type', 'scope_id'] }),
-    DepartmentMembership.findAll({ where: { user_id: userId }, attributes: ['department_id'] }),
-  ]);
-
-  for (const assignment of roleAssignments) await addAncestors(assignment.scope_type, assignment.scope_id);
-  for (const permission of directPermissions) await addAncestors(permission.scope_type, permission.scope_id);
-  for (const membership of departmentMemberships) await addAncestors('DEPARTMENT', membership.department_id);
-
-  return scopeKeys;
-}
-
-function documentMatchesAudience(doc, userAudienceScopeKeys) {
-  const audienceRules = doc.audienceRules || [];
-  if (audienceRules.length === 0) return true;
-
-  return audienceRules.some((rule) =>
-    userAudienceScopeKeys.has(`${rule.target_scope_type}:${rule.target_scope_id}`));
+  return docs.filter((doc) => documentMatchesAudience(doc, userAudienceScopeKeys));
 }
 
 const documentsService = {
@@ -519,12 +506,147 @@ const documentsService = {
 
   // Category operations — scoped to entity_type DOCUMENT so the dropdown
   // never shows News categories.
-  async listCategories() {
+  //
+  // When `userId` is supplied, the result is filtered to only the categories
+  // the user has at least one visible published document under, with a live
+  // `doc_count`. Without `userId` (admin flows), every DOCUMENT category is
+  // returned with no count attached.
+  async listCategories(userId = null) {
     const { Category } = require('../../database/models');
-    return Category.findAll({
+    const allCategories = await Category.findAll({
       where: { deleted_at: null, entity_type: 'DOCUMENT' },
       order: [['sort_order', 'ASC'], ['name', 'ASC']],
     });
+
+    if (!userId) return allCategories;
+
+    const visibleDocs = await getVisibleDocumentsForUser(userId);
+    const countByCategory = new Map();
+    for (const doc of visibleDocs) {
+      if (!doc.category_id) continue;
+      countByCategory.set(doc.category_id, (countByCategory.get(doc.category_id) || 0) + 1);
+    }
+
+    return allCategories
+      .filter((c) => countByCategory.has(c.category_id))
+      .map((c) => {
+        const plain = c.toJSON();
+        plain.doc_count = countByCategory.get(c.category_id) || 0;
+        return plain;
+      });
+  },
+
+  async recordView(documentId, userId) {
+    const { DocumentView } = require('../../database/models');
+    // getById enforces audience visibility — if the user shouldn't see it,
+    // it throws notFound and we never write a view row.
+    await this.getById(documentId, userId);
+
+    const [row, created] = await DocumentView.findOrCreate({
+      where: { user_id: userId, document_item_id: documentId },
+      defaults: { viewed_at: new Date() },
+    });
+    if (!created) {
+      row.viewed_at = new Date();
+      await row.save();
+    }
+    return { ok: true };
+  },
+
+  async listRecentlyViewed(userId, limit = 10) {
+    const { DocumentView, DocumentItem, DocumentVersion, Category, ContentAudienceRule } = require('../../database/models');
+    const userAudienceScopeKeys = await getUserAudienceScopeKeys(userId);
+
+    // Pull a generous slab so audience filtering still leaves us `limit`.
+    const views = await DocumentView.findAll({
+      where: { user_id: userId },
+      order: [['viewed_at', 'DESC']],
+      limit: Math.max(limit * 3, 30),
+      include: [{
+        model: DocumentItem,
+        as: 'document',
+        required: true,
+        where: { deleted_at: null, status: 'PUBLISHED' },
+        include: [
+          { model: Category, as: 'category', attributes: ['category_id', 'name', 'slug'], required: false },
+          { model: ContentAudienceRule, as: 'audienceRules', where: { entity_type: 'DOCUMENT' }, required: false },
+          {
+            model: DocumentVersion,
+            as: 'versions',
+            attributes: ['document_version_id', 'version_no', 'file_name', 'file_size', 'mime_type', 'file_url'],
+            required: false,
+            separate: true,
+            order: [['version_no', 'DESC']],
+            limit: 1,
+          },
+        ],
+      }],
+    });
+
+    const visible = views.filter((v) => v.document && documentMatchesAudience(v.document, userAudienceScopeKeys));
+    return visible.slice(0, limit).map((v) => ({
+      view_id: v.view_id,
+      viewed_at: v.viewed_at,
+      document: v.document,
+    }));
+  },
+
+  async getFeatured(userId) {
+    const { DocumentVersion } = require('../../database/models');
+    const visible = await getVisibleDocumentsForUser(userId, {
+      extraInclude: [{
+        model: DocumentVersion,
+        as: 'versions',
+        attributes: ['document_version_id', 'version_no', 'file_name', 'file_size', 'mime_type', 'file_url'],
+        required: false,
+        separate: true,
+        order: [['version_no', 'DESC']],
+        limit: 1,
+      }],
+    });
+    if (visible.length === 0) return null;
+    const priorityRank = { URGENT: 0, HIGH: 1, NORMAL: 2, LOW: 3 };
+    visible.sort((a, b) => {
+      const r = (priorityRank[a.priority] ?? 9) - (priorityRank[b.priority] ?? 9);
+      if (r !== 0) return r;
+      const aDate = a.published_at || a.created_at;
+      const bDate = b.published_at || b.created_at;
+      return new Date(bDate) - new Date(aDate);
+    });
+    const top = visible[0];
+    if (!top || (top.priority !== 'URGENT' && top.priority !== 'HIGH')) return null;
+    return top;
+  },
+
+  async getStorageSummary(userId) {
+    const { sequelize } = require('../../database/models');
+    const { QueryTypes } = require('sequelize');
+    const visibleDocs = await getVisibleDocumentsForUser(userId);
+    const ids = visibleDocs.map((d) => d.document_item_id);
+
+    let usedBytes = 0;
+    if (ids.length > 0) {
+      // Sum the latest version's file_size per document so we don't
+      // double-count revision history.
+      const rows = await sequelize.query(
+        `SELECT COALESCE(SUM(latest.file_size), 0) AS used_bytes
+         FROM (
+           SELECT DISTINCT ON (document_item_id) document_item_id, file_size
+           FROM document_version
+           WHERE document_item_id IN (:ids)
+           ORDER BY document_item_id, version_no DESC
+         ) latest`,
+        { replacements: { ids }, type: QueryTypes.SELECT }
+      );
+      usedBytes = Number(rows?.[0]?.used_bytes || 0);
+    }
+
+    const totalBytes = Number(process.env.DOCUMENTS_STORAGE_QUOTA_BYTES) || 50 * 1024 * 1024 * 1024; // 50 GB
+    return {
+      used_bytes: usedBytes,
+      total_bytes: totalBytes,
+      document_count: visibleDocs.length,
+    };
   },
 
   async createCategory(data) {

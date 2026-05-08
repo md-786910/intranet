@@ -1,110 +1,112 @@
-// Dummy data for the Documents (Resource Library) page.
-// Will swap to /api/v1/documents-driven content later.
+// Visual theme map for category cards. Backend supplies the category data
+// (id, name, description, doc_count); the frontend chooses how each one
+// looks. Keyed by slug; falls back to `_default` for unknown slugs.
 
-export const CATEGORIES = [
-  {
-    id: 'policies',
-    name: 'Company Policies',
-    desc: 'Official rules, regulations, and operational standards for the workplace.',
+const FALLBACK_ICONS = ['folder', 'topic', 'inventory_2', 'description'];
+
+export const CATEGORY_THEME = {
+  policies: {
     icon: 'policy',
     iconColor: 'text-primary',
     iconBg: 'bg-primary-fixed-dim/30',
     iconHoverBg: 'group-hover:bg-primary-fixed-dim/50',
     arrowHover: 'group-hover:text-primary',
-    count: '124 Docs',
     countText: 'text-on-primary-fixed-variant',
     countBg: 'bg-primary-fixed',
   },
-  {
-    id: 'brand',
-    name: 'Brand Guidelines',
-    desc: 'Visual identity standards, logos, and communication voice kits.',
+  'company-policies': {
+    icon: 'policy',
+    iconColor: 'text-primary',
+    iconBg: 'bg-primary-fixed-dim/30',
+    iconHoverBg: 'group-hover:bg-primary-fixed-dim/50',
+    arrowHover: 'group-hover:text-primary',
+    countText: 'text-on-primary-fixed-variant',
+    countBg: 'bg-primary-fixed',
+  },
+  brand: {
     icon: 'palette',
     iconColor: 'text-tertiary',
     iconBg: 'bg-tertiary-fixed/30',
     iconHoverBg: 'group-hover:bg-tertiary-fixed/50',
     arrowHover: 'group-hover:text-tertiary',
-    count: '48 Files',
     countText: 'text-on-tertiary-container',
     countBg: 'bg-tertiary-fixed',
   },
-  {
-    id: 'hr',
-    name: 'HR Forms',
-    desc: 'Applications, reimbursement, and benefit enrollment documents.',
+  'brand-guidelines': {
+    icon: 'palette',
+    iconColor: 'text-tertiary',
+    iconBg: 'bg-tertiary-fixed/30',
+    iconHoverBg: 'group-hover:bg-tertiary-fixed/50',
+    arrowHover: 'group-hover:text-tertiary',
+    countText: 'text-on-tertiary-container',
+    countBg: 'bg-tertiary-fixed',
+  },
+  hr: {
     icon: 'assignment',
     iconColor: 'text-secondary',
     iconBg: 'bg-secondary-fixed/30',
     iconHoverBg: 'group-hover:bg-secondary-fixed/50',
     arrowHover: 'group-hover:text-secondary',
-    count: '82 Items',
     countText: 'text-on-secondary-container',
     countBg: 'bg-secondary-fixed',
   },
-  {
-    id: 'training',
-    name: 'Training Manuals',
-    desc: 'Educational resources and step-by-step guides for skill development.',
+  'hr-forms': {
+    icon: 'assignment',
+    iconColor: 'text-secondary',
+    iconBg: 'bg-secondary-fixed/30',
+    iconHoverBg: 'group-hover:bg-secondary-fixed/50',
+    arrowHover: 'group-hover:text-secondary',
+    countText: 'text-on-secondary-container',
+    countBg: 'bg-secondary-fixed',
+  },
+  training: {
     icon: 'school',
     iconColor: 'text-primary',
     iconBg: 'bg-primary-container/30',
     iconHoverBg: 'group-hover:bg-primary-container/50',
     arrowHover: 'group-hover:text-primary',
-    count: '215 Guides',
     countText: 'text-on-primary-container',
     countBg: 'bg-primary-fixed-dim',
   },
-];
-
-export const RECENTLY_VIEWED = [
-  {
-    name: 'Employee_Handbook_2024.pdf',
-    icon: 'description',
+  'training-manuals': {
+    icon: 'school',
     iconColor: 'text-primary',
-    category: 'Company Policies',
-    time: '2 hours ago',
-    size: '4.2 MB',
+    iconBg: 'bg-primary-container/30',
+    iconHoverBg: 'group-hover:bg-primary-container/50',
+    arrowHover: 'group-hover:text-primary',
+    countText: 'text-on-primary-container',
+    countBg: 'bg-primary-fixed-dim',
   },
-  {
-    name: 'Brand_Assets_Q3_Final.zip',
-    icon: 'image',
-    iconColor: 'text-tertiary',
-    category: 'Brand Guidelines',
-    time: 'Yesterday',
-    size: '128 MB',
+  _default: {
+    iconColor: 'text-on-surface-variant',
+    iconBg: 'bg-surface-container-high/40',
+    iconHoverBg: 'group-hover:bg-surface-container-high/60',
+    arrowHover: 'group-hover:text-on-background',
+    countText: 'text-on-surface-variant',
+    countBg: 'bg-surface-container-high',
   },
-  {
-    name: 'Expense_Report_Template.xlsx',
-    icon: 'table_view',
-    iconColor: 'text-secondary',
-    category: 'HR Forms',
-    time: 'Oct 12, 2024',
-    size: '845 KB',
-  },
-  {
-    name: 'Security_Training_Module_1.mp4',
-    icon: 'video_library',
-    iconColor: 'text-primary',
-    category: 'Training Manuals',
-    time: 'Oct 10, 2024',
-    size: '24.5 MB',
-  },
-];
-
-export const STORAGE = {
-  used: 32.4,
-  total: 50,
-  unit: 'GB',
-  percent: 72,
 };
 
-export const FEATURED_BANNER = {
-  pill: 'Featured Event',
-  title: '2024 Employee Experience Summit',
-  description:
-    'Access all keynote presentations, workshop recordings, and strategic roadmaps from our annual global gathering.',
-  primaryCta: 'Access Collection',
-  secondaryCta: 'Download Agenda',
-  imageUrl:
-    'https://lh3.googleusercontent.com/aida/ADBb0uj8fEOkL4VMxGs3DPmUzs86NmvEM7NgibbYgNOwgrEfWFxbaUtbIuwpuRdZmbnYg64iz8FapihiUkPvgsCeHmdIphNr8hUR-1aCkRT_c1EZKLfEysKGUbfK0LTETXl1YjdVQmxWTAlXEFe2MDi_ntceThe1ohTvrOcl6N9pqcsgXVhsucbtnJizfcy5U0IrUiQYnZUkZkpAiptZUdAl2W3OT2Q-Wi0mXUrhzOvvgxcWvNcOJralep_J-fulRnyW42Kza_hNXaUDrQ',
-};
+// Pick a stable visual theme for a category. Same slug → same look across
+// renders; unknown slugs get a deterministic fallback icon.
+export function themeForCategory(category) {
+  const slug = (category?.slug || '').toLowerCase();
+  const base = CATEGORY_THEME[slug] || CATEGORY_THEME._default;
+  if (base.icon) return base;
+  const seed = category?.category_id ?? 0;
+  return { ...base, icon: FALLBACK_ICONS[Math.abs(seed) % FALLBACK_ICONS.length] };
+}
+
+// Map mime/file extension to an iconography hint for recently-viewed rows.
+export function iconForFile(name = '', mime = '') {
+  const lower = (name || '').toLowerCase();
+  if (mime.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/.test(lower)) return { icon: 'image', color: 'text-tertiary' };
+  if (mime.startsWith('video/') || /\.(mp4|mov|webm|avi)$/.test(lower)) return { icon: 'video_library', color: 'text-primary' };
+  if (mime.startsWith('audio/') || /\.(mp3|wav|m4a)$/.test(lower)) return { icon: 'audio_file', color: 'text-secondary' };
+  if (/\.zip$|\.rar$|\.7z$|\.tar/.test(lower)) return { icon: 'folder_zip', color: 'text-tertiary' };
+  if (/\.xlsx?$|\.csv$/.test(lower)) return { icon: 'table_view', color: 'text-secondary' };
+  if (/\.docx?$/.test(lower)) return { icon: 'description', color: 'text-primary' };
+  if (/\.pdf$/.test(lower)) return { icon: 'picture_as_pdf', color: 'text-error' };
+  if (/\.pptx?$/.test(lower)) return { icon: 'slideshow', color: 'text-tertiary' };
+  return { icon: 'description', color: 'text-primary' };
+}
