@@ -41,46 +41,51 @@ export default function NewsDetailPage() {
   }, [id]);
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 py-unit-xl bg-background min-h-[calc(100vh-10rem)]">
-      <div className="max-w-7xl mx-auto">
-        {loading ? (
-          <DetailSkeleton />
-        ) : error ? (
-          <EmptyState
-            icon="error"
-            title="Couldn't load article"
-            description={error}
-            action={
-              <Link
-                to="/news"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg font-semibold hover:opacity-90 transition-opacity"
-              >
-                ← Back to News
-              </Link>
-            }
-          />
-        ) : article ? (
-          <>
-            <ArticleHeader article={article} />
-            <ArticleHero article={article} />
+    <div className="max-w-container-max mx-auto px-gutter py-unit-xl bg-background min-h-[calc(100vh-10rem)]">
+      {loading ? (
+        <DetailSkeleton />
+      ) : error ? (
+        <EmptyState
+          icon="error"
+          title="Couldn't load article"
+          description={error}
+          action={
+            <Link
+              to="/news"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg font-semibold hover:opacity-90 transition-opacity"
+            >
+              ← Back to News
+            </Link>
+          }
+        />
+      ) : article ? (
+        <>
+          {/* Article Header — narrower reading column */}
+          <ArticleHeader article={article} />
 
-            <div className="max-w-4xl mx-auto">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-unit-xl">
-                <article className="md:col-span-12 lg:col-span-8">
-                  <ArticleBody body={article.body} />
-                  <EngagementBar likes={0} comments={0} />
-                </article>
+          {/* Hero Image — full width of the 1280px container */}
+          <ArticleHero article={article} />
 
-                <aside className="md:col-span-12 lg:col-span-4 space-y-unit-xl">
+          {/* Article Content — narrower reading column with sidebar */}
+          <div className="max-w-4xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-unit-xl">
+              <article className="md:col-span-12 lg:col-span-8">
+                <ArticleBody body={article.body} />
+                <EngagementBar likes={0} comments={0} />
+              </article>
+
+              <aside className="md:col-span-12 lg:col-span-4">
+                <div className="lg:sticky lg:top-24 space-y-unit-xl">
                   <TakeActionCard />
-                </aside>
-              </div>
+                </div>
+              </aside>
             </div>
+          </div>
 
-            <RelatedArticles ids={article.related_news_ids || []} />
-          </>
-        ) : null}
-      </div>
+          {/* Related Articles — full width */}
+          <RelatedArticles ids={article.related_news_ids || []} />
+        </>
+      ) : null}
     </div>
   );
 }
