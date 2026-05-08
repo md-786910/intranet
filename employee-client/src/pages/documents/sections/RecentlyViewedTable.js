@@ -4,38 +4,16 @@ import Skeleton from '../../../components/common/Skeleton';
 import { documentsService } from '../../../services/documentsService';
 import { formatRelative } from '../../../theme/dateFormat';
 import { iconForFile } from '../data';
+import { formatBytes, pickPrimaryFile } from '../documentActions';
+import { useDocumentPreview } from '../DocumentPreviewContext';
 
 const PAGE_LIMIT = 4;
-
-function formatBytes(n) {
-  if (n == null || isNaN(n)) return '—';
-  const bytes = Number(n);
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(1)} KB`;
-  const mb = kb / 1024;
-  if (mb < 1024) return `${mb.toFixed(1)} MB`;
-  return `${(mb / 1024).toFixed(2)} GB`;
-}
-
-function pickPrimaryFile(doc) {
-  const versions = doc.versions || [];
-  const v0 = versions[0] || null;
-  if (v0) {
-    return {
-      name: v0.file_name,
-      mime: v0.mime_type,
-      size: v0.file_size,
-      url: v0.file_url,
-    };
-  }
-  return { name: doc.title, mime: '', size: null, url: null };
-}
 
 export default function RecentlyViewedTable() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { openDocument } = useDocumentPreview();
 
   useEffect(() => {
     let cancelled = false;
@@ -56,14 +34,6 @@ export default function RecentlyViewedTable() {
       cancelled = true;
     };
   }, []);
-
-  const openDoc = (doc, primary) => {
-    if (doc?.document_item_id) {
-      // Bump the view timestamp; ignore failures (server enforces visibility).
-      documentsService.recordView(doc.document_item_id).catch(() => {});
-    }
-    if (primary?.url) window.open(primary.url, '_blank', 'noopener');
-  };
 
   return (
     <div className="lg:col-span-2 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-unit-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
@@ -101,7 +71,7 @@ export default function RecentlyViewedTable() {
                 return (
                   <tr
                     key={row.view_id}
-                    onClick={() => openDoc(doc, primary)}
+                    onClick={() => openDocument(doc)}
                     className={`hover:bg-surface-variant/20 transition-colors cursor-pointer ${
                       i < rows.length - 1 ? 'border-b border-outline-variant/10' : ''
                     }`}

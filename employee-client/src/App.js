@@ -13,6 +13,7 @@ import NewsListPage from './pages/news/NewsListPage';
 import NewsDetailPage from './pages/news/NewsDetailPage';
 import PeoplePage from './pages/people/PeoplePage';
 import DocumentsPage from './pages/documents/DocumentsPage';
+import CategoryDetailPage from './pages/documents/CategoryDetailPage';
 import PoliciesPage from './pages/policies/PoliciesPage';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import SettingsPage from './pages/settings/SettingsPage';
@@ -40,6 +41,7 @@ export default function App() {
               <Route path="/news/:id" element={<NewsDetailPage />} />
               <Route path="/people" element={<PeoplePage />} />
               <Route path="/documents" element={<DocumentsPage />} />
+              <Route path="/documents/categories/:id" element={<CategoryDetailPage />} />
               <Route path="/policies" element={<PoliciesPage />} />
               <Route path="/org-chart" element={<OrgChartPage />} />
               <Route path="/settings" element={<SettingsPage />} />

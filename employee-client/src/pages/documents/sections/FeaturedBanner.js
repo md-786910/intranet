@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import Skeleton from '../../../components/common/Skeleton';
 import { documentsService } from '../../../services/documentsService';
+import { useDocumentPreview } from '../DocumentPreviewContext';
 
 export default function FeaturedBanner() {
   const [doc, setDoc] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { openDocument } = useDocumentPreview();
 
   useEffect(() => {
     let cancelled = false;
@@ -31,12 +33,6 @@ export default function FeaturedBanner() {
   const pill = doc.priority === 'URGENT' ? 'Urgent' : 'Featured';
   const primary = (doc.versions && doc.versions[0]) || null;
 
-  const open = () => {
-    if (!doc.document_item_id) return;
-    documentsService.recordView(doc.document_item_id).catch(() => {});
-    if (primary?.file_url) window.open(primary.file_url, '_blank', 'noopener');
-  };
-
   return (
     <section className="relative h-[400px] rounded-[32px] overflow-hidden bg-gradient-to-br from-primary via-tertiary to-secondary">
       <div className="absolute inset-0 bg-gradient-to-r from-on-background/80 via-on-background/40 to-transparent flex flex-col justify-center px-6 sm:px-12 text-white">
@@ -54,7 +50,7 @@ export default function FeaturedBanner() {
         <div className="flex flex-wrap items-center gap-4">
           <button
             type="button"
-            onClick={open}
+            onClick={() => openDocument(doc)}
             disabled={!primary?.file_url}
             className="bg-white text-on-background px-unit-lg py-3 rounded-xl font-bold hover:bg-surface-variant transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >

@@ -4,6 +4,7 @@ export const documentsService = {
   // for_user=true → backend filters categories to those the caller can see
   // and attaches a live doc_count per category.
   listCategories: () => api.get('/documents/categories', { params: { for_user: true } }),
+  getCategory: (id) => api.get(`/documents/categories/${id}/info`),
   listDocuments: (params) => api.get('/documents', { params }),
   getDocument: (id) => api.get(`/documents/${id}`),
   recordView: (id) => api.post(`/documents/${id}/view`),

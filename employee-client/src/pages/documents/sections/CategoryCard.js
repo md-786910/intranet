@@ -4,9 +4,8 @@ import MaterialIcon from '../../../components/common/MaterialIcon';
 export default function CategoryCard({ category }) {
   const c = category;
   return (
-    <button
-      type="button"
-      className="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-unit-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-md transition-shadow group cursor-pointer text-left flex flex-col"
+    <div
+      className="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-unit-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-md transition-shadow group cursor-pointer text-left flex flex-col h-full"
     >
       <div
         className={`w-12 h-12 ${c.iconBg} rounded-lg flex items-center justify-center mb-4 ${c.iconHoverBg} transition-colors`}
@@ -32,6 +31,6 @@ export default function CategoryCard({ category }) {
           className={`text-outline-variant ${c.arrowHover} transition-colors`}
         />
       </div>
-    </button>
+    </div>
   );
 }

@@ -106,7 +106,25 @@ const documentsService = {
         { summary: { [Op.iLike]: `%${query.search}%` } },
       ];
     }
+    // priority — accept array, comma-separated string, or single value
+    const priorities = (() => {
+      if (!query.priority) return null;
+      if (Array.isArray(query.priority)) return query.priority;
+      return String(query.priority).split(',').map((s) => s.trim()).filter(Boolean);
+    })();
+    if (priorities && priorities.length > 0) {
+      where.priority = { [Op.in]: priorities };
+    }
 
+    // mime_prefix — applied JS-side after fetch since the file lives on the
+    // latest DocumentVersion (one-to-many).
+    const mimePrefixes = (() => {
+      if (!query.mime_prefix) return null;
+      const arr = Array.isArray(query.mime_prefix) ? query.mime_prefix : [query.mime_prefix];
+      return arr.map((s) => String(s).toLowerCase()).filter(Boolean);
+    })();
+
+    const { DocumentVersion } = require('../../database/models');
     const include = [
       { model: UserAccount, as: 'author', attributes: ['user_id', 'first_name', 'last_name', 'email'] },
       { model: Category, as: 'category', attributes: ['category_id', 'name', 'slug'], required: false },
@@ -118,6 +136,15 @@ const documentsService = {
         as: 'audienceRules',
         where: { entity_type: 'DOCUMENT' },
         required: false,
+      });
+      include.push({
+        model: DocumentVersion,
+        as: 'versions',
+        attributes: ['document_version_id', 'version_no', 'file_name', 'file_size', 'mime_type', 'file_url'],
+        required: false,
+        separate: true,
+        order: [['version_no', 'DESC']],
+        limit: 1,
       });
     }
 
@@ -168,7 +195,14 @@ const documentsService = {
       order: [['created_at', 'DESC']],
     });
 
-    const visibleDocuments = rows.filter((doc) => documentMatchesAudience(doc, userAudienceScopeKeys));
+    let visibleDocuments = rows.filter((doc) => documentMatchesAudience(doc, userAudienceScopeKeys));
+    if (mimePrefixes && mimePrefixes.length > 0) {
+      visibleDocuments = visibleDocuments.filter((doc) => {
+        const mime = (doc.versions?.[0]?.mime_type || '').toLowerCase();
+        if (!mime) return false;
+        return mimePrefixes.some((p) => mime.startsWith(p));
+      });
+    }
     const paginatedDocuments = visibleDocuments.slice(offset, offset + limit);
 
     return {
@@ -647,6 +681,28 @@ const documentsService = {
       total_bytes: totalBytes,
       document_count: visibleDocs.length,
     };
+  },
+
+  // Single-category lookup for the employee Category Detail page.
+  // Returns the category if the user has at least one visible document in it,
+  // with `doc_count` attached. Otherwise throws notFound — no signal that
+  // the category exists at all.
+  async getCategoryById(categoryId, userId) {
+    const { Category } = require('../../database/models');
+    const cat = await Category.findOne({
+      where: { category_id: categoryId, entity_type: 'DOCUMENT', deleted_at: null },
+    });
+    if (!cat) throw ApiError.notFound('Category not found');
+
+    if (userId) {
+      const visibleDocs = await getVisibleDocumentsForUser(userId);
+      const inCategory = visibleDocs.filter((d) => d.category_id === Number(categoryId));
+      if (inCategory.length === 0) throw ApiError.notFound('Category not found');
+      const plain = cat.toJSON();
+      plain.doc_count = inCategory.length;
+      return plain;
+    }
+    return cat;
   },
 
   async createCategory(data) {

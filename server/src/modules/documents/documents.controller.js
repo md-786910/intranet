@@ -86,6 +86,11 @@ const getStorageSummary = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
+const getCategoryById = catchAsync(async (req, res) => {
+  const category = await documentsService.getCategoryById(req.params.categoryId, req.user.user_id);
+  res.status(200).json({ status: 'success', data: category });
+});
+
 const createCategory = catchAsync(async (req, res) => {
   const category = await documentsService.createCategory(req.body);
   res.status(201).json({ status: 'success', data: category });
@@ -105,6 +110,6 @@ module.exports = {
   list, getById, create, update, remove, publish, unpublish,
   bulkRestore, bulkPurge,
   listVersions, createVersion,
-  listCategories, createCategory, updateCategory, deleteCategory,
+  listCategories, getCategoryById, createCategory, updateCategory, deleteCategory,
   recordView, listRecentlyViewed, getFeatured, getStorageSummary,
 };

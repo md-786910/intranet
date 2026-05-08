@@ -28,6 +28,17 @@ const listDocsSchema = {
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
     trash: Joi.boolean().optional(),
+    // Filter chips from the employee-client filter popover.
+    // Both accept comma-separated strings or repeated query params.
+    priority: Joi.alternatives(
+      priorityPattern,
+      Joi.array().items(priorityPattern),
+      Joi.string().pattern(/^[A-Z,]+$/).max(40),
+    ).optional(),
+    mime_prefix: Joi.alternatives(
+      Joi.string().max(80),
+      Joi.array().items(Joi.string().max(80)),
+    ).optional(),
   }),
 };
 

@@ -10,6 +10,7 @@ router.use(authenticate);
 
 // ── Categories (must be before /:id to avoid param matching) ──
 router.get('/categories', authorize('DOCUMENTS', 'VIEW'), controller.listCategories);
+router.get('/categories/:categoryId/info', authorize('DOCUMENTS', 'VIEW'), validate(schemas.categoryIdParam), controller.getCategoryById);
 router.post('/categories', authorize('DOCUMENTS', 'CREATE'), validate(schemas.createCategorySchema), controller.createCategory);
 router.put('/categories/:categoryId', authorize('DOCUMENTS', 'EDIT'), validate(schemas.updateCategorySchema), controller.updateCategory);
 router.delete('/categories/:categoryId', authorize('DOCUMENTS', 'DELETE'), validate(schemas.categoryIdParam), controller.deleteCategory);
