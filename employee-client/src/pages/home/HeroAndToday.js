@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import MaterialIcon from '../../components/common/MaterialIcon';
 
 const HERO_IMAGE =
@@ -29,13 +30,13 @@ export default function HeroAndToday() {
             HR documents in one central place.
           </p>
           <div className="flex gap-4">
-            <button
-              type="button"
+            <Link
+              to="/org-chart"
               className="bg-primary-container text-on-background px-5 sm:px-6 py-3 rounded-lg font-semibold text-body-md hover:bg-primary-container/80 transition-all flex items-center gap-2"
             >
-              View Directory
+              View Org Chart
               <MaterialIcon name="arrow_forward" />
-            </button>
+            </Link>
           </div>
         </div>
       </div>

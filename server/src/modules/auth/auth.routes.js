@@ -43,6 +43,15 @@ router.put(
 // GET /api/v1/auth/me
 router.get("/me", authenticate, controller.getMe);
 
+// PUT /api/v1/auth/profile
+router.put(
+  "/profile",
+  authenticate,
+  validate(schemas.updateProfileSchema),
+  auditLogger("PROFILE_UPDATED"),
+  controller.updateProfile,
+);
+
 // GET /api/v1/auth/invitations/:token/validate (public)
 router.get(
   "/invitations/:token/validate",

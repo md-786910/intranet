@@ -405,6 +405,35 @@ const authService = {
       permissions,
     };
   },
+
+  /**
+   * Update current user profile info.
+   */
+  async updateProfile(userId, updateData) {
+    const { UserAccount } = require("../../database/models");
+
+    const user = await UserAccount.findByPk(userId);
+    if (!user) {
+      throw ApiError.notFound("User not found");
+    }
+
+    // Only allow updating specific fields
+    const allowedUpdates = {
+      first_name: updateData.first_name,
+      last_name: updateData.last_name,
+      phone: updateData.phone,
+    };
+
+    await user.update(allowedUpdates);
+
+    await auditService.log({
+      user_id: userId,
+      action: "PROFILE_UPDATED",
+      result: "SUCCESS",
+    });
+
+    return user.toSafeJSON();
+  },
 };
 
 module.exports = authService;

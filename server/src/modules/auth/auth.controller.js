@@ -77,6 +77,16 @@ const getMe = catchAsync(async (req, res) => {
   });
 });
 
+const updateProfile = catchAsync(async (req, res) => {
+  const result = await authService.updateProfile(req.user.user_id, req.body);
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Profile updated successfully',
+    data: result,
+  });
+});
+
 const validateInvitation = catchAsync(async (req, res) => {
   const result = await employeesService.validateInvitation(req.params.token);
   res.status(200).json({ status: 'success', data: result });
@@ -124,6 +134,7 @@ module.exports = {
   logout,
   changePassword,
   getMe,
+  updateProfile,
   validateInvitation,
   acceptInvitation,
   forgotPassword,

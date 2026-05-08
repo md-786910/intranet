@@ -15,6 +15,7 @@ import PeoplePage from './pages/people/PeoplePage';
 import DocumentsPage from './pages/documents/DocumentsPage';
 import PoliciesPage from './pages/policies/PoliciesPage';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
+import SettingsPage from './pages/settings/SettingsPage';
 
 export default function App() {
   return (
@@ -41,6 +42,7 @@ export default function App() {
               <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/policies" element={<PoliciesPage />} />
               <Route path="/org-chart" element={<OrgChartPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               <Route path="/" element={<Navigate to="/home" replace />} />
             </Route>
 

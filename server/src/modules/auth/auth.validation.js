@@ -98,6 +98,22 @@ const resetPasswordSchema = {
   }),
 };
 
+const updateProfileSchema = {
+  body: Joi.object({
+    first_name: Joi.string().max(100).required().messages({
+      'string.max': 'First name cannot exceed 100 characters',
+      'any.required': 'First name is required',
+    }),
+    last_name: Joi.string().max(100).required().messages({
+      'string.max': 'Last name cannot exceed 100 characters',
+      'any.required': 'Last name is required',
+    }),
+    phone: Joi.string().max(20).allow('', null).messages({
+      'string.max': 'Phone number cannot exceed 20 characters',
+    }),
+  }),
+};
+
 module.exports = {
   loginSchema,
   refreshSchema,
@@ -107,4 +123,5 @@ module.exports = {
   forgotPasswordSchema,
   resetTokenParam,
   resetPasswordSchema,
+  updateProfileSchema,
 };

@@ -97,6 +97,7 @@ export function AuthProvider({ children }) {
 
   const value = {
     user,
+    setUser,
     permissions,
     isLoading,
     isAuthenticated,
