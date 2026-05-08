@@ -2,14 +2,16 @@ const bcrypt = require("bcryptjs");
 const { v4: uuidv4 } = require("uuid");
 const { Op } = require("sequelize");
 const ApiError = require("../../utils/ApiError");
-const { sha256 } = require("../../utils/crypto");
+const { sha256, generateToken } = require("../../utils/crypto");
 const tokenService = require("../../services/token.service");
 const auditService = require("../../services/audit.service");
 const permissionService = require("../../services/permission.service");
+const emailService = require("../../services/email.service");
 const logger = require("../../config/logger");
 
 const LOCK_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_FAILED_ATTEMPTS = 5;
+const PASSWORD_RESET_TTL_MIN = parseInt(process.env.PASSWORD_RESET_TTL_MIN, 10) || 30;
 
 const authService = {
   /**
@@ -258,6 +260,126 @@ const authService = {
     await auditService.log({
       user_id: userId,
       action: "PASSWORD_CHANGE",
+      result: "SUCCESS",
+    });
+  },
+
+  /**
+   * Initiate password reset. Always returns successfully to prevent
+   * user enumeration. Sends an email only if the account exists & is active.
+   */
+  async forgotPassword(email, ipAddress, userAgent) {
+    const { UserAccount, PasswordReset } = require("../../database/models");
+
+    const normalized = email.toLowerCase().trim();
+    const user = await UserAccount.findOne({ where: { email: normalized } });
+
+    if (!user || (user.status !== "ACTIVE" && user.status !== "LOCKED")) {
+      // Silent no-op so callers can't probe for valid accounts
+      logger.info(
+        `[auth] forgot-password: skipping (no active user for ${normalized})`,
+      );
+      return;
+    }
+
+    const rawToken = generateToken(32); // 64-char hex
+    const tokenHash = sha256(rawToken);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MIN * 60 * 1000);
+
+    await PasswordReset.create({
+      user_id: user.user_id,
+      email: user.email,
+      token_hash: tokenHash,
+      expires_at: expiresAt,
+    });
+
+    try {
+      await emailService.sendPasswordReset({
+        to: user.email,
+        firstName: user.first_name,
+        token: rawToken,
+        expiresAt,
+      });
+    } catch (err) {
+      logger.error(`[auth] failed to send password reset email: ${err.message}`);
+    }
+
+    await auditService.log({
+      user_id: user.user_id,
+      action: "PASSWORD_RESET_REQUESTED",
+      ip_address: ipAddress,
+      user_agent: userAgent,
+      result: "SUCCESS",
+    });
+  },
+
+  /**
+   * Validate a password reset token. Returns email + expiry if valid.
+   */
+  async validatePasswordResetToken(rawToken) {
+    const { PasswordReset } = require("../../database/models");
+    const tokenHash = sha256(rawToken);
+
+    const reset = await PasswordReset.findOne({
+      where: {
+        token_hash: tokenHash,
+        used_at: null,
+        expires_at: { [Op.gt]: new Date() },
+      },
+    });
+
+    if (!reset) {
+      throw ApiError.notFound("Invalid or expired reset link");
+    }
+
+    return { email: reset.email, expires_at: reset.expires_at };
+  },
+
+  /**
+   * Consume a password reset token and set a new password.
+   * Revokes all sessions for the user.
+   */
+  async resetPassword(rawToken, newPassword) {
+    const { UserAccount, PasswordReset, sequelize } = require("../../database/models");
+    const tokenHash = sha256(rawToken);
+
+    const reset = await PasswordReset.findOne({
+      where: {
+        token_hash: tokenHash,
+        used_at: null,
+        expires_at: { [Op.gt]: new Date() },
+      },
+    });
+
+    if (!reset) {
+      throw ApiError.notFound("Invalid or expired reset link");
+    }
+
+    const user = await UserAccount.findByPk(reset.user_id);
+    if (!user) {
+      throw ApiError.notFound("Account not found");
+    }
+
+    const rounds = parseInt(process.env.BCRYPT_ROUNDS, 10) || 12;
+    const passwordHash = await bcrypt.hash(newPassword, rounds);
+
+    await sequelize.transaction(async (t) => {
+      const updates = {
+        password_hash: passwordHash,
+        password_changed_at: new Date(),
+        failed_login_attempts: 0,
+        locked_until: null,
+      };
+      if (user.status === "LOCKED") updates.status = "ACTIVE";
+      await user.update(updates, { transaction: t });
+      await reset.update({ used_at: new Date() }, { transaction: t });
+    });
+
+    await tokenService.revokeAllUserTokens(user.user_id, "PASSWORD_RESET");
+
+    await auditService.log({
+      user_id: user.user_id,
+      action: "PASSWORD_RESET_COMPLETED",
       result: "SUCCESS",
     });
   },

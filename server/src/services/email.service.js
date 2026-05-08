@@ -5,6 +5,8 @@ const logger = require("../config/logger");
 
 const APP_NAME = process.env.APP_NAME || "BrightNow";
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
+const EMPLOYEE_APP_BASE_URL =
+  process.env.EMPLOYEE_APP_BASE_URL || APP_BASE_URL;
 
 let cachedTransport = null;
 function getTransport() {
@@ -22,17 +24,12 @@ function getTransport() {
   return cachedTransport;
 }
 
-let cachedInvitationTemplate = null;
-function loadInvitationTemplate() {
-  if (cachedInvitationTemplate) return cachedInvitationTemplate;
-  const templatePath = path.join(
-    __dirname,
-    "..",
-    "emails",
-    "employee-invitation.html",
-  );
-  cachedInvitationTemplate = fs.readFileSync(templatePath, "utf-8");
-  return cachedInvitationTemplate;
+const templateCache = {};
+function loadTemplate(name) {
+  if (templateCache[name]) return templateCache[name];
+  const templatePath = path.join(__dirname, "..", "emails", `${name}.html`);
+  templateCache[name] = fs.readFileSync(templatePath, "utf-8");
+  return templateCache[name];
 }
 
 function renderTemplate(template, vars) {
@@ -43,7 +40,21 @@ function renderTemplate(template, vars) {
 }
 
 function buildAcceptUrl(token) {
-  return `${APP_BASE_URL.replace(/\/$/, "")}/invitations/${token}`;
+  return `${EMPLOYEE_APP_BASE_URL.replace(/\/$/, "")}/invitations/${token}`;
+}
+
+function buildResetUrl(token) {
+  return `${EMPLOYEE_APP_BASE_URL.replace(/\/$/, "")}/reset-password/${token}`;
+}
+
+function formatExpiresAt(expiresAt) {
+  return new Date(expiresAt).toLocaleString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 async function sendEmployeeInvitation({
@@ -54,7 +65,7 @@ async function sendEmployeeInvitation({
   expiresAt,
 }) {
   const acceptUrl = buildAcceptUrl(token);
-  const html = renderTemplate(loadInvitationTemplate(), {
+  const html = renderTemplate(loadTemplate("employee-invitation"), {
     appName: APP_NAME,
     firstName: firstName || "there",
     inviterName: inviterName || "An administrator",
@@ -88,7 +99,40 @@ async function sendEmployeeInvitation({
   return { delivered: true, acceptUrl };
 }
 
+async function sendPasswordReset({ to, firstName, token, expiresAt }) {
+  const resetUrl = buildResetUrl(token);
+  const html = renderTemplate(loadTemplate("password-reset"), {
+    appName: APP_NAME,
+    firstName: firstName || "there",
+    resetUrl,
+    expiresAt: formatExpiresAt(expiresAt),
+  });
+
+  const transport = getTransport();
+  if (!transport) {
+    logger.warn(
+      `[email] SMTP not configured — password reset link for ${to}: ${resetUrl}`,
+    );
+    return { delivered: false, resetUrl };
+  }
+
+  const from =
+    process.env.SMTP_FROM ||
+    `"${APP_NAME}" <no-reply@${APP_NAME.toLowerCase()}.local>`;
+  await transport.sendMail({
+    from,
+    to,
+    subject: `Reset your ${APP_NAME} password`,
+    html,
+  });
+
+  logger.info(`[email] Password reset sent to ${to}`);
+  return { delivered: true, resetUrl };
+}
+
 module.exports = {
   sendEmployeeInvitation,
+  sendPasswordReset,
   buildAcceptUrl,
+  buildResetUrl,
 };

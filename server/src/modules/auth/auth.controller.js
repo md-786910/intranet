@@ -92,6 +92,32 @@ const acceptInvitation = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
+const forgotPassword = catchAsync(async (req, res) => {
+  await authService.forgotPassword(
+    req.body.email,
+    req.ip,
+    req.headers['user-agent'],
+  );
+  // Generic response — never reveal whether the account exists
+  res.status(200).json({
+    status: 'success',
+    message: 'If that email is registered, a reset link has been sent.',
+  });
+});
+
+const validatePasswordReset = catchAsync(async (req, res) => {
+  const result = await authService.validatePasswordResetToken(req.params.token);
+  res.status(200).json({ status: 'success', data: result });
+});
+
+const resetPassword = catchAsync(async (req, res) => {
+  await authService.resetPassword(req.params.token, req.body.password);
+  res.status(200).json({
+    status: 'success',
+    message: 'Password reset. Please log in with your new password.',
+  });
+});
+
 module.exports = {
   login,
   refresh,
@@ -100,4 +126,7 @@ module.exports = {
   getMe,
   validateInvitation,
   acceptInvitation,
+  forgotPassword,
+  validatePasswordReset,
+  resetPassword,
 };

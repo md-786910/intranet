@@ -69,10 +69,42 @@ const acceptInvitationSchema = {
   }),
 };
 
+const forgotPasswordSchema = {
+  body: Joi.object({
+    email: Joi.string()
+      .email()
+      .required()
+      .lowercase()
+      .trim()
+      .messages({
+        'string.email': 'Please provide a valid email address',
+        'any.required': 'Email is required',
+      }),
+  }),
+};
+
+const resetTokenParam = {
+  params: Joi.object({
+    token: Joi.string().hex().length(64).required(),
+  }),
+};
+
+const resetPasswordSchema = {
+  params: Joi.object({
+    token: Joi.string().hex().length(64).required(),
+  }),
+  body: Joi.object({
+    password: passwordPattern.required(),
+  }),
+};
+
 module.exports = {
   loginSchema,
   refreshSchema,
   changePasswordSchema,
   invitationTokenParam,
   acceptInvitationSchema,
+  forgotPasswordSchema,
+  resetTokenParam,
+  resetPasswordSchema,
 };

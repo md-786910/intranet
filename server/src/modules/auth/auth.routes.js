@@ -60,4 +60,30 @@ router.post(
   controller.acceptInvitation,
 );
 
+// POST /api/v1/auth/forgot-password (public)
+router.post(
+  "/forgot-password",
+  authLimiter,
+  validate(schemas.forgotPasswordSchema),
+  auditLogger("PASSWORD_RESET_REQUESTED"),
+  controller.forgotPassword,
+);
+
+// GET /api/v1/auth/password-resets/:token/validate (public)
+router.get(
+  "/password-resets/:token/validate",
+  authLimiter,
+  validate(schemas.resetTokenParam),
+  controller.validatePasswordReset,
+);
+
+// POST /api/v1/auth/password-resets/:token/reset (public)
+router.post(
+  "/password-resets/:token/reset",
+  authLimiter,
+  validate(schemas.resetPasswordSchema),
+  auditLogger("PASSWORD_RESET_COMPLETED"),
+  controller.resetPassword,
+);
+
 module.exports = router;

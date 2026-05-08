@@ -70,12 +70,33 @@ services:
     networks:
       - bh_network
 
+  # ---------- Employee Frontend ----------
+  client-employee:
+    build:
+      context: ./employee-client
+      dockerfile: Dockerfile
+      target: development
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      REACT_APP_API_URL: ${EMPLOYEE_REACT_APP_API_URL:-http://localhost:8000/api/v1}
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./employee-client/src:/app/src
+      - ./employee-client/public:/app/public
+      - client_employee_node_modules:/app/node_modules
+    networks:
+      - bh_network
+
 volumes:
   pg_data:
     driver: local
   redis_data:
     driver: local
   server_node_modules:
+    driver: local
+  client_employee_node_modules:
     driver: local
 
 networks:
