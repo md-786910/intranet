@@ -42,17 +42,16 @@ export default function NewsCard({ article, size = 'sm' }) {
         <h4 className="font-h3 text-base text-on-surface group-hover:text-primary leading-tight line-clamp-2">
           {article.title}
         </h4>
-        {size === 'md' && article.summary ? (
+        {size === 'md' && article.summary && (
           <p className="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">
             {article.summary}
           </p>
-        ) : (
-          <p className="text-xs text-on-surface-variant font-body-sm">
-            {formatRelative(article.published_at || article.created_at)}
-            {' • '}
-            {readingTime(article.body)}
-          </p>
         )}
+        <p className="text-[11px] text-zinc-400 font-body-sm pt-1">
+          {formatRelative(article.published_at || article.created_at)}
+          {' • '}
+          {readingTime(article.body)}
+        </p>
       </div>
     </Link>
   );

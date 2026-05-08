@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import MaterialIcon from '../common/MaterialIcon';
+import { formatRelative } from '../../theme/dateFormat';
 import { resolveMediaUrl } from '../../utils/mediaUtils';
 
 // Vertical card used in the "Related Articles" section on the detail page.
@@ -39,6 +40,11 @@ export default function RelatedCard({ article }) {
         {article.summary && (
           <p className="text-body-sm text-on-surface-variant line-clamp-2">
             {article.summary}
+          </p>
+        )}
+        {(article.published_at || article.created_at) && (
+          <p className="text-[11px] text-zinc-400 mt-3">
+            {formatRelative(article.published_at || article.created_at)}
           </p>
         )}
       </div>

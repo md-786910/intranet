@@ -11,6 +11,7 @@ import EngagementBar from './detail/EngagementBar';
 import TakeActionCard from './detail/TakeActionCard';
 import RelatedArticles from './detail/RelatedArticles';
 import { getErrorMessage } from '../../utils/errorUtils';
+import { formatRelative } from '../../theme/dateFormat';
 
 export default function NewsDetailPage() {
   const { id } = useParams();
@@ -81,6 +82,11 @@ export default function NewsDetailPage() {
             <div className="grid grid-cols-1 md:grid-cols-12 gap-unit-xl">
               <article className="md:col-span-12 lg:col-span-8">
                 <ArticleBody body={article.body} />
+                {(article.published_at || article.created_at) && (
+                  <p className="text-[11px] text-zinc-400 mt-unit-lg">
+                    Posted {formatRelative(article.published_at || article.created_at)}
+                  </p>
+                )}
                 <EngagementBar likes={0} comments={0} />
               </article>
 
