@@ -57,7 +57,7 @@ export default function PeoplePage() {
   };
 
   return (
-    <main className="w-full px-4 sm:px-6 lg:px-8 py-unit-lg flex gap-gutter overflow-hidden h-[calc(100vh-11rem)]">
+    <main className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-unit-lg flex gap-gutter overflow-hidden h-[calc(100vh-11rem)]">
       <MessagesSidebar
         conversations={conversations}
         selectedId={selectedId}

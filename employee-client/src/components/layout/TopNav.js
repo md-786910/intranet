@@ -46,7 +46,7 @@ export default function TopNav() {
 
   return (
     <header className="bg-white border-b border-zinc-100 shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
-      <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 h-16 w-full">
+      <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 h-16 w-full max-w-screen-2xl mx-auto">
         <div className="flex items-center gap-6 lg:gap-12 min-w-0">
           <NavLink
             to="/home"

@@ -8,7 +8,7 @@ import FeaturedBanner from './sections/FeaturedBanner';
 
 export default function DocumentsPage() {
   return (
-    <main className="w-full px-4 sm:px-6 lg:px-8 py-unit-xl space-y-unit-xl bg-background">
+    <main className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-unit-xl space-y-unit-xl bg-background">
       <ResourceLibraryHeader />
       <CategoryGrid />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-gutter">

@@ -68,7 +68,7 @@ export default function NewsListPage() {
   const canLoadMore = pagination ? page < pagination.totalPages : false;
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 py-unit-lg lg:py-unit-xl bg-background min-h-[calc(100vh-10rem)]">
+    <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-unit-lg lg:py-unit-xl bg-background min-h-[calc(100vh-10rem)]">
       <div className="w-full space-y-unit-xl">
         {loading ? (
           <NewsLoadingSkeleton />

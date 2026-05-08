@@ -42,7 +42,7 @@ export default function NewsDetailPage() {
   }, [id]);
 
   return (
-    <div className="max-w-container-max mx-auto px-gutter py-unit-xl bg-background min-h-[calc(100vh-10rem)]">
+    <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-unit-xl bg-background min-h-[calc(100vh-10rem)]">
       {loading ? (
         <DetailSkeleton />
       ) : error ? (

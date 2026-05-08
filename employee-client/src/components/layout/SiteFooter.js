@@ -3,7 +3,7 @@ import React from 'react';
 export default function SiteFooter() {
   return (
     <footer className="w-full border-t border-zinc-100 bg-white mt-unit-xxl">
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-3 px-4 sm:px-6 lg:px-8 py-6 w-full">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-3 px-4 sm:px-6 lg:px-8 py-6 w-full max-w-screen-2xl mx-auto">
         <p className="text-body-sm text-zinc-500 text-center sm:text-left">
           © 2026 BrightNOW. All rights reserved.
         </p>
