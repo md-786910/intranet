@@ -16,6 +16,7 @@ const listNewsSchema = {
     limit: Joi.number().integer().min(1).max(100).default(20),
     search: Joi.string().trim().max(255).optional().allow(''),
     status: Joi.string().valid('DRAFT', 'PUBLISHED', 'ARCHIVED').optional(),
+    category_id: idPattern.optional(),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
     trash: Joi.boolean().optional(),

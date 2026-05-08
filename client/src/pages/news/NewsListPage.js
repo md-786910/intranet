@@ -7,8 +7,10 @@ import Pagination from '../../components/common/Pagination';
 import SearchBar from '../../components/common/SearchBar';
 import StatusBadge from '../../components/common/StatusBadge';
 import PriorityBadge from '../../components/common/PriorityBadge';
+import Select from '../../components/common/Select';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { newsService } from '../../services/newsService';
+import { categoryService } from '../../services/categoryService';
 import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -26,6 +28,8 @@ export default function NewsListPage() {
   const [viewMode, setViewMode] = useState('active');
   const [search, setSearch] = useState('');
   const [statusTab, setStatusTab] = useState('ALL');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [categories, setCategories] = useState([]);
   const debouncedSearch = useDebounce(search);
   const [data, setData] = useState({ articles: [], pagination: {}, status_counts: {} });
   const [loading, setLoading] = useState(true);
@@ -34,12 +38,19 @@ export default function NewsListPage() {
 
   const isTrash = viewMode === 'trash';
 
+  useEffect(() => {
+    categoryService.list({ entity_type: 'NEWS', limit: 200 })
+      .then((res) => setCategories(res.data?.data?.categories || []))
+      .catch(() => {});
+  }, []);
+
   const fetchArticles = useCallback(async () => {
     try {
       setLoading(true);
       const params = { page, limit };
       if (debouncedSearch) params.search = debouncedSearch;
       if (statusTab !== 'ALL') params.status = statusTab;
+      if (categoryFilter) params.category_id = categoryFilter;
       if (isTrash) params.trash = true;
       const res = await newsService.getArticles(params);
       setData(res.data?.data || { articles: [], pagination: {}, status_counts: {} });
@@ -48,7 +59,7 @@ export default function NewsListPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, debouncedSearch, statusTab, isTrash, addToast]);
+  }, [page, limit, debouncedSearch, statusTab, categoryFilter, isTrash, addToast]);
 
   useEffect(() => { fetchArticles(); }, [fetchArticles]);
 
@@ -203,8 +214,24 @@ export default function NewsListPage() {
         })}
       </div>
 
-      <div className="mb-4 max-w-sm">
-        <SearchBar value={search} onChange={setSearch} placeholder={isTrash ? 'Search archive...' : 'Search articles...'} />
+      <div className="flex gap-4 mb-4">
+        <div className="w-72">
+          <SearchBar value={search} onChange={setSearch} placeholder={isTrash ? 'Search archive...' : 'Search articles...'} />
+        </div>
+        {!isTrash && (
+          <div className="w-48">
+            <Select
+              name="category"
+              value={categoryFilter}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setPage(1);
+              }}
+              placeholder="All categories"
+              options={categories.map((c) => ({ value: c.category_id, label: c.name }))}
+            />
+          </div>
+        )}
       </div>
 
       <Table

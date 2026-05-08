@@ -147,6 +147,7 @@ const newsService = {
       }
       where.status = 'PUBLISHED';
     }
+    if (query.category_id) where.category_id = query.category_id;
     if (query.search) {
       where[Op.or] = [
         { title: { [Op.iLike]: `%${query.search}%` } },
