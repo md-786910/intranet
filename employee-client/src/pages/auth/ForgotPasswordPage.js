@@ -45,7 +45,7 @@ export default function ForgotPasswordPage() {
             </p>
             <Link
               to="/login"
-              className="mt-6 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700"
+              className="mt-6 inline-flex items-center text-sm font-medium text-brand-600 hover:text-brand-700"
             >
               ← Back to sign in
             </Link>
@@ -79,7 +79,7 @@ export default function ForgotPasswordPage() {
               <Button
                 type="submit"
                 loading={isSubmitting}
-                className="w-full py-3 bg-primary-300 hover:bg-primary-400 text-primary-900 font-semibold"
+                className="w-full py-3 bg-brand-300 hover:bg-brand-400 text-brand-900 font-semibold"
               >
                 Send reset link
               </Button>
@@ -87,7 +87,7 @@ export default function ForgotPasswordPage() {
               <div className="text-center">
                 <Link
                   to="/login"
-                  className="text-sm font-medium text-primary-600 hover:text-primary-700"
+                  className="text-sm font-medium text-brand-600 hover:text-brand-700"
                 >
                   ← Back to sign in
                 </Link>

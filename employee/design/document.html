@@ -1,0 +1,637 @@
+<!doctype html>
+
+<html class="light" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 24;
+      }
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #fbf9fc;
+      }
+    </style>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary-container": "#e1e3e4",
+              "on-tertiary-fixed-variant": "#5b430e",
+              "on-background": "#1b1b1e",
+              "inverse-on-surface": "#f2f0f3",
+              "on-secondary": "#ffffff",
+              "secondary-fixed-dim": "#c5c7c8",
+              "on-tertiary-fixed": "#271900",
+              primary: "#4c5e83",
+              "surface-container-lowest": "#ffffff",
+              outline: "#75777f",
+              "on-secondary-container": "#626566",
+              "surface-dim": "#dbd9dd",
+              surface: "#fbf9fc",
+              "tertiary-fixed-dim": "#e6c181",
+              "on-secondary-fixed": "#191c1d",
+              "surface-container-high": "#e9e7eb",
+              "tertiary-container": "#f0cb8a",
+              "on-primary-fixed": "#041b3c",
+              "primary-fixed-dim": "#b4c7f1",
+              "surface-container-low": "#f5f3f6",
+              "outline-variant": "#c5c6cf",
+              "on-secondary-fixed-variant": "#454748",
+              secondary: "#5c5f60",
+              "primary-fixed": "#d7e2ff",
+              "on-primary-fixed-variant": "#34476a",
+              "on-primary": "#ffffff",
+              background: "#fbf9fc",
+              "on-primary-container": "#46597d",
+              "surface-tint": "#4c5e83",
+              "inverse-primary": "#b4c7f1",
+              "surface-variant": "#e4e2e5",
+              "primary-container": "#bdd0fb",
+              "on-error-container": "#93000a",
+              tertiary: "#755a24",
+              "surface-container": "#efedf1",
+              "on-surface": "#1b1b1e",
+              "on-tertiary-container": "#6f541f",
+              "surface-container-highest": "#e4e2e5",
+              error: "#ba1a1a",
+              "secondary-fixed": "#e1e3e4",
+              "surface-bright": "#fbf9fc",
+              "tertiary-fixed": "#ffdea6",
+              "on-surface-variant": "#44474e",
+              "on-error": "#ffffff",
+              "error-container": "#ffdad6",
+              "on-tertiary": "#ffffff",
+              "inverse-surface": "#303033",
+            },
+            spacing: {
+              "unit-xs": "0.25rem",
+              "unit-lg": "1.5rem",
+              "unit-xxl": "4rem",
+              "container-max": "1280px",
+              "unit-md": "1rem",
+              gutter: "1.5rem",
+              "unit-xl": "2.5rem",
+              "unit-sm": "0.5rem",
+            },
+            fontFamily: {
+              "label-caps": ["Inter"],
+              h3: ["Inter"],
+              "body-md": ["Inter"],
+              display: ["Inter"],
+              "body-lg": ["Inter"],
+              h2: ["Inter"],
+              h1: ["Inter"],
+              "body-sm": ["Inter"],
+            },
+            fontSize: {
+              "label-caps": [
+                "12px",
+                { lineHeight: "1", letterSpacing: "0.05em", fontWeight: "700" },
+              ],
+              h3: ["20px", { lineHeight: "1.4", fontWeight: "600" }],
+              "body-md": ["16px", { lineHeight: "1.6", fontWeight: "400" }],
+              display: [
+                "48px",
+                {
+                  lineHeight: "1.1",
+                  letterSpacing: "-0.02em",
+                  fontWeight: "700",
+                },
+              ],
+              "body-lg": ["18px", { lineHeight: "1.6", fontWeight: "400" }],
+              h2: ["24px", { lineHeight: "1.3", fontWeight: "600" }],
+              h1: [
+                "32px",
+                {
+                  lineHeight: "1.2",
+                  letterSpacing: "-0.01em",
+                  fontWeight: "600",
+                },
+              ],
+              "body-sm": ["14px", { lineHeight: "1.5", fontWeight: "400" }],
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="bg-background text-on-surface">
+    <!-- Global Announcement Marquee -->
+    <header
+      class="bg-blue-100 flex justify-center items-center w-full px-4 py-2 sticky top-0 z-50"
+    >
+      <div class="flex items-center gap-2">
+        <span
+          class="font-['Inter'] text-xs uppercase tracking-widest font-semibold text-blue-900"
+          >ANNOUNCEMENT</span
+        >
+        <span class="w-1 h-1 bg-blue-900 rounded-full mx-2"></span>
+        <button
+          class="font-['Inter'] text-xs uppercase tracking-widest font-semibold text-blue-800 hover:underline cursor-pointer"
+        >
+          View Updates
+        </button>
+      </div>
+    </header>
+    <!-- Main Navigation Shell -->
+    <nav
+      class="bg-white dark:bg-gray-950 border-b border-gray-100 dark:border-gray-800 shadow-sm dark:shadow-none sticky top-[36px] z-40"
+    >
+      <div
+        class="flex justify-between items-center w-full px-8 py-4 max-w-full mx-auto"
+      >
+        <div class="flex items-center gap-8">
+          <span
+            class="text-xl font-bold text-gray-900 dark:text-gray-50 tracking-tight"
+            >BrightNOW</span
+          >
+          <div class="hidden md:flex items-center gap-6">
+            <a
+              class="text-gray-500 dark:text-gray-400 hover:text-gray-900 font-['Inter'] text-sm tracking-tight transition-colors"
+              href="#"
+              >Home</a
+            >
+            <a
+              class="text-gray-500 dark:text-gray-400 hover:text-gray-900 font-['Inter'] text-sm tracking-tight transition-colors"
+              href="#"
+              >People</a
+            >
+            <a
+              class="text-gray-500 dark:text-gray-400 hover:text-gray-900 font-['Inter'] text-sm tracking-tight transition-colors"
+              href="#"
+              >News</a
+            >
+            <a
+              class="text-gray-900 dark:text-gray-50 font-semibold border-b-2 border-blue-200 pb-1 font-['Inter'] text-sm tracking-tight"
+              href="#"
+              >Documents</a
+            >
+            <a
+              class="text-gray-500 dark:text-gray-400 hover:text-gray-900 font-['Inter'] text-sm tracking-tight transition-colors"
+              href="#"
+              >Policies</a
+            >
+            <a
+              class="text-gray-500 dark:text-gray-400 hover:text-gray-900 font-['Inter'] text-sm tracking-tight transition-colors"
+              href="#"
+              >Org Chart</a
+            >
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <button class="p-2 rounded-full hover:bg-gray-50 transition-colors">
+            <span class="material-symbols-outlined text-on-surface-variant"
+              >notifications</span
+            >
+          </button>
+          <button class="p-2 rounded-full hover:bg-gray-50 transition-colors">
+            <span class="material-symbols-outlined text-on-surface-variant"
+              >settings</span
+            >
+          </button>
+          <div
+            class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant ml-2"
+          >
+            <img
+              alt="User profile"
+              class="w-full h-full object-cover"
+              data-alt="A professional close-up portrait of a corporate employee in a brightly lit, modern office environment. The lighting is soft and natural, emphasizing a clean, airy aesthetic. The subject wears a neutral-toned business casual outfit against a blurred background of contemporary interior design elements, reflecting a calm and efficient workplace atmosphere."
+              src="https://lh3.googleusercontent.com/aida/ADBb0ujDg_fH21pPzcu5ravT_cnMw1YkFs4sr2uGc0TJtEfaFmYVc-6zDoiO7r3bkd0dGkqTecqpGg0yvyIFnNpGpGdOoBvvAoJhGw4mafv0XDp0x0eF4sH4lA5Z9ICbE9GSRCY9QdLDKIRv6XeIImpRV3Li9tdEYmICQ7wwBZG6EvIWu_vYOlXxjozA6croCmp_nQ_E85KibuSZAxcGprwpd6J7XHQMGFT-Yn17GJCFHKKqbgA5Fx7UA-b_4HhJYqB9RoH7_cjNLzP3qA"
+            />
+          </div>
+        </div>
+      </div>
+    </nav>
+    <main class="max-w-[1280px] mx-auto px-8 py-unit-xl space-y-unit-xl">
+      <!-- Header Section -->
+      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div class="space-y-unit-xs">
+          <h1 class="font-h1 text-h1 text-on-background">Resource Library</h1>
+          <p class="font-body-md text-body-md text-on-surface-variant">
+            Central hub for all company documentation, assets, and guidelines.
+          </p>
+        </div>
+        <div class="flex items-center gap-unit-md">
+          <button
+            class="flex items-center gap-2 px-unit-lg py-2 border border-outline-variant rounded-lg hover:bg-surface-variant transition-colors font-body-sm text-body-sm"
+          >
+            <span class="material-symbols-outlined text-sm">filter_list</span>
+            Filter
+          </button>
+          <button
+            class="bg-primary-container text-on-background font-semibold px-unit-lg py-2 rounded-lg hover:opacity-90 transition-all flex items-center gap-2 shadow-sm font-body-sm text-body-sm"
+          >
+            <span class="material-symbols-outlined text-sm">upload</span>
+            Upload New
+          </button>
+        </div>
+      </div>
+      <!-- Category Grid -->
+      <section
+        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter"
+      >
+        <!-- Company Policies -->
+        <div
+          class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-unit-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-md transition-shadow group cursor-pointer"
+        >
+          <div
+            class="w-12 h-12 bg-primary-fixed-dim/30 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary-fixed-dim/50 transition-colors"
+          >
+            <span
+              class="material-symbols-outlined text-primary"
+              style="font-variation-settings: &quot;FILL&quot; 1"
+              >policy</span
+            >
+          </div>
+          <h3 class="font-h3 text-h3 text-on-background mb-2">
+            Company Policies
+          </h3>
+          <p
+            class="font-body-sm text-body-sm text-on-surface-variant mb-6 line-clamp-2"
+          >
+            Official rules, regulations, and operational standards for the
+            workplace.
+          </p>
+          <div class="flex items-center justify-between mt-auto">
+            <span
+              class="font-label-caps text-label-caps text-on-primary-fixed-variant bg-primary-fixed px-2 py-1 rounded"
+              >124 Docs</span
+            >
+            <span
+              class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors"
+              >arrow_forward</span
+            >
+          </div>
+        </div>
+        <!-- Brand Guidelines -->
+        <div
+          class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-unit-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-md transition-shadow group cursor-pointer"
+        >
+          <div
+            class="w-12 h-12 bg-tertiary-fixed/30 rounded-lg flex items-center justify-center mb-4 group-hover:bg-tertiary-fixed/50 transition-colors"
+          >
+            <span
+              class="material-symbols-outlined text-tertiary"
+              style="font-variation-settings: &quot;FILL&quot; 1"
+              >palette</span
+            >
+          </div>
+          <h3 class="font-h3 text-h3 text-on-background mb-2">
+            Brand Guidelines
+          </h3>
+          <p
+            class="font-body-sm text-body-sm text-on-surface-variant mb-6 line-clamp-2"
+          >
+            Visual identity standards, logos, and communication voice kits.
+          </p>
+          <div class="flex items-center justify-between mt-auto">
+            <span
+              class="font-label-caps text-label-caps text-on-tertiary-container bg-tertiary-fixed px-2 py-1 rounded"
+              >48 Files</span
+            >
+            <span
+              class="material-symbols-outlined text-outline-variant group-hover:text-tertiary transition-colors"
+              >arrow_forward</span
+            >
+          </div>
+        </div>
+        <!-- HR Forms -->
+        <div
+          class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-unit-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-md transition-shadow group cursor-pointer"
+        >
+          <div
+            class="w-12 h-12 bg-secondary-fixed/30 rounded-lg flex items-center justify-center mb-4 group-hover:bg-secondary-fixed/50 transition-colors"
+          >
+            <span
+              class="material-symbols-outlined text-secondary"
+              style="font-variation-settings: &quot;FILL&quot; 1"
+              >assignment</span
+            >
+          </div>
+          <h3 class="font-h3 text-h3 text-on-background mb-2">HR Forms</h3>
+          <p
+            class="font-body-sm text-body-sm text-on-surface-variant mb-6 line-clamp-2"
+          >
+            Applications, reimbursement, and benefit enrollment documents.
+          </p>
+          <div class="flex items-center justify-between mt-auto">
+            <span
+              class="font-label-caps text-label-caps text-on-secondary-container bg-secondary-fixed px-2 py-1 rounded"
+              >82 Items</span
+            >
+            <span
+              class="material-symbols-outlined text-outline-variant group-hover:text-secondary transition-colors"
+              >arrow_forward</span
+            >
+          </div>
+        </div>
+        <!-- Training Manuals -->
+        <div
+          class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-unit-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-md transition-shadow group cursor-pointer"
+        >
+          <div
+            class="w-12 h-12 bg-primary-container/30 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary-container/50 transition-colors"
+          >
+            <span
+              class="material-symbols-outlined text-primary"
+              style="font-variation-settings: &quot;FILL&quot; 1"
+              >school</span
+            >
+          </div>
+          <h3 class="font-h3 text-h3 text-on-background mb-2">
+            Training Manuals
+          </h3>
+          <p
+            class="font-body-sm text-body-sm text-on-surface-variant mb-6 line-clamp-2"
+          >
+            Educational resources and step-by-step guides for skill development.
+          </p>
+          <div class="flex items-center justify-between mt-auto">
+            <span
+              class="font-label-caps text-label-caps text-on-primary-container bg-primary-fixed-dim px-2 py-1 rounded"
+              >215 Guides</span
+            >
+            <span
+              class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors"
+              >arrow_forward</span
+            >
+          </div>
+        </div>
+      </section>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+        <!-- Recently Viewed Table -->
+        <div
+          class="lg:col-span-2 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-unit-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]"
+        >
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="font-h2 text-h2 text-on-background">Recently Viewed</h2>
+            <button
+              class="text-primary font-semibold font-body-sm text-body-sm hover:underline"
+            >
+              View All
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead>
+                <tr class="border-b border-outline-variant/20">
+                  <th
+                    class="pb-4 font-label-caps text-label-caps text-on-surface-variant"
+                  >
+                    File Name
+                  </th>
+                  <th
+                    class="pb-4 font-label-caps text-label-caps text-on-surface-variant"
+                  >
+                    Category
+                  </th>
+                  <th
+                    class="pb-4 font-label-caps text-label-caps text-on-surface-variant"
+                  >
+                    Last Viewed
+                  </th>
+                  <th
+                    class="pb-4 font-label-caps text-label-caps text-on-surface-variant text-right"
+                  >
+                    Size
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="font-body-sm text-body-sm">
+                <tr
+                  class="border-b border-outline-variant/10 hover:bg-surface-variant/20 transition-colors"
+                >
+                  <td class="py-4">
+                    <div class="flex items-center gap-3">
+                      <span class="material-symbols-outlined text-primary"
+                        >description</span
+                      >
+                      <span class="font-semibold text-on-background"
+                        >Employee_Handbook_2024.pdf</span
+                      >
+                    </div>
+                  </td>
+                  <td class="py-4 text-on-surface-variant">Company Policies</td>
+                  <td class="py-4 text-on-surface-variant">2 hours ago</td>
+                  <td class="py-4 text-on-surface-variant text-right">
+                    4.2 MB
+                  </td>
+                </tr>
+                <tr
+                  class="border-b border-outline-variant/10 hover:bg-surface-variant/20 transition-colors"
+                >
+                  <td class="py-4">
+                    <div class="flex items-center gap-3">
+                      <span class="material-symbols-outlined text-tertiary"
+                        >image</span
+                      >
+                      <span class="font-semibold text-on-background"
+                        >Brand_Assets_Q3_Final.zip</span
+                      >
+                    </div>
+                  </td>
+                  <td class="py-4 text-on-surface-variant">Brand Guidelines</td>
+                  <td class="py-4 text-on-surface-variant">Yesterday</td>
+                  <td class="py-4 text-on-surface-variant text-right">
+                    128 MB
+                  </td>
+                </tr>
+                <tr
+                  class="border-b border-outline-variant/10 hover:bg-surface-variant/20 transition-colors"
+                >
+                  <td class="py-4">
+                    <div class="flex items-center gap-3">
+                      <span class="material-symbols-outlined text-secondary"
+                        >table_view</span
+                      >
+                      <span class="font-semibold text-on-background"
+                        >Expense_Report_Template.xlsx</span
+                      >
+                    </div>
+                  </td>
+                  <td class="py-4 text-on-surface-variant">HR Forms</td>
+                  <td class="py-4 text-on-surface-variant">Oct 12, 2024</td>
+                  <td class="py-4 text-on-surface-variant text-right">
+                    845 KB
+                  </td>
+                </tr>
+                <tr class="hover:bg-surface-variant/20 transition-colors">
+                  <td class="py-4">
+                    <div class="flex items-center gap-3">
+                      <span class="material-symbols-outlined text-primary"
+                        >video_library</span
+                      >
+                      <span class="font-semibold text-on-background"
+                        >Security_Training_Module_1.mp4</span
+                      >
+                    </div>
+                  </td>
+                  <td class="py-4 text-on-surface-variant">Training Manuals</td>
+                  <td class="py-4 text-on-surface-variant">Oct 10, 2024</td>
+                  <td class="py-4 text-on-surface-variant text-right">
+                    24.5 MB
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Cloud Sync & Promotional Section -->
+        <div class="space-y-gutter">
+          <!-- Cloud Sync Status -->
+          <div
+            class="bg-primary-fixed text-on-primary-fixed-variant rounded-2xl p-unit-lg border border-primary-container shadow-sm"
+          >
+            <div class="flex items-start justify-between mb-4">
+              <div
+                class="w-10 h-10 bg-white/40 rounded-full flex items-center justify-center"
+              >
+                <span class="material-symbols-outlined text-primary"
+                  >cloud_done</span
+                >
+              </div>
+              <span
+                class="bg-white/40 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                >Synced</span
+              >
+            </div>
+            <h3 class="font-h3 text-h3 mb-1">Cloud Storage</h3>
+            <p class="font-body-sm text-body-sm opacity-80 mb-6">
+              Your workspace is automatically backed up to our secure enterprise
+              cloud.
+            </p>
+            <div
+              class="w-full bg-white/30 h-1.5 rounded-full overflow-hidden mb-2"
+            >
+              <div class="bg-primary w-[72%] h-full"></div>
+            </div>
+            <div class="flex justify-between text-[11px] font-bold">
+              <span>32.4 GB used</span>
+              <span>50 GB total</span>
+            </div>
+          </div>
+          <!-- Promotional Status Card -->
+          <div
+            class="bg-white border border-outline-variant/30 rounded-2xl p-unit-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] relative overflow-hidden group"
+          >
+            <div class="relative z-10">
+              <span
+                class="font-label-caps text-label-caps text-secondary-fixed-variant mb-2 block uppercase"
+                >Advanced Search</span
+              >
+              <h4 class="font-h3 text-h3 text-on-background mb-3">
+                AI Discovery
+              </h4>
+              <p class="font-body-sm text-body-sm text-on-surface-variant mb-4">
+                Find specific clauses across thousands of documents instantly
+                using our new AI-powered search tool.
+              </p>
+              <button
+                class="bg-inverse-surface text-inverse-on-surface px-4 py-2 rounded-lg font-semibold text-xs hover:opacity-90 transition-opacity"
+              >
+                Try Now
+              </button>
+            </div>
+            <div
+              class="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform"
+            >
+              <span
+                class="material-symbols-outlined text-6xl"
+                style="font-variation-settings: &quot;opsz&quot; 48"
+                >auto_awesome</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Featured Resource Banner -->
+      <section class="relative h-[400px] rounded-[32px] overflow-hidden group">
+        <img
+          alt="Featured Resource Banner"
+          class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+          data-alt="A wide-angle, high-definition photograph of a stunning modern auditorium designed for an employee summit. The space features light wood paneling, minimalist white furniture, and a large digital screen displaying abstract blue and gold data visualizations. The lighting is bright and ethereal, using a light-mode color palette to create an atmosphere of inspiration, progress, and professional community."
+          src="https://lh3.googleusercontent.com/aida/ADBb0uj8fEOkL4VMxGs3DPmUzs86NmvEM7NgibbYgNOwgrEfWFxbaUtbIuwpuRdZmbnYg64iz8FapihiUkPvgsCeHmdIphNr8hUR-1aCkRT_c1EZKLfEysKGUbfK0LTETXl1YjdVQmxWTAlXEFe2MDi_ntceThe1ohTvrOcl6N9pqcsgXVhsucbtnJizfcy5U0IrUiQYnZUkZkpAiptZUdAl2W3OT2Q-Wi0mXUrhzOvvgxcWvNcOJralep_J-fulRnyW42Kza_hNXaUDrQ"
+        />
+        <div
+          class="absolute inset-0 bg-gradient-to-r from-on-background/80 via-on-background/40 to-transparent flex flex-col justify-center px-12 text-white"
+        >
+          <span
+            class="bg-primary-container text-on-primary-container font-label-caps text-label-caps px-3 py-1.5 rounded-full w-fit mb-6"
+            >Featured Event</span
+          >
+          <h2
+            class="text-4xl md:text-5xl font-display text-white mb-4 max-w-xl"
+          >
+            2024 Employee Experience Summit
+          </h2>
+          <p class="font-body-lg text-body-lg text-white/80 max-w-md mb-8">
+            Access all keynote presentations, workshop recordings, and strategic
+            roadmaps from our annual global gathering.
+          </p>
+          <div class="flex items-center gap-4">
+            <button
+              class="bg-white text-on-background px-unit-lg py-3 rounded-xl font-bold hover:bg-surface-variant transition-colors"
+            >
+              Access Collection
+            </button>
+            <button
+              class="bg-white/10 backdrop-blur-md border border-white/20 text-white px-unit-lg py-3 rounded-xl font-bold hover:bg-white/20 transition-colors"
+            >
+              Download Agenda
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+    <!-- Standard Portal Footer -->
+    <footer
+      class="bg-white dark:bg-gray-950 border-t border-gray-100 dark:border-gray-800"
+    >
+      <div
+        class="flex justify-between items-center w-full px-8 py-6 max-w-full mx-auto"
+      >
+        <p class="font-['Inter'] text-xs text-gray-400 dark:text-gray-500">
+          © 2024 BrightNOW Team Portal
+        </p>
+        <div class="flex items-center gap-6">
+          <a
+            class="font-['Inter'] text-xs text-gray-400 dark:text-gray-500 hover:text-blue-400 transition-colors"
+            href="#"
+            >Privacy Policy</a
+          >
+          <a
+            class="font-['Inter'] text-xs text-gray-400 dark:text-gray-500 hover:text-blue-400 transition-colors"
+            href="#"
+            >Contact Support</a
+          >
+          <a
+            class="font-['Inter'] text-xs text-gray-400 dark:text-gray-500 hover:text-blue-400 transition-colors"
+            href="#"
+            >Terms of Service</a
+          >
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -28,7 +28,7 @@ export default function Input({
           onChange={onChange}
           placeholder={placeholder}
           disabled={disabled}
-          className={`w-full py-2.5 border rounded-lg text-sm bg-white transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed ${
+          className={`w-full py-2.5 border rounded-lg text-sm bg-white transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 disabled:bg-gray-100 disabled:cursor-not-allowed ${
             leftIcon ? 'pl-10' : 'pl-3'
           } ${
             isPassword ? 'pr-10' : 'pr-3'

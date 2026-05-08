@@ -1,0 +1,571 @@
+<!doctype html>
+
+<html class="light" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 24;
+      }
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #fbf9fc; /* surface-bright */
+      }
+    </style>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary-container": "#e1e3e4",
+              "on-tertiary-fixed-variant": "#5b430e",
+              "on-background": "#1b1b1e",
+              "inverse-on-surface": "#f2f0f3",
+              "on-secondary": "#ffffff",
+              "secondary-fixed-dim": "#c5c7c8",
+              "on-tertiary-fixed": "#271900",
+              primary: "#4c5e83",
+              "surface-container-lowest": "#ffffff",
+              outline: "#75777f",
+              "on-secondary-container": "#626566",
+              "surface-dim": "#dbd9dd",
+              surface: "#fbf9fc",
+              "tertiary-fixed-dim": "#e6c181",
+              "on-secondary-fixed": "#191c1d",
+              "surface-container-high": "#e9e7eb",
+              "tertiary-container": "#f0cb8a",
+              "on-primary-fixed": "#041b3c",
+              "primary-fixed-dim": "#b4c7f1",
+              "surface-container-low": "#f5f3f6",
+              "outline-variant": "#c5c6cf",
+              "on-secondary-fixed-variant": "#454748",
+              secondary: "#5c5f60",
+              "primary-fixed": "#d7e2ff",
+              "on-primary-fixed-variant": "#34476a",
+              "on-primary": "#ffffff",
+              background: "#fbf9fc",
+              "on-primary-container": "#46597d",
+              "surface-tint": "#4c5e83",
+              "inverse-primary": "#b4c7f1",
+              "surface-variant": "#e4e2e5",
+              "primary-container": "#bdd0fb",
+              "on-error-container": "#93000a",
+              tertiary: "#755a24",
+              "surface-container": "#efedf1",
+              "on-surface": "#1b1b1e",
+              "on-tertiary-container": "#6f541f",
+              "surface-container-highest": "#e4e2e5",
+              error: "#ba1a1a",
+              "secondary-fixed": "#e1e3e4",
+              "surface-bright": "#fbf9fc",
+              "tertiary-fixed": "#ffdea6",
+              "on-surface-variant": "#44474e",
+              "on-error": "#ffffff",
+              "error-container": "#ffdad6",
+              "on-tertiary": "#ffffff",
+              "inverse-surface": "#303033",
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "0.75rem",
+              full: "9999px",
+            },
+            spacing: {
+              "unit-xs": "0.25rem",
+              "unit-lg": "1.5rem",
+              "unit-xxl": "4rem",
+              "container-max": "1280px",
+              "unit-md": "1rem",
+              gutter: "1.5rem",
+              "unit-xl": "2.5rem",
+              "unit-sm": "0.5rem",
+            },
+            fontFamily: {
+              "label-caps": ["Inter"],
+              h3: ["Inter"],
+              "body-md": ["Inter"],
+              display: ["Inter"],
+              "body-lg": ["Inter"],
+              h2: ["Inter"],
+              h1: ["Inter"],
+              "body-sm": ["Inter"],
+            },
+            fontSize: {
+              "label-caps": [
+                "12px",
+                { lineHeight: "1", letterSpacing: "0.05em", fontWeight: "700" },
+              ],
+              h3: ["20px", { lineHeight: "1.4", fontWeight: "600" }],
+              "body-md": ["16px", { lineHeight: "1.6", fontWeight: "400" }],
+              display: [
+                "48px",
+                {
+                  lineHeight: "1.1",
+                  letterSpacing: "-0.02em",
+                  fontWeight: "700",
+                },
+              ],
+              "body-lg": ["18px", { lineHeight: "1.6", fontWeight: "400" }],
+              h2: ["24px", { lineHeight: "1.3", fontWeight: "600" }],
+              h1: [
+                "32px",
+                {
+                  lineHeight: "1.2",
+                  letterSpacing: "-0.01em",
+                  fontWeight: "600",
+                },
+              ],
+              "body-sm": ["14px", { lineHeight: "1.5", fontWeight: "400" }],
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="bg-background text-on-surface">
+    <!-- Announcement Bar -->
+    <header
+      class="bg-blue-100 dark:bg-blue-900/30 flex justify-center items-center w-full px-4 py-2 docked full-width top-0"
+    >
+      <div class="flex items-center space-x-unit-md">
+        <span
+          class="font-['Inter'] text-xs uppercase tracking-widest font-black text-blue-900 dark:text-blue-100"
+          >ANNOUNCEMENT</span
+        >
+        <span
+          class="font-['Inter'] text-xs uppercase tracking-widest font-semibold text-blue-900 dark:text-blue-100"
+          >NEW STRATEGY REVEALED</span
+        >
+        <button
+          class="font-['Inter'] text-xs uppercase tracking-widest font-semibold text-blue-900 dark:text-blue-100 hover:underline cursor-pointer"
+        >
+          View Updates
+        </button>
+      </div>
+    </header>
+    <!-- Top Navigation Bar -->
+    <nav
+      class="bg-white dark:bg-gray-950 border-b border-gray-100 dark:border-gray-800 shadow-sm dark:shadow-none flex justify-between items-center w-full px-8 py-4 max-w-full mx-auto docked full-width top-0"
+    >
+      <div class="flex items-center gap-unit-xl">
+        <span
+          class="text-xl font-bold text-gray-900 dark:text-gray-50 font-['Inter']"
+          >BrightNOW</span
+        >
+        <div
+          class="hidden md:flex items-center space-x-unit-lg font-['Inter'] text-sm tracking-tight"
+        >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 transition-colors"
+            href="#"
+            >Home</a
+          >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 transition-colors"
+            href="#"
+            >People</a
+          >
+          <a
+            class="text-gray-900 dark:text-gray-50 font-semibold border-b-2 border-blue-200 pb-1"
+            href="#"
+            >News</a
+          >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 transition-colors"
+            href="#"
+            >Documents</a
+          >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 transition-colors"
+            href="#"
+            >Policies</a
+          >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 transition-colors"
+            href="#"
+            >Org Chart</a
+          >
+        </div>
+      </div>
+      <div class="flex items-center space-x-unit-md">
+        <div
+          class="flex items-center bg-surface-container-low px-unit-sm py-unit-xs rounded-lg border border-outline-variant"
+        >
+          <span
+            class="material-symbols-outlined text-outline text-sm"
+            data-icon="search"
+            >search</span
+          >
+          <input
+            class="bg-transparent border-none focus:ring-0 text-sm font-body-sm w-48"
+            placeholder="Search portal..."
+            type="text"
+          />
+        </div>
+        <button
+          class="p-2 rounded-full hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors text-on-surface-variant"
+        >
+          <span class="material-symbols-outlined" data-icon="notifications"
+            >notifications</span
+          >
+        </button>
+        <button
+          class="p-2 rounded-full hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors text-on-surface-variant"
+        >
+          <span class="material-symbols-outlined" data-icon="settings"
+            >settings</span
+          >
+        </button>
+        <img
+          alt="User Profile"
+          class="w-8 h-8 rounded-full border border-outline-variant"
+          data-alt="A professional headshot of a smiling team member in a well-lit office environment. The image is a close-up portrait, focusing on the friendly expression and clear skin. The lighting is soft and natural, emphasizing a professional yet approachable corporate culture. The background shows a modern, blurred office interior with soft neutral tones that complement the overall light-mode aesthetic of the portal."
+          src="https://lh3.googleusercontent.com/aida-public/AB6AXuBle5BRKCMKJP37eKr1dCjZQwKkf3d2HjzY3zizm5vKAmJV9n4rE6PyO7VIw0ty7LWlZ4HoqmKyfrF6RcvnrTpkxMY4Wc5ntv1UTydNZ3cKRYFMFPwtXpbpFlrLjGLEZU4-HMe1kPIejSj5nKA6wo4eiEdu_A8et02cC0tFXswpqFS16mhawVhG-xACiQugprNSWXnetUNX1wEIwz7IMxN9tVniS2ptKYdJPY4ZbxdWOzRswMnzuQPetmdB1NFSDjQKY8zjPMB-oUU"
+        />
+      </div>
+    </nav>
+    <main class="max-w-[1280px] mx-auto px-8 py-unit-xl space-y-unit-xl">
+      <!-- Pinned Updates Section -->
+      <section class="space-y-unit-lg mb-unit-xl">
+        <div class="flex items-center justify-between">
+          <h2 class="font-h2 text-h2 text-on-surface">Pinned Updates</h2>
+          <span class="text-primary font-body-sm cursor-pointer hover:underline"
+            >View All</span
+          >
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-unit-lg">
+          <!-- Pinned Card 1 -->
+          <div
+            class="bg-white border border-[#E9ECEF] rounded-xl p-unit-lg shadow-sm flex gap-unit-lg items-start hover:shadow-md transition-shadow"
+          >
+            <div class="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
+              <img
+                class="w-full h-full object-cover"
+                data-alt="A crisp, high-resolution conceptual photograph representing corporate strategy alignment. It features modern office elements like a sleek glass table and a minimalist digital tablet displaying growth charts. The scene is bathed in soft, natural daylight, creating a clean and professional atmosphere. The color palette is dominated by soft whites and cool grays, reflecting an organized and efficient corporate environment."
+                src="https://lh3.googleusercontent.com/aida/ADBb0ujDg_fH21pPzcu5ravT_cnMw1YkFs4sr2uGc0TJtEfaFmYVc-6zDoiO7r3bkd0dGkqTecqpGg0yvyIFnNpGpGdOoBvvAoJhGw4mafv0XDp0x0eF4sH4lA5Z9ICbE9GSRCY9QdLDKIRv6XeIImpRV3Li9tdEYmICQ7wwBZG6EvIWu_vYOlXxjozA6croCmp_nQ_E85KibuSZAxcGprwpd6J7XHQMGFT-Yn17GJCFHKKqbgA5Fx7UA-b_4HhJYqB9RoH7_cjNLzP3qA"
+              />
+            </div>
+            <div class="space-y-unit-xs">
+              <span
+                class="font-label-caps text-label-caps text-primary uppercase"
+                >Company Strategy</span
+              >
+              <h3 class="font-h3 text-h3 text-on-surface">
+                Strategy Alignment: Q4 Goals &amp; Objectives
+              </h3>
+              <p class="font-body-sm text-body-sm text-on-surface-variant">
+                Unified vision for the upcoming quarter focusing on core growth
+                metrics and team efficiency.
+              </p>
+            </div>
+          </div>
+          <!-- Pinned Card 2 -->
+          <div
+            class="bg-white border border-[#E9ECEF] rounded-xl p-unit-lg shadow-sm flex gap-unit-lg items-start hover:shadow-md transition-shadow"
+          >
+            <div class="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
+              <img
+                class="w-full h-full object-cover"
+                data-alt="A serene and inviting image representing health and wellness in the workplace. It shows a modern health center interior with soft green plants, a minimalist reception desk, and warm, diffused lighting. The aesthetic is clean, calming, and premium, suggesting a high standard of employee benefits. The overall mood is supportive and health-focused, using a palette of soft whites, pale greens, and light wood tones."
+                src="https://lh3.googleusercontent.com/aida/ADBb0uj8fEOkL4VMxGs3DPmUzs86NmvEM7NgibbYgNOwgrEfWFxbaUtbIuwpuRdZmbnYg64iz8FapihiUkPvgsCeHmdIphNr8hUR-1aCkRT_c1EZKLfEysKGUbfK0LTETXl1YjdVQmxWTAlXEFe2MDi_ntceThe1ohTvrOcl6N9pqcsgXVhsucbtnJizfcy5U0IrUiQYnZUkZkpAiptZUdAl2W3OT2Q-Wi0mXUrhzOvvgxcWvNcOJralep_J-fulRnyW42Kza_hNXaUDrQ"
+              />
+            </div>
+            <div class="space-y-unit-xs">
+              <span
+                class="font-label-caps text-label-caps text-tertiary uppercase"
+                >Human Resources</span
+              >
+              <h3 class="font-h3 text-h3 text-on-surface">
+                New Health Benefits: Open Enrollment Starts
+              </h3>
+              <p class="font-body-sm text-body-sm text-on-surface-variant">
+                Comprehensive medical and wellness coverage updates for 2024.
+                Review your plan by Friday.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- Main Content Area: Featured & Latest Feed -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-unit-xl items-start">
+        <!-- Left Column: Main News (8 Columns) -->
+        <div class="lg:col-span-8 space-y-unit-xl">
+          <!-- Featured Story -->
+          <section class="space-y-unit-lg">
+            <h2 class="font-h2 text-h2 text-on-surface">Featured Story</h2>
+            <div
+              class="group cursor-pointer relative bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div class="aspect-[21/9] w-full overflow-hidden">
+                <img
+                  alt="Modern glass corporate headquarters representing global expansion"
+                  class="w-full h-full object-cover"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3yvOR_fyPXeQYZ5nQ4tUv9YhJjZKQlVc7eniIbIDWVn3AY-VglUNAResnQw4f_Pj66vY2P6ZLZmf3JuBIIiz36No2mTwjdSq5RCX4DNNsPSkFznH0HqooCKbKSSZGAtqyPm83cW8NART1kMDOFTs-sYEaSL9S6KJi608MjexOjMP4v5_mqa7DFSnoEZzYlQHy0j9VlK4zAjZCG3eSDMTTOr2Y8Kg0AarxTb6yO_qNTvg0Zx_ek6NVtcelljVdm7JxbRdiyGa5CwY"
+                />
+              </div>
+              <div class="p-unit-xl space-y-unit-lg">
+                <div class="flex items-center gap-unit-md">
+                  <span
+                    class="bg-primary-container text-on-primary-container px-unit-md py-1 rounded-full font-label-caps text-xs uppercase"
+                    >Global Expansion</span
+                  >
+                  <span class="text-on-surface-variant font-body-sm"
+                    >October 24, 2024</span
+                  >
+                </div>
+                <div class="space-y-unit-md">
+                  <h1 class="font-h1 text-h1 text-on-surface leading-tight">
+                    Bright Digital expands to new Tokyo headquarters
+                  </h1>
+                  <p class="font-body-lg text-on-surface-variant max-w-3xl">
+                    A significant milestone in our international growth strategy
+                    as we inaugurate our new state-of-the-art innovation center
+                    in the heart of Minato City, Tokyo. This move strengthens
+                    our presence in the Asian market and fosters global
+                    collaboration.
+                  </p>
+                </div>
+                <button
+                  class="bg-primary text-on-primary px-unit-xl py-unit-sm rounded-lg font-semibold flex items-center gap-unit-sm hover:opacity-90 transition-all shadow-sm"
+                >
+                  Read Full Article
+                  <span class="material-symbols-outlined text-sm"
+                    >arrow_forward</span
+                  >
+                </button>
+              </div>
+            </div>
+          </section>
+          <!-- Latest News Feed -->
+          <section class="space-y-unit-lg">
+            <div class="flex items-center justify-between">
+              <h2 class="font-h2 text-h2 text-on-surface">Latest News</h2>
+              <div class="flex items-center gap-unit-md">
+                <span
+                  class="material-symbols-outlined text-on-surface-variant cursor-pointer"
+                  data-icon="filter_list"
+                  >filter_list</span
+                >
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-unit-md">
+              <!-- News Item 1 -->
+              <div
+                class="bg-white border border-outline-variant p-unit-md rounded-xl shadow-sm hover:border-primary-container transition-colors cursor-pointer group flex gap-unit-md"
+              >
+                <div class="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
+                  <img
+                    class="w-full h-full object-cover"
+                    src="https://lh3.googleusercontent.com/aida/ADBb0ugLzfJNkTdE8IV8swSSJk3BuDAb1zMuWtDsAIjRp5dzrNCOW6hZAt-cHQWg7p2EmWYgNddEiaLTGVDtKp5ewEzUFpkyM2k5dgcehEukbDcHoS8EVUo7rmdzcCnCh5eYvUbn5nt4LzO4awWb39Vvr909bFrJ-NRsXeVplgZBtx4nIJvj21T5JkKA7j0G8GN0ncWNjFg32EYSDj07DDlad2dvHa5laTVXVdXa4BRMSI6J6MRuisqJvxz0qKrTd3GZ2i43zq2DUeM_tw"
+                  />
+                </div>
+                <div class="space-y-1">
+                  <span class="text-[10px] font-bold text-primary uppercase"
+                    >Engineering</span
+                  >
+                  <h4
+                    class="font-h3 text-base text-on-surface group-hover:text-primary leading-tight"
+                  >
+                    New API Infrastructure: System Upgrade Completed
+                  </h4>
+                  <p class="text-xs text-on-surface-variant font-body-sm">
+                    3 hours ago • 4 min read
+                  </p>
+                </div>
+              </div>
+              <!-- News Item 2 -->
+              <div
+                class="bg-white border border-outline-variant p-unit-md rounded-xl shadow-sm hover:border-primary-container transition-colors cursor-pointer group flex gap-unit-md"
+              >
+                <div class="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
+                  <img
+                    class="w-full h-full object-cover"
+                    src="https://lh3.googleusercontent.com/aida/ADBb0uj7bI6oh_3gMY5UoMWy3hRINJWKDChK6VzqgGlWCN8PqZtnemhzX0pK4oJVZ0OfHYFbfRy3i5ULukqGAaqpAVCRHaPwVP1nojKDLa-Vxmb90IkmU8AJ0muDxz8o9uJRQ2DRZcIImuL_aZIukOL9jb_jnTmJoUeUu7iH9aOw3Y-7Vs99xQ9HAXHfg8wZkRnQWvRELLIiT-65FhjeohDBu6jDwOglHDdfAs_EpHhNcbL36DmCl0eCVyGXpQR8cNY2Q8aU7_r1dK30"
+                  />
+                </div>
+                <div class="space-y-1">
+                  <span class="text-[10px] font-bold text-tertiary uppercase"
+                    >Culture</span
+                  >
+                  <h4
+                    class="font-h3 text-base text-on-surface group-hover:text-primary leading-tight"
+                  >
+                    Annual Summer Mixer: Photo Highlights Live
+                  </h4>
+                  <p class="text-xs text-on-surface-variant font-body-sm">
+                    Yesterday • 2 min read
+                  </p>
+                </div>
+              </div>
+              <!-- News Item 3 -->
+              <div
+                class="bg-white border border-outline-variant p-unit-md rounded-xl shadow-sm hover:border-primary-container transition-colors cursor-pointer group flex gap-unit-md"
+              >
+                <div
+                  class="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 bg-surface-container flex items-center justify-center"
+                >
+                  <span class="material-symbols-outlined text-primary text-3xl"
+                    >analytics</span
+                  >
+                </div>
+                <div class="space-y-1">
+                  <span class="text-[10px] font-bold text-secondary uppercase"
+                    >Management</span
+                  >
+                  <h4
+                    class="font-h3 text-base text-on-surface group-hover:text-primary leading-tight"
+                  >
+                    Q3 Strategy Update: Leadership Town Hall
+                  </h4>
+                  <p class="text-xs text-on-surface-variant font-body-sm">
+                    2 days ago • 12 min read
+                  </p>
+                </div>
+              </div>
+              <!-- News Item 4 -->
+              <div
+                class="bg-white border border-outline-variant p-unit-md rounded-xl shadow-sm hover:border-primary-container transition-colors cursor-pointer group flex gap-unit-md"
+              >
+                <div
+                  class="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 bg-surface-container flex items-center justify-center"
+                >
+                  <span
+                    class="material-symbols-outlined text-secondary text-3xl"
+                    >policy</span
+                  >
+                </div>
+                <div class="space-y-1">
+                  <span
+                    class="text-[10px] font-bold text-on-secondary-fixed-variant uppercase"
+                    >Policy</span
+                  >
+                  <h4
+                    class="font-h3 text-base text-on-surface group-hover:text-primary leading-tight"
+                  >
+                    Updated Remote Work Guidelines for 2025
+                  </h4>
+                  <p class="text-xs text-on-surface-variant font-body-sm">
+                    3 days ago • 5 min read
+                  </p>
+                </div>
+              </div>
+            </div>
+            <button
+              class="w-full py-unit-sm border border-outline-variant rounded-lg font-semibold text-on-surface hover:bg-surface-container transition-colors"
+            >
+              View News Archive
+            </button>
+          </section>
+        </div>
+        <!-- Right Column: Sidebar (4 Columns) -->
+        <aside class="lg:col-span-4 space-y-unit-xl">
+          <!-- Newsletter Section -->
+          <div
+            class="bg-primary-container rounded-xl p-unit-lg space-y-unit-md"
+          >
+            <div class="space-y-unit-xs">
+              <h2 class="font-h3 text-h3 text-on-primary-container">
+                Daily Briefing
+              </h2>
+              <p class="font-body-sm text-on-primary-container opacity-90">
+                Important updates and culture news delivered every morning at
+                9:00 AM.
+              </p>
+            </div>
+            <div class="space-y-unit-sm">
+              <input
+                class="w-full rounded-lg border-none focus:ring-2 focus:ring-primary py-2 px-4 shadow-sm text-sm"
+                placeholder="work-email@brightnow.com"
+                type="email"
+              />
+              <button
+                class="w-full bg-primary text-on-primary py-2 rounded-lg font-semibold shadow-sm hover:opacity-90 transition-all"
+              >
+                Subscribe
+              </button>
+            </div>
+          </div>
+          <!-- Quick Links or Resources -->
+          <div
+            class="bg-white border border-outline-variant rounded-xl p-unit-lg space-y-unit-md shadow-sm"
+          >
+            <h3
+              class="font-label-caps text-label-caps text-on-surface-variant uppercase"
+            >
+              News Resources
+            </h3>
+            <nav class="flex flex-col gap-unit-sm">
+              <a
+                class="flex items-center justify-between group hover:text-primary transition-colors"
+                href="#"
+              >
+                <span class="font-body-sm">Press Kits</span>
+                <span class="material-symbols-outlined text-sm"
+                  >open_in_new</span
+                >
+              </a>
+              <a
+                class="flex items-center justify-between group hover:text-primary transition-colors"
+                href="#"
+              >
+                <span class="font-body-sm">Brand Guidelines</span>
+                <span class="material-symbols-outlined text-sm"
+                  >open_in_new</span
+                >
+              </a>
+              <a
+                class="flex items-center justify-between group hover:text-primary transition-colors"
+                href="#"
+              >
+                <span class="font-body-sm">Media Inquiries</span>
+                <span class="material-symbols-outlined text-sm">mail</span>
+              </a>
+            </nav>
+          </div>
+        </aside>
+      </div>
+      <!-- Secondary Feed / Newsletter section -->
+    </main>
+    <!-- Footer -->
+    <footer
+      class="bg-white dark:bg-gray-950 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center w-full px-8 py-6 max-w-full mx-auto docked full-width bottom-0"
+    >
+      <div class="font-['Inter'] text-xs text-gray-400 dark:text-gray-500">
+        © 2024 BrightNOW Team Portal
+      </div>
+      <div class="flex items-center space-x-unit-lg">
+        <a
+          class="font-['Inter'] text-xs text-gray-400 dark:text-gray-500 hover:text-blue-400 transition-colors"
+          href="#"
+          >Privacy Policy</a
+        >
+        <a
+          class="font-['Inter'] text-xs text-gray-400 dark:text-gray-500 hover:text-blue-400 transition-colors"
+          href="#"
+          >Contact Support</a
+        >
+        <a
+          class="font-['Inter'] text-xs text-gray-400 dark:text-gray-500 hover:text-blue-400 transition-colors"
+          href="#"
+          >Terms of Service</a
+        >
+      </div>
+    </footer>
+  </body>
+</html>

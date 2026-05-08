@@ -8,7 +8,11 @@ import LoginPage from './pages/auth/LoginPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import InvitationAcceptPage from './pages/auth/InvitationAcceptPage';
-import WorkspaceHomePage from './pages/workspace/WorkspaceHomePage';
+import HomePage from './pages/home/HomePage';
+import NewsListPage from './pages/news/NewsListPage';
+import NewsDetailPage from './pages/news/NewsDetailPage';
+import PeoplePage from './pages/people/PeoplePage';
+import DocumentsPage from './pages/documents/DocumentsPage';
 
 export default function App() {
   return (
@@ -28,11 +32,15 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
-              <Route path="/workspace" element={<WorkspaceHomePage />} />
-              <Route path="/" element={<Navigate to="/workspace" replace />} />
+              <Route path="/home" element={<HomePage />} />
+              <Route path="/news" element={<NewsListPage />} />
+              <Route path="/news/:id" element={<NewsDetailPage />} />
+              <Route path="/people" element={<PeoplePage />} />
+              <Route path="/documents" element={<DocumentsPage />} />
+              <Route path="/" element={<Navigate to="/home" replace />} />
             </Route>
 
-            <Route path="*" element={<Navigate to="/workspace" replace />} />
+            <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </AuthProvider>
       </ToastProvider>

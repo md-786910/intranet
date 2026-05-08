@@ -1,0 +1,572 @@
+<!doctype html>
+
+<html class="light" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary-container": "#e1e3e4",
+              "on-tertiary-fixed-variant": "#5b430e",
+              "on-background": "#1b1b1e",
+              "inverse-on-surface": "#f2f0f3",
+              "on-secondary": "#ffffff",
+              "secondary-fixed-dim": "#c5c7c8",
+              "on-tertiary-fixed": "#271900",
+              primary: "#4c5e83",
+              "surface-container-lowest": "#ffffff",
+              outline: "#75777f",
+              "on-secondary-container": "#626566",
+              "surface-dim": "#dbd9dd",
+              surface: "#fbf9fc",
+              "tertiary-fixed-dim": "#e6c181",
+              "on-secondary-fixed": "#191c1d",
+              "surface-container-high": "#e9e7eb",
+              "tertiary-container": "#f0cb8a",
+              "on-primary-fixed": "#041b3c",
+              "primary-fixed-dim": "#b4c7f1",
+              "surface-container-low": "#f5f3f6",
+              "outline-variant": "#c5c6cf",
+              "on-secondary-fixed-variant": "#454748",
+              secondary: "#5c5f60",
+              "primary-fixed": "#d7e2ff",
+              "on-primary-fixed-variant": "#34476a",
+              "on-primary": "#ffffff",
+              background: "#fbf9fc",
+              "on-primary-container": "#46597d",
+              "surface-tint": "#4c5e83",
+              "inverse-primary": "#b4c7f1",
+              "surface-variant": "#e4e2e5",
+              "primary-container": "#bdd0fb",
+              "on-error-container": "#93000a",
+              tertiary: "#755a24",
+              "surface-container": "#efedf1",
+              "on-surface": "#1b1b1e",
+              "on-tertiary-container": "#6f541f",
+              "surface-container-highest": "#e4e2e5",
+              error: "#ba1a1a",
+              "secondary-fixed": "#e1e3e4",
+              "surface-bright": "#fbf9fc",
+              "tertiary-fixed": "#ffdea6",
+              "on-surface-variant": "#44474e",
+              "on-error": "#ffffff",
+              "error-container": "#ffdad6",
+              "on-tertiary": "#ffffff",
+              "inverse-surface": "#303033",
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "0.75rem",
+              full: "9999px",
+            },
+            spacing: {
+              "unit-xs": "0.25rem",
+              "unit-lg": "1.5rem",
+              "unit-xxl": "4rem",
+              "container-max": "1280px",
+              "unit-md": "1rem",
+              gutter: "1.5rem",
+              "unit-xl": "2.5rem",
+              "unit-sm": "0.5rem",
+            },
+            fontFamily: {
+              "label-caps": ["Inter"],
+              h3: ["Inter"],
+              "body-md": ["Inter"],
+              display: ["Inter"],
+              "body-lg": ["Inter"],
+              h2: ["Inter"],
+              h1: ["Inter"],
+              "body-sm": ["Inter"],
+            },
+            fontSize: {
+              "label-caps": [
+                "12px",
+                { lineHeight: "1", letterSpacing: "0.05em", fontWeight: "700" },
+              ],
+              h3: ["20px", { lineHeight: "1.4", fontWeight: "600" }],
+              "body-md": ["16px", { lineHeight: "1.6", fontWeight: "400" }],
+              display: [
+                "48px",
+                {
+                  lineHeight: "1.1",
+                  letterSpacing: "-0.02em",
+                  fontWeight: "700",
+                },
+              ],
+              "body-lg": ["18px", { lineHeight: "1.6", fontWeight: "400" }],
+              h2: ["24px", { lineHeight: "1.3", fontWeight: "600" }],
+              h1: [
+                "32px",
+                {
+                  lineHeight: "1.2",
+                  letterSpacing: "-0.01em",
+                  fontWeight: "600",
+                },
+              ],
+              "body-sm": ["14px", { lineHeight: "1.5", fontWeight: "400" }],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      .drop-cap::first-letter {
+        float: left;
+        font-size: 4.5rem;
+        line-height: 1;
+        padding-right: 0.75rem;
+        font-weight: 800;
+        color: #4c5e83;
+      }
+    </style>
+  </head>
+  <body class="bg-background text-on-background font-body-md">
+    <!-- Announcement Bar -->
+    <header
+      class="bg-blue-100 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100 font-['Inter'] text-xs uppercase tracking-widest font-semibold flex justify-center items-center w-full px-4 py-2 docked full-width top-0"
+    >
+      <span class="mr-2">ANNOUNCEMENT</span>
+      <button class="hover:underline cursor-pointer">View Updates</button>
+    </header>
+    <!-- Navigation -->
+    <nav
+      class="bg-white dark:bg-gray-950 flex justify-between items-center w-full px-8 py-4 max-w-full mx-auto shadow-sm dark:shadow-none border-b border-gray-100 dark:border-gray-800 sticky top-0 z-50"
+    >
+      <div class="flex items-center gap-8">
+        <span
+          class="text-xl font-bold text-gray-900 dark:text-gray-50 font-['Inter']"
+          >BrightNOW</span
+        >
+        <div
+          class="hidden md:flex gap-6 items-center font-['Inter'] text-sm tracking-tight"
+        >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 transition-colors"
+            href="#"
+            >Home</a
+          >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 transition-colors"
+            href="#"
+            >People</a
+          >
+          <a
+            class="text-gray-900 dark:text-gray-50 font-semibold border-b-2 border-blue-200 pb-1"
+            href="#"
+            >News</a
+          >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 transition-colors"
+            href="#"
+            >Documents</a
+          >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 transition-colors"
+            href="#"
+            >Policies</a
+          >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 transition-colors"
+            href="#"
+            >Org Chart</a
+          >
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <span
+          class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:bg-gray-50 p-2 rounded-full transition-colors"
+          >notifications</span
+        >
+        <span
+          class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:bg-gray-50 p-2 rounded-full transition-colors"
+          >settings</span
+        >
+        <div class="h-8 w-8 rounded-full bg-gray-200 overflow-hidden">
+          <img
+            alt="User profile"
+            class="h-full w-full object-cover"
+            src="https://lh3.googleusercontent.com/aida-public/AB6AXuA87mMD8RbwuwEHnTy3BDpVmsEB5xVFVcbk7iFwxEDk_-NsVbf3QUcs2rAACaJTMB1EhI8EvTzFTCOje-y4UOw7r2AWQyhSnWGA55X2iqLAyifk3jYJz8lAMsKj0lLl322mS4UTahiFmaHkma_Fy9Uzjwk-u8yqbULW8q-aNz6Yda4N_U4L_9eGj4MT6PbC9_soAtmP_m2Rp64u54VBrqIaCBZkZV0rnmhdPMhp6pRd7DzwxUYIhGmmiCXEeuEBLUMnl6L5x7pUiv4"
+          />
+        </div>
+      </div>
+    </nav>
+    <main class="max-w-container-max mx-auto px-gutter py-unit-xl">
+      <!-- Article Header -->
+      <div class="max-w-4xl mx-auto mb-unit-lg">
+        <div class="mb-unit-md">
+          <span
+            class="inline-block bg-primary-container text-on-primary-container font-label-caps text-label-caps py-unit-xs px-unit-sm rounded-full"
+            >Sustainability</span
+          >
+        </div>
+        <h1 class="font-h1 text-h1 text-on-background mb-unit-md leading-tight">
+          Company-wide Sustainability Initiative: Building Our Greener Future
+          Together
+        </h1>
+        <div class="flex items-center gap-unit-md mb-unit-lg">
+          <div class="h-12 w-12 rounded-full overflow-hidden">
+            <img
+              alt="Elena Rodriguez"
+              class="h-full w-full object-cover"
+              data-alt="A professional headshot of a woman with dark hair and a warm, confident expression, wearing a tailored navy blazer. She is set against a soft-focus office background with natural lighting, evoking a sense of corporate leadership and director-level authority. The lighting is bright and clean, matching the portal's airy aesthetic."
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBa8KoVrcesbJUOA2JnRf4atHzCGbhPsOpLMwC1wQeDBaOzVg49oD_p-W4bLIE1JUyQs6DRCpSTjh3IqnS4EDUSxQmBuSsEZz4-doj_3IxQNoq9ggpRhx669YP_tyqop7nS0Qp-JUryyxeV1CE4qsVQY-7r3vq7OO2tmXmn-3Ca0erKz6eeNsE6rutFobeVKQUVAVaKucNmqcTZTRwUu4i-1U0Gb_3jGPePtPXxNC9ZN4v9Ejx9R1-EcOwBzI8VkAMqX64sjNA23oc"
+            />
+          </div>
+          <div>
+            <p class="font-h3 text-body-md text-on-background font-semibold">
+              Elena Rodriguez
+            </p>
+            <p class="font-body-sm text-body-sm text-on-surface-variant">
+              Director of ESG • Oct 24, 2024 • 8 min read
+            </p>
+          </div>
+        </div>
+      </div>
+      <!-- Hero Image -->
+      <div class="mb-unit-xl">
+        <div
+          class="aspect-[21/9] rounded-xl overflow-hidden border border-outline-variant shadow-sm bg-surface-container-low"
+        >
+          <img
+            alt="SK Sustainable Corporate"
+            class="w-full h-full object-cover"
+            data-alt="A wide-angle, high-resolution architectural photograph of a modern, eco-friendly corporate headquarters featuring 'SK Sustainable Corporate' branding. The building incorporates vertical gardens, large glass panels reflecting a bright blue sky, and sleek solar arrays integrated into the design. The overall mood is optimistic, forward-thinking, and clean, with a soft daylight glow that emphasizes the sustainable materials used in construction."
+            src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfXVPfVk-kDDdpPZX35hxlPYHL0F0Ko1b1auUNSmUTUbYLe4dM1BR7L9rCpI3FFJS_1XYRLhrmyDu6UCq80iM0MQ6bG9U5_jExgPxBoGw8F9SXzWS9-8XkCqyouPatTN5F7dB62bQiwv2UHJOppnkT8hDxH1AZZeySrwgLpCzLnIuFb7mtlxBaTDktxaFDA636QS9vFafcF3SaQz0rSKtXEpIX92WT1OfHr4luyAjs_79yjRcdAhjeGdxFahe53atgWVNWfgfaMkE"
+          />
+        </div>
+      </div>
+      <!-- Article Content -->
+      <div class="max-w-4xl mx-auto">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-unit-xl">
+          <!-- Main Body -->
+          <article class="md:col-span-12 lg:col-span-8">
+            <div
+              class="space-y-unit-md font-body-lg text-body-lg text-on-surface-variant leading-relaxed"
+            >
+              <p class="drop-cap">
+                As we look toward the next decade of growth at BrightNOW, our
+                commitment to environmental, social, and governance (ESG)
+                standards has never been more vital. Today, we are proud to
+                announce our comprehensive Sustainability Initiative, a roadmap
+                designed to reduce our carbon footprint by 40% over the next
+                five years while fostering a culture of mindful resource
+                management across all global offices.
+              </p>
+              <p>
+                This journey isn't just about high-level policy changes; it's
+                about the collective action of every team member. From our
+                engineering departments optimizing server efficiency to our
+                administrative teams transitioning to zero-waste office
+                environments, the initiative touches every corner of our
+                operations.
+              </p>
+              <div
+                class="my-unit-xl py-unit-lg px-unit-xl border-l-4 border-primary bg-surface-container-low rounded-r-xl"
+              >
+                <blockquote
+                  class="italic font-h2 text-h2 text-on-surface italic leading-snug"
+                >
+                  "Sustainability is no longer an optional add-on for successful
+                  businesses; it is the fundamental framework upon which all
+                  future innovation must be built."
+                </blockquote>
+              </div>
+              <p>
+                We are investing $15M into renewable energy credits and on-site
+                solar installations for our regional hubs. Furthermore, we are
+                introducing the 'Green Catalyst' grant, a program that will fund
+                employee-led projects aimed at local community environmental
+                restoration.
+              </p>
+              <!-- Community Impact Section -->
+              <section
+                class="mt-unit-xl p-unit-xl bg-white border border-outline-variant rounded-xl shadow-sm"
+              >
+                <h3
+                  class="font-h2 text-h2 text-on-surface mb-unit-lg flex items-center gap-2"
+                >
+                  <span class="material-symbols-outlined text-primary"
+                    >eco</span
+                  >
+                  Community Impact Goals
+                </h3>
+                <ul class="space-y-unit-md">
+                  <li class="flex gap-unit-md items-start">
+                    <div class="p-2 bg-primary-container rounded-lg">
+                      <span
+                        class="material-symbols-outlined text-on-primary-container"
+                        >forest</span
+                      >
+                    </div>
+                    <div>
+                      <span class="font-semibold block text-on-surface"
+                        >Reforestation Partnerships</span
+                      >
+                      <p class="text-body-sm">
+                        Planting 50,000 native trees in urban corridors by 2026.
+                      </p>
+                    </div>
+                  </li>
+                  <li class="flex gap-unit-md items-start">
+                    <div class="p-2 bg-primary-container rounded-lg">
+                      <span
+                        class="material-symbols-outlined text-on-primary-container"
+                        >water_drop</span
+                      >
+                    </div>
+                    <div>
+                      <span class="font-semibold block text-on-surface"
+                        >Clean Water Access</span
+                      >
+                      <p class="text-body-sm">
+                        Implementing greywater recycling systems in 100% of our
+                        campuses.
+                      </p>
+                    </div>
+                  </li>
+                  <li class="flex gap-unit-md items-start">
+                    <div class="p-2 bg-primary-container rounded-lg">
+                      <span
+                        class="material-symbols-outlined text-on-primary-container"
+                        >groups</span
+                      >
+                    </div>
+                    <div>
+                      <span class="font-semibold block text-on-surface"
+                        >Employee Volunteering</span
+                      >
+                      <p class="text-body-sm">
+                        40,000 combined annual volunteer hours dedicated to
+                        environmental causes.
+                      </p>
+                    </div>
+                  </li>
+                </ul>
+              </section>
+            </div>
+            <!-- Engagement Bar -->
+            <div
+              class="mt-unit-xl pt-unit-lg border-t border-outline-variant flex justify-between items-center"
+            >
+              <div class="flex items-center gap-unit-lg">
+                <button
+                  class="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors"
+                >
+                  <span
+                    class="material-symbols-outlined"
+                    style="font-variation-settings: &quot;FILL&quot; 1"
+                    >favorite</span
+                  >
+                  <span class="font-semibold">1.2k</span>
+                </button>
+                <button
+                  class="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors"
+                >
+                  <span class="material-symbols-outlined">forum</span>
+                  <span class="font-semibold">84</span>
+                </button>
+              </div>
+              <div class="flex items-center gap-unit-md">
+                <button
+                  class="p-2 text-on-surface-variant hover:bg-surface-container rounded-full transition-colors"
+                >
+                  <span class="material-symbols-outlined">share</span>
+                </button>
+                <button
+                  class="p-2 text-on-surface-variant hover:bg-surface-container rounded-full transition-colors"
+                >
+                  <span class="material-symbols-outlined">bookmark</span>
+                </button>
+              </div>
+            </div>
+          </article>
+          <!-- Sidebar (Secondary Content) -->
+          <aside class="md:col-span-12 lg:col-span-4 space-y-unit-xl">
+            <div
+              class="p-unit-lg bg-surface-container-low rounded-xl border border-outline-variant"
+            >
+              <h4 class="font-h3 text-h3 text-on-surface mb-unit-md">
+                Take Action
+              </h4>
+              <p class="text-body-sm text-on-surface-variant mb-unit-lg">
+                Ready to contribute to our sustainability goals? Join the ESG
+                Task Force or download our Green Office Guide.
+              </p>
+              <button
+                class="w-full bg-primary-container text-on-primary-container font-semibold py-unit-sm px-unit-lg rounded-lg hover:opacity-90 transition-opacity"
+              >
+                Download Green Guide
+              </button>
+              <button
+                class="w-full mt-unit-sm bg-transparent border border-outline text-on-surface font-semibold py-unit-sm px-unit-lg rounded-lg hover:bg-white transition-colors"
+              >
+                Apply for Task Force
+              </button>
+            </div>
+            <div
+              class="p-unit-lg bg-white rounded-xl border border-outline-variant shadow-sm"
+            >
+              <h4 class="font-h3 text-h3 text-on-surface mb-unit-md">
+                Sustainability Metrics
+              </h4>
+              <div class="space-y-unit-md">
+                <div>
+                  <div class="flex justify-between text-body-sm mb-1">
+                    <span>Energy Reduction</span>
+                    <span class="font-bold">24%</span>
+                  </div>
+                  <div
+                    class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden"
+                  >
+                    <div class="bg-primary h-full" style="width: 24%"></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-body-sm mb-1">
+                    <span>Waste Diversion</span>
+                    <span class="font-bold">68%</span>
+                  </div>
+                  <div
+                    class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden"
+                  >
+                    <div class="bg-primary h-full" style="width: 68%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+      <!-- Related Articles -->
+      <section class="mt-unit-xxl pt-unit-xxl border-t border-outline-variant">
+        <h2 class="font-h1 text-h1 text-on-background mb-unit-xl">
+          Related Articles
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+          <!-- Related Card 1 -->
+          <div
+            class="group bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          >
+            <div class="h-48 w-full overflow-hidden">
+              <img
+                alt="New Hybrid Work Policy"
+                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                data-alt="A modern office space showcasing a flexible, hybrid work environment. Employees are seen in a bright, open-plan office with ergonomic furniture, glass partitions, and abundant indoor plants. The scene is captured in soft, natural daylight with a warm, inviting atmosphere that suggests a balance between professional productivity and personal well-being."
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjBekUPRR_ycmEFweSrMkJ8ZJXitLS8olZC4RcR-7mSR_Skf9m3Qkl52AL3_eE-MK0nroi-8yJoL65C08vBGgx_DNRSWPZSZzC1rB688tUp6pEfLAmsJryW72z38wfb6BGmIS4KvQJ1zmpzkej6pRl0VSPenYWeRnKkPSaOaeP7thXx0Y5e04G3pxAeJE3xGKWW_LY4zNgIQxNiBy3TKCejsNYBaaiOGBpp0-BtOS_ppvGB2wPNfAEIieCV4pDtQnF6g1s8JiKyRc"
+              />
+            </div>
+            <div class="p-unit-lg">
+              <span
+                class="text-xs font-bold text-primary uppercase tracking-wider mb-unit-xs block"
+                >Policies</span
+              >
+              <h3 class="font-h3 text-h3 text-on-surface mb-unit-sm">
+                New Hybrid Work Policy
+              </h3>
+              <p class="text-body-sm text-on-surface-variant line-clamp-2">
+                Exploring the updated framework for flexible work arrangements
+                starting next quarter.
+              </p>
+            </div>
+          </div>
+          <!-- Related Card 2 -->
+          <div
+            class="group bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          >
+            <div class="h-48 w-full overflow-hidden">
+              <img
+                alt="AI Ethics Board"
+                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                data-alt="A minimalist and conceptual image representing technology ethics, featuring a group of diverse professionals in a high-tech boardroom. A digital, semi-transparent holographic overlay of a neural network is visible above the conference table. The aesthetic is clean, professional, and sophisticated, using a cool color palette of blues and greys with high-key lighting."
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuAaUb9nKbl_KEedxIhQj7sDEY-yalznGdl6YLhUpeTWp9Dzw1f4M1ToaUT5VSpYBERnlfaWHv9QlKyht48CxWXCdTIo73CD7Joll7Bd3Q2A89-ZYi4iLqFmVMpEDl9pzzMYe_FZf7rfEAW44VkhzyAD5qcz3U-uTWY4Y0xbGojUZSFX2qg8s0jG3lPNPhIWJXwAsyh4enA9fIWtDni7cYw4p6toJlpv5RFYziqEu_C1ZHMr5OkeN2oBxNChHDxz1LE9rYbhxDQ_QGI"
+              />
+            </div>
+            <div class="p-unit-lg">
+              <span
+                class="text-xs font-bold text-primary uppercase tracking-wider mb-unit-xs block"
+                >Innovation</span
+              >
+              <h3 class="font-h3 text-h3 text-on-surface mb-unit-sm">
+                AI Ethics Board
+              </h3>
+              <p class="text-body-sm text-on-surface-variant line-clamp-2">
+                How we are ensuring responsible and transparent use of AI across
+                our product stack.
+              </p>
+            </div>
+          </div>
+          <!-- Related Card 3 -->
+          <div
+            class="group bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          >
+            <div class="h-48 w-full overflow-hidden">
+              <img
+                alt="Community Outreach"
+                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                data-alt="A vibrant outdoor scene of diverse team members participating in a community outreach program. They are working together to revitalize a local community garden, with lush green foliage and bright flowers in the background. The lighting is warm and golden-hour, creating a sense of unity, purpose, and positive community engagement."
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBHL-96mvE8xagqW0MJpjvJLKtJzKLuLB-bwHPzvC4W4e5_FR2RVmxV6eSaSJOXMPSftBVEu3MTo-8Auy-WjHnmys0gNHz5Hy4QtMUklI27Rd5gpK-7b6dpZCWrCO5ssz4ORpjtZv3RJwejiffYeEqYFke4LAW-XQpoE7rDOTtI4d6Bv34IrVXfgOPJSzO7hrC2Aw7KXrI6Qi8jZQaJzCG_D5B_lhA1fZo4SRgL_6JpQg7VyCGiBS_UfvUxdAy5tHG_19Od7my0s_w"
+              />
+            </div>
+            <div class="p-unit-lg">
+              <span
+                class="text-xs font-bold text-primary uppercase tracking-wider mb-unit-xs block"
+                >Community</span
+              >
+              <h3 class="font-h3 text-h3 text-on-surface mb-unit-sm">
+                Community Outreach
+              </h3>
+              <p class="text-body-sm text-on-surface-variant line-clamp-2">
+                Highlights from our recent local volunteer day and upcoming
+                partnership opportunities.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <!-- Footer -->
+    <footer
+      class="bg-white dark:bg-gray-950 flex justify-between items-center w-full px-8 py-6 max-w-full mx-auto border-t border-gray-100 dark:border-gray-800 flat no shadows font-['Inter'] text-xs"
+    >
+      <div class="text-gray-400 dark:text-gray-500">
+        © 2024 BrightNOW Team Portal
+      </div>
+      <div class="flex gap-6">
+        <a
+          class="text-gray-400 dark:text-gray-500 hover:text-blue-400 transition-colors"
+          href="#"
+          >Privacy Policy</a
+        >
+        <a
+          class="text-gray-400 dark:text-gray-500 hover:text-blue-400 transition-colors"
+          href="#"
+          >Contact Support</a
+        >
+        <a
+          class="text-gray-400 dark:text-gray-500 hover:text-blue-400 transition-colors"
+          href="#"
+          >Terms of Service</a
+        >
+      </div>
+    </footer>
+  </body>
+</html>

@@ -35,7 +35,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from?.pathname || '/workspace';
+  const from = location.state?.from?.pathname || '/home';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -104,7 +104,7 @@ export default function LoginPage() {
               </label>
               <Link
                 to="/forgot-password"
-                className="text-xs font-medium text-primary-600 hover:text-primary-700"
+                className="text-xs font-medium text-brand-600 hover:text-brand-700"
               >
                 Forgot?
               </Link>
@@ -127,7 +127,7 @@ export default function LoginPage() {
               type="checkbox"
               checked={keepSignedIn}
               onChange={(e) => setKeepSignedIn(e.target.checked)}
-              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
             />
             Keep me signed in
           </label>
@@ -135,7 +135,7 @@ export default function LoginPage() {
           <Button
             type="submit"
             loading={isSubmitting}
-            className="w-full py-3 bg-primary-300 hover:bg-primary-400 text-primary-900 font-semibold"
+            className="w-full py-3 bg-brand-300 hover:bg-brand-400 text-brand-900 font-semibold"
           >
             Continue to Workspace
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">

@@ -1,0 +1,575 @@
+<!doctype html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 24;
+        vertical-align: middle;
+      }
+      .chat-scrollbar::-webkit-scrollbar {
+        width: 4px;
+      }
+      .chat-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .chat-scrollbar::-webkit-scrollbar-thumb {
+        background: #e9ecef;
+        border-radius: 10px;
+      }
+    </style>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary-container": "#e1e3e4",
+              "on-tertiary-fixed-variant": "#5b430e",
+              "on-background": "#1b1b1e",
+              "inverse-on-surface": "#f2f0f3",
+              "on-secondary": "#ffffff",
+              "secondary-fixed-dim": "#c5c7c8",
+              "on-tertiary-fixed": "#271900",
+              primary: "#4c5e83",
+              "surface-container-lowest": "#ffffff",
+              outline: "#75777f",
+              "on-secondary-container": "#626566",
+              "surface-dim": "#dbd9dd",
+              surface: "#fbf9fc",
+              "tertiary-fixed-dim": "#e6c181",
+              "on-secondary-fixed": "#191c1d",
+              "surface-container-high": "#e9e7eb",
+              "tertiary-container": "#f0cb8a",
+              "on-primary-fixed": "#041b3c",
+              "primary-fixed-dim": "#b4c7f1",
+              "surface-container-low": "#f5f3f6",
+              "outline-variant": "#c5c6cf",
+              "on-secondary-fixed-variant": "#454748",
+              secondary: "#5c5f60",
+              "primary-fixed": "#d7e2ff",
+              "on-primary-fixed-variant": "#34476a",
+              "on-primary": "#ffffff",
+              background: "#fbf9fc",
+              "on-primary-container": "#46597d",
+              "surface-tint": "#4c5e83",
+              "inverse-primary": "#b4c7f1",
+              "surface-variant": "#e4e2e5",
+              "primary-container": "#bdd0fb",
+              "on-error-container": "#93000a",
+              tertiary: "#755a24",
+              "surface-container": "#efedf1",
+              "on-surface": "#1b1b1e",
+              "on-tertiary-container": "#6f541f",
+              "surface-container-highest": "#e4e2e5",
+              error: "#ba1a1a",
+              "secondary-fixed": "#e1e3e4",
+              "surface-bright": "#fbf9fc",
+              "tertiary-fixed": "#ffdea6",
+              "on-surface-variant": "#44474e",
+              "on-error": "#ffffff",
+              "error-container": "#ffdad6",
+              "on-tertiary": "#ffffff",
+              "inverse-surface": "#303033",
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "0.75rem",
+              full: "9999px",
+            },
+            spacing: {
+              "unit-xs": "0.25rem",
+              "unit-lg": "1.5rem",
+              "unit-xxl": "4rem",
+              "container-max": "1280px",
+              "unit-md": "1rem",
+              gutter: "1.5rem",
+              "unit-xl": "2.5rem",
+              "unit-sm": "0.5rem",
+            },
+            fontFamily: {
+              "label-caps": ["Inter"],
+              h3: ["Inter"],
+              "body-md": ["Inter"],
+              display: ["Inter"],
+              "body-lg": ["Inter"],
+              h2: ["Inter"],
+              h1: ["Inter"],
+              "body-sm": ["Inter"],
+            },
+            fontSize: {
+              "label-caps": [
+                "12px",
+                { lineHeight: "1", letterSpacing: "0.05em", fontWeight: "700" },
+              ],
+              h3: ["20px", { lineHeight: "1.4", fontWeight: "600" }],
+              "body-md": ["16px", { lineHeight: "1.6", fontWeight: "400" }],
+              display: [
+                "48px",
+                {
+                  lineHeight: "1.1",
+                  letterSpacing: "-0.02em",
+                  fontWeight: "700",
+                },
+              ],
+              "body-lg": ["18px", { lineHeight: "1.6", fontWeight: "400" }],
+              h2: ["24px", { lineHeight: "1.3", fontWeight: "600" }],
+              h1: [
+                "32px",
+                {
+                  lineHeight: "1.2",
+                  letterSpacing: "-0.01em",
+                  fontWeight: "600",
+                },
+              ],
+              "body-sm": ["14px", { lineHeight: "1.5", fontWeight: "400" }],
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body
+    class="bg-background font-body-md text-on-background min-h-screen flex flex-col"
+  >
+    <!-- Announcement Bar -->
+    <header
+      class="bg-blue-100 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100 font-label-caps text-xs uppercase tracking-widest flex justify-center items-center w-full px-4 py-2 sticky top-0 z-50"
+    >
+      <span class="mr-2">ANNOUNCEMENT</span>
+      <span class="opacity-80">Q4 System Updates are now live.</span>
+      <a class="ml-4 font-bold hover:underline" href="#">View Updates</a>
+    </header>
+    <!-- Global Navigation -->
+    <nav
+      class="bg-white dark:bg-gray-950 text-blue-300 dark:text-blue-200 border-b border-gray-100 dark:border-gray-800 shadow-sm dark:shadow-none flex justify-between items-center w-full px-8 py-4 sticky top-10 z-40"
+    >
+      <div class="flex items-center gap-8">
+        <span
+          class="text-xl font-bold text-gray-900 dark:text-gray-50 tracking-tight"
+          >BrightNOW</span
+        >
+        <div class="hidden md:flex gap-6 items-center">
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 font-body-sm transition-colors"
+            href="#"
+            >Home</a
+          >
+          <a
+            class="text-gray-900 dark:text-gray-50 font-semibold border-b-2 border-blue-200 pb-1 font-body-sm"
+            href="#"
+            >People</a
+          >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 font-body-sm transition-colors"
+            href="#"
+            >News</a
+          >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 font-body-sm transition-colors"
+            href="#"
+            >Documents</a
+          >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 font-body-sm transition-colors"
+            href="#"
+            >Policies</a
+          >
+          <a
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 font-body-sm transition-colors"
+            href="#"
+            >Org Chart</a
+          >
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <button class="p-2 rounded-full hover:bg-gray-50 transition-colors">
+          <span class="material-symbols-outlined text-gray-600"
+            >notifications</span
+          >
+        </button>
+        <button class="p-2 rounded-full hover:bg-gray-50 transition-colors">
+          <span class="material-symbols-outlined text-gray-600">settings</span>
+        </button>
+        <div
+          class="w-8 h-8 rounded-full bg-gray-200 overflow-hidden ml-2 border border-gray-100"
+        >
+          <img
+            alt="User profile"
+            class="w-full h-full object-cover"
+            data-alt="A professional headshot of a friendly corporate employee with a warm smile, set against a clean, softly lit studio background with neutral tones. The lighting is bright and even, reinforcing the light-mode aesthetic and professional trust of the BrightNOW portal."
+            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBDtYw_dMlA57GfKNWULTP7aWxFpHKjyk0f480oOhJg4XnbQ00RDHgbfFNPNeMB-ss0MCDjE6T02ixEs1VeTjQ4eO5nYytjcQ6CNBOwocqWxZmfVzrBfgd8DeQnJ3D5eG95DJOhqwWWVP606CJXY_wwClZw5aUu5SDGfER-MoZKHP6R0PlQBDlsKLqLp94Ox028tcKFMqndc01Guw9i31ktDtPYu9xbUjDSAe1UgNvQsaDEB9EizYf-zy3Ky4mMI0YoAmoKoFrFW4M"
+          />
+        </div>
+      </div>
+    </nav>
+    <!-- Main Content Canvas -->
+    <main
+      class="flex-grow w-full max-w-container-max mx-auto px-gutter py-unit-lg flex gap-gutter overflow-hidden h-[calc(100vh-160px)]"
+    >
+      <!-- Sidebar: Recent Chats -->
+      <aside
+        class="w-80 flex flex-col bg-white border border-outline-variant rounded-xl shadow-sm overflow-hidden h-full"
+      >
+        <!-- Sidebar Header -->
+        <div
+          class="p-unit-md border-b border-outline-variant bg-surface flex justify-between items-center"
+        >
+          <h2 class="font-h2 text-h2 text-on-surface">Messages</h2>
+          <button
+            class="p-unit-xs hover:bg-surface-variant rounded-lg transition-colors"
+          >
+            <span class="material-symbols-outlined text-primary"
+              >edit_square</span
+            >
+          </button>
+        </div>
+        <!-- Search -->
+        <div class="p-unit-md">
+          <div class="relative">
+            <span
+              class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm"
+              >search</span
+            >
+            <input
+              class="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg font-body-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+              placeholder="Search chats..."
+              type="text"
+            />
+          </div>
+        </div>
+        <!-- Chat List -->
+        <div class="flex-grow overflow-y-auto chat-scrollbar">
+          <!-- Active Chat Item -->
+          <button
+            class="w-full p-unit-md flex gap-unit-sm items-start bg-primary-container text-on-primary-container transition-colors relative"
+          >
+            <div class="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
+            <div class="relative shrink-0">
+              <img
+                class="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm"
+                data-alt="Close-up portrait of Sarah Jenkins, a professional woman with a calm and confident expression. The photograph is shot in high-key lighting with a soft-focus office background, utilizing a clean and airy color palette of whites and soft blues that matches the modern minimalist theme of the BrightNOW portal."
+                src="https://lh3.googleusercontent.com/aida/ADBb0ujDg_fH21pPzcu5ravT_cnMw1YkFs4sr2uGc0TJtEfaFmYVc-6zDoiO7r3bkd0dGkqTecqpGg0yvyIFnNpGpGdOoBvvAoJhGw4mafv0XDp0x0eF4sH4lA5Z9ICbE9GSRCY9QdLDKIRv6XeIImpRV3Li9tdEYmICQ7wwBZG6EvIWu_vYOlXxjozA6croCmp_nQ_E85KibuSZAxcGprwpd6J7XHQMGFT-Yn17GJCFHKKqbgA5Fx7UA-b_4HhJYqB9RoH7_cjNLzP3qA"
+              />
+              <div
+                class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"
+              ></div>
+            </div>
+            <div class="flex-grow text-left">
+              <div class="flex justify-between items-baseline">
+                <span class="font-h3 text-body-md font-semibold truncate"
+                  >Sarah Jenkins</span
+                >
+                <span class="text-[11px] opacity-70">10:42 AM</span>
+              </div>
+              <p class="text-body-sm opacity-90 truncate">
+                Can you review the Q4 project specs?
+              </p>
+            </div>
+          </button>
+          <!-- Inactive Chat Item -->
+          <button
+            class="w-full p-unit-md flex gap-unit-sm items-start hover:bg-surface-container-low transition-colors border-b border-gray-50"
+          >
+            <div class="relative shrink-0">
+              <img
+                class="w-12 h-12 rounded-full object-cover border border-outline-variant"
+                data-alt="A portrait of David Chen, a man with a friendly and professional look, wearing a neutral-toned sweater. The image is captured with bright, natural lighting in a contemporary workspace, emphasizing clarity and professionalism. The aesthetic aligns with the portal's calm and efficient visual identity."
+                src="https://lh3.googleusercontent.com/aida/ADBb0uj8fEOkL4VMxGs3DPmUzs86NmvEM7NgibbYgNOwgrEfWFxbaUtbIuwpuRdZmbnYg64iz8FapihiUkPvgsCeHmdIphNr8hUR-1aCkRT_c1EZKLfEysKGUbfK0LTETXl1YjdVQmxWTAlXEFe2MDi_ntceThe1ohTvrOcl6N9pqcsgXVhsucbtnJizfcy5U0IrUiQYnZUkZkpAiptZUdAl2W3OT2Q-Wi0mXUrhzOvvgxcWvNcOJralep_J-fulRnyW42Kza_hNXaUDrQ"
+              />
+              <div
+                class="absolute bottom-0 right-0 w-3 h-3 bg-gray-300 border-2 border-white rounded-full"
+              ></div>
+            </div>
+            <div class="flex-grow text-left">
+              <div class="flex justify-between items-baseline">
+                <span class="font-body-md font-medium text-on-surface truncate"
+                  >David Chen</span
+                >
+                <span class="text-[11px] text-outline">Yesterday</span>
+              </div>
+              <p class="text-body-sm text-outline truncate">
+                The meeting was moved to 2 PM.
+              </p>
+            </div>
+          </button>
+          <!-- Inactive Chat Item -->
+          <button
+            class="w-full p-unit-md flex gap-unit-sm items-start hover:bg-surface-container-low transition-colors border-b border-gray-50"
+          >
+            <div class="relative shrink-0">
+              <img
+                class="w-12 h-12 rounded-full object-cover border border-outline-variant"
+                data-alt="A high-quality professional portrait of Elena Rodriguez in a bright, modern office environment. She is smiling warmly at the camera. The image features soft ambient lighting and a crisp white background that enhances the clean, minimalist style of the team portal interface."
+                src="https://lh3.googleusercontent.com/aida/ADBb0uj52QXmpGEP4GUw_4_H3TVTbsxwNgu-kuNxXLN7W1LHGdOmNr0E2R7bVm0kC3qZjUdkH0B9M9BKPK3heMxRzj2g6Zm6jpM4JtHHIAZjuAisCuPlrGo1SsecvlUkotc8MXmvZxaAOgdaAht4pXhtn6yachCgFpMBMSt7ppNahDrp1Qt3UdLw8WTxBkQ0oJBycU0ya5c4z6o_qR9kyruaAMdpeZdH8Vc7EFdhmduTVd0tnYjV0YRijW4pUtH7iXgiSRKouOx-JBvGwQ"
+              />
+              <div
+                class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"
+              ></div>
+            </div>
+            <div class="flex-grow text-left">
+              <div class="flex justify-between items-baseline">
+                <span class="font-body-md font-medium text-on-surface truncate"
+                  >Elena Rodriguez</span
+                >
+                <span class="text-[11px] text-outline">Oct 12</span>
+              </div>
+              <p class="text-body-sm text-outline truncate">
+                Great job on the presentation!
+              </p>
+            </div>
+          </button>
+          <!-- Inactive Chat Item -->
+          <button
+            class="w-full p-unit-md flex gap-unit-sm items-start hover:bg-surface-container-low transition-colors border-b border-gray-50"
+          >
+            <div class="relative shrink-0">
+              <img
+                class="w-12 h-12 rounded-full object-cover border border-outline-variant"
+                data-alt="Professional corporate headshot of Marcus Thorne, looking sharp and professional against a neutral, well-lit background. The image uses soft studio lighting and a restrained color palette that evokes authority and reliability, fitting seamlessly into the BrightNOW visual ecosystem."
+                src="https://lh3.googleusercontent.com/aida/ADBb0uj7bI6oh_3gMY5UoMWy3hRINJWKDChK6VzqgGlWCN8PqZtnemhzX0pK4oJVZ0OfHYFbfRy3i5ULukqGAaqpAVCRHaPwVP1nojKDLa-Vxmb90IkmU8AJ0muDxz8o9uJRQ2DRZcIImuL_aZIukOL9jb_jnTmJoUeUu7iH9aOw3Y-7Vs99xQ9HAXHfg8wZkRnQWvRELLIiT-65FhjeohDBu6jDwOglHDdfAs_EpHhNcbL36DmCl0eCVyGXpQR8cNY2Q8aU7_r1dK30"
+              />
+              <div
+                class="absolute bottom-0 right-0 w-3 h-3 bg-gray-300 border-2 border-white rounded-full"
+              ></div>
+            </div>
+            <div class="flex-grow text-left">
+              <div class="flex justify-between items-baseline">
+                <span class="font-body-md font-medium text-on-surface truncate"
+                  >Marcus Thorne</span
+                >
+                <span class="text-[11px] text-outline">Oct 11</span>
+              </div>
+              <p class="text-body-sm text-outline truncate">
+                Sent you the policy documents.
+              </p>
+            </div>
+          </button>
+        </div>
+      </aside>
+      <!-- Main Chat Window -->
+      <section
+        class="flex-grow flex flex-col bg-white border border-outline-variant rounded-xl shadow-sm overflow-hidden h-full"
+      >
+        <!-- Chat Header -->
+        <header
+          class="px-unit-lg py-unit-md border-b border-outline-variant bg-white flex justify-between items-center z-10"
+        >
+          <div class="flex items-center gap-unit-sm">
+            <img
+              class="w-10 h-10 rounded-full object-cover border border-outline-variant"
+              data-alt="Detailed portrait of Sarah Jenkins for the chat interface, emphasizing a friendly and collaborative mood. The lighting is crisp and clear, supporting the high-contrast typography and minimalist layout of the messaging screen in the BrightNOW team portal."
+              src="https://lh3.googleusercontent.com/aida/ADBb0ujDg_fH21pPzcu5ravT_cnMw1YkFs4sr2uGc0TJtEfaFmYVc-6zDoiO7r3bkd0dGkqTecqpGg0yvyIFnNpGpGdOoBvvAoJhGw4mafv0XDp0x0eF4sH4lA5Z9ICbE9GSRCY9QdLDKIRv6XeIImpRV3Li9tdEYmICQ7wwBZG6EvIWu_vYOlXxjozA6croCmp_nQ_E85KibuSZAxcGprwpd6J7XHQMGFT-Yn17GJCFHKKqbgA5Fx7UA-b_4HhJYqB9RoH7_cjNLzP3qA"
+            />
+            <div>
+              <h3 class="font-h3 text-body-md font-bold text-on-surface">
+                Sarah Jenkins
+              </h3>
+              <p class="text-[12px] text-green-600 flex items-center gap-1">
+                <span class="w-1.5 h-1.5 bg-green-600 rounded-full"></span>
+                Online
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              class="p-2 hover:bg-surface-container-low rounded-lg transition-colors text-outline"
+            >
+              <span class="material-symbols-outlined">videocam</span>
+            </button>
+            <button
+              class="p-2 hover:bg-surface-container-low rounded-lg transition-colors text-outline"
+            >
+              <span class="material-symbols-outlined">call</span>
+            </button>
+            <div class="w-px h-6 bg-outline-variant mx-1"></div>
+            <button
+              class="p-2 hover:bg-surface-container-low rounded-lg transition-colors text-outline"
+            >
+              <span class="material-symbols-outlined">more_vert</span>
+            </button>
+          </div>
+        </header>
+        <!-- Message History -->
+        <div
+          class="flex-grow overflow-y-auto p-unit-lg bg-surface chat-scrollbar flex flex-col gap-unit-md"
+        >
+          <div class="flex justify-center my-4">
+            <span
+              class="px-3 py-1 bg-white border border-outline-variant rounded-full text-[11px] font-semibold text-outline tracking-wider uppercase"
+              >Today</span
+            >
+          </div>
+          <!-- Received Message -->
+          <div class="flex items-end gap-unit-sm max-w-[80%]">
+            <img
+              class="w-8 h-8 rounded-full shrink-0 border border-outline-variant"
+              data-alt="Small thumbnail avatar of Sarah Jenkins for message bubbles. Clean lighting and professional framing maintain visual consistency with the portal's modern minimalist design."
+              src="https://lh3.googleusercontent.com/aida/ADBb0ujDg_fH21pPzcu5ravT_cnMw1YkFs4sr2uGc0TJtEfaFmYVc-6zDoiO7r3bkd0dGkqTecqpGg0yvyIFnNpGpGdOoBvvAoJhGw4mafv0XDp0x0eF4sH4lA5Z9ICbE9GSRCY9QdLDKIRv6XeIImpRV3Li9tdEYmICQ7wwBZG6EvIWu_vYOlXxjozA6croCmp_nQ_E85KibuSZAxcGprwpd6J7XHQMGFT-Yn17GJCFHKKqbgA5Fx7UA-b_4HhJYqB9RoH7_cjNLzP3qA"
+            />
+            <div
+              class="bg-white border border-outline-variant p-unit-md rounded-2xl rounded-bl-none shadow-sm"
+            >
+              <p class="text-body-sm text-on-surface">
+                Hi there! Have you had a chance to look at the Q4 project
+                specifications I sent over this morning?
+              </p>
+              <span class="text-[10px] text-outline mt-1 block text-right"
+                >10:30 AM</span
+              >
+            </div>
+          </div>
+          <!-- Sent Message -->
+          <div
+            class="flex items-end gap-unit-sm max-w-[80%] self-end flex-row-reverse"
+          >
+            <div
+              class="w-8 h-8 rounded-full bg-primary-container shrink-0 flex items-center justify-center border border-primary/20"
+            >
+              <span class="text-on-primary-container text-xs font-bold"
+                >JD</span
+              >
+            </div>
+            <div
+              class="bg-primary text-white p-unit-md rounded-2xl rounded-br-none shadow-sm"
+            >
+              <p class="text-body-sm">
+                I just started going through it. The timeline for Phase 2 looks
+                a bit tight. Should we discuss it?
+              </p>
+              <span class="text-[10px] text-blue-100 mt-1 block text-right"
+                >10:35 AM</span
+              >
+            </div>
+          </div>
+          <!-- Received Message -->
+          <div class="flex items-end gap-unit-sm max-w-[80%]">
+            <img
+              class="w-8 h-8 rounded-full shrink-0 border border-outline-variant"
+              data-alt="Small thumbnail avatar of Sarah Jenkins for message bubbles. Clean lighting and professional framing maintain visual consistency with the portal's modern minimalist design."
+              src="https://lh3.googleusercontent.com/aida/ADBb0ujDg_fH21pPzcu5ravT_cnMw1YkFs4sr2uGc0TJtEfaFmYVc-6zDoiO7r3bkd0dGkqTecqpGg0yvyIFnNpGpGdOoBvvAoJhGw4mafv0XDp0x0eF4sH4lA5Z9ICbE9GSRCY9QdLDKIRv6XeIImpRV3Li9tdEYmICQ7wwBZG6EvIWu_vYOlXxjozA6croCmp_nQ_E85KibuSZAxcGprwpd6J7XHQMGFT-Yn17GJCFHKKqbgA5Fx7UA-b_4HhJYqB9RoH7_cjNLzP3qA"
+            />
+            <div
+              class="bg-white border border-outline-variant p-unit-md rounded-2xl rounded-bl-none shadow-sm"
+            >
+              <p class="text-body-sm text-on-surface">
+                Good catch. I agree, Phase 2 is aggressive. I've attached the
+                resource allocation draft if that helps clarify the reasoning.
+              </p>
+              <span class="text-[10px] text-outline mt-1 block text-right"
+                >10:41 AM</span
+              >
+            </div>
+          </div>
+          <!-- File Attachment in Chat -->
+          <div class="flex items-end gap-unit-sm max-w-[80%] ml-10">
+            <div
+              class="bg-white border border-outline-variant p-unit-sm rounded-xl flex items-center gap-unit-md hover:bg-surface-container-low cursor-pointer transition-colors w-64 shadow-sm"
+            >
+              <div
+                class="w-10 h-10 bg-tertiary-fixed rounded-lg flex items-center justify-center"
+              >
+                <span
+                  class="material-symbols-outlined text-on-tertiary-container"
+                  >description</span
+                >
+              </div>
+              <div class="overflow-hidden">
+                <p class="text-body-sm font-semibold truncate">
+                  Q4_Resource_Allocation.pdf
+                </p>
+                <p class="text-[11px] text-outline">2.4 MB • PDF</p>
+              </div>
+            </div>
+          </div>
+          <!-- Received Message (Current One) -->
+          <div class="flex items-end gap-unit-sm max-w-[80%]">
+            <img
+              class="w-8 h-8 rounded-full shrink-0 border border-outline-variant"
+              data-alt="Small thumbnail avatar of Sarah Jenkins for message bubbles. Clean lighting and professional framing maintain visual consistency with the portal's modern minimalist design."
+              src="https://lh3.googleusercontent.com/aida/ADBb0ujDg_fH21pPzcu5ravT_cnMw1YkFs4sr2uGc0TJtEfaFmYVc-6zDoiO7r3bkd0dGkqTecqpGg0yvyIFnNpGpGdOoBvvAoJhGw4mafv0XDp0x0eF4sH4lA5Z9ICbE9GSRCY9QdLDKIRv6XeIImpRV3Li9tdEYmICQ7wwBZG6EvIWu_vYOlXxjozA6croCmp_nQ_E85KibuSZAxcGprwpd6J7XHQMGFT-Yn17GJCFHKKqbgA5Fx7UA-b_4HhJYqB9RoH7_cjNLzP3qA"
+            />
+            <div
+              class="bg-white border border-outline-variant p-unit-md rounded-2xl rounded-bl-none shadow-sm"
+            >
+              <p class="text-body-sm text-on-surface">
+                Can you review the Q4 project specs?
+              </p>
+              <span class="text-[10px] text-outline mt-1 block text-right"
+                >10:42 AM</span
+              >
+            </div>
+          </div>
+        </div>
+        <!-- Chat Input Area -->
+        <footer class="p-unit-lg bg-white border-t border-outline-variant">
+          <div
+            class="flex items-center gap-unit-md bg-surface-container-low border border-outline-variant rounded-xl p-unit-sm shadow-inner"
+          >
+            <div class="flex gap-1">
+              <button
+                class="p-2 hover:bg-white rounded-lg transition-all text-outline"
+              >
+                <span class="material-symbols-outlined">add_circle</span>
+              </button>
+              <button
+                class="p-2 hover:bg-white rounded-lg transition-all text-outline"
+              >
+                <span class="material-symbols-outlined">image</span>
+              </button>
+              <button
+                class="p-2 hover:bg-white rounded-lg transition-all text-outline"
+              >
+                <span class="material-symbols-outlined">mood</span>
+              </button>
+            </div>
+            <input
+              class="flex-grow bg-transparent border-none focus:ring-0 font-body-sm outline-none placeholder:text-outline"
+              placeholder="Type a message..."
+              type="text"
+            />
+            <button
+              class="px-unit-lg py-2 bg-primary-container text-on-background font-semibold rounded-lg flex items-center gap-2 hover:opacity-80 transition-opacity"
+            >
+              <span>Send</span>
+              <span class="material-symbols-outlined text-sm">send</span>
+            </button>
+          </div>
+        </footer>
+      </section>
+    </main>
+    <!-- Portal Footer -->
+    <footer
+      class="bg-white dark:bg-gray-950 text-gray-400 dark:text-gray-500 font-body-sm text-xs border-t border-gray-100 dark:border-gray-800 flex justify-between items-center w-full px-8 py-6 max-w-full mx-auto mt-auto"
+    >
+      <span>© 2024 BrightNOW Team Portal</span>
+      <div class="flex gap-8">
+        <a class="hover:text-blue-400 transition-colors" href="#"
+          >Privacy Policy</a
+        >
+        <a class="hover:text-blue-400 transition-colors" href="#"
+          >Contact Support</a
+        >
+        <a class="hover:text-blue-400 transition-colors" href="#"
+          >Terms of Service</a
+        >
+      </div>
+    </footer>
+  </body>
+</html>

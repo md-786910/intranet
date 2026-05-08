@@ -21,13 +21,51 @@ const STATUS_OPTIONS = [
   { value: 'LOCKED', label: 'Locked' },
 ];
 
-function summarizeMemberships(memberships = []) {
-  if (memberships.length === 0) return '—';
-  const first = memberships[0]?.department;
-  if (!first) return '—';
-  const path = [first.name, first.vertical?.name, first.vertical?.officeLocation?.name]
-    .filter(Boolean).join(' · ');
-  return memberships.length > 1 ? `${path} +${memberships.length - 1}` : path;
+function getPrimaryMembership(memberships = []) {
+  if (memberships.length === 0) return null;
+  const department = memberships[0]?.department;
+  if (!department) return null;
+  return {
+    department: department.name,
+    vertical: department.vertical?.name || null,
+    office: department.vertical?.officeLocation?.name || null,
+    extraCount: Math.max(memberships.length - 1, 0),
+  };
+}
+
+function OrgCell({ memberships }) {
+  const primary = getPrimaryMembership(memberships);
+  if (!primary) {
+    return <span className="text-gray-400 text-sm">—</span>;
+  }
+  const parentPath = [primary.office, primary.vertical].filter(Boolean);
+  return (
+    <div className="flex items-start gap-2 min-w-0">
+      <div className="min-w-0 leading-tight">
+        {parentPath.length > 0 && (
+          <div className="flex items-center gap-1 text-[11px] text-gray-400 truncate">
+            {parentPath.map((part, idx) => (
+              <React.Fragment key={`${part}-${idx}`}>
+                {idx > 0 && <span className="text-gray-300">›</span>}
+                <span className="truncate">{part}</span>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+        <div className="text-sm font-semibold text-gray-900 truncate mt-0.5">
+          {primary.department}
+        </div>
+      </div>
+      {primary.extraCount > 0 && (
+        <span
+          className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-indigo-50 text-indigo-600 border border-indigo-100"
+          title={`${primary.extraCount} additional assignment${primary.extraCount > 1 ? 's' : ''}`}
+        >
+          +{primary.extraCount}
+        </span>
+      )}
+    </div>
+  );
 }
 
 export default function EmployeesListPage() {
@@ -91,8 +129,8 @@ export default function EmployeesListPage() {
         <div className="text-xs text-gray-500">{row.email}</div>
       </div>
     )},
-    { key: 'org', label: 'Department · Vertical · Office', render: (row) => (
-      <span className="text-gray-600 text-sm">{summarizeMemberships(row.departmentMemberships)}</span>
+    { key: 'org', label: 'Organisation', render: (row) => (
+      <OrgCell memberships={row.departmentMemberships} />
     )},
     { key: 'job', label: 'Job Title', render: (row) => (
       <span className="text-gray-500">{row.profile?.job_title || '—'}</span>

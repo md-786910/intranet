@@ -91,7 +91,7 @@ export default function ResetPasswordPage() {
             <p className="mt-2 text-sm text-gray-600">{tokenError}</p>
             <Link
               to="/forgot-password"
-              className="mt-6 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700"
+              className="mt-6 inline-flex items-center text-sm font-medium text-brand-600 hover:text-brand-700"
             >
               Request a new reset link →
             </Link>
@@ -138,7 +138,7 @@ export default function ResetPasswordPage() {
               <Button
                 type="submit"
                 loading={isSubmitting}
-                className="w-full py-3 bg-primary-300 hover:bg-primary-400 text-primary-900 font-semibold"
+                className="w-full py-3 bg-brand-300 hover:bg-brand-400 text-brand-900 font-semibold"
               >
                 Update password
               </Button>

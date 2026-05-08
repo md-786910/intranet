@@ -70,7 +70,7 @@ export default function InvitationAcceptPage() {
       const res = await authService.acceptInvitation(token, password);
       const { accessToken, refreshToken, user, permissions } = res.data.data;
       await setAuthFromTokens(accessToken, refreshToken, user, permissions);
-      navigate('/workspace', { replace: true });
+      navigate('/home', { replace: true });
     } catch (err) {
       setError(getErrorMessage(err, 'Could not activate your account. Please try again.'));
     } finally {
@@ -95,7 +95,7 @@ export default function InvitationAcceptPage() {
             </p>
             <Link
               to="/login"
-              className="mt-6 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700"
+              className="mt-6 inline-flex items-center text-sm font-medium text-brand-600 hover:text-brand-700"
             >
               ← Back to sign in
             </Link>
@@ -144,7 +144,7 @@ export default function InvitationAcceptPage() {
               <Button
                 type="submit"
                 loading={isSubmitting}
-                className="w-full py-3 bg-primary-300 hover:bg-primary-400 text-primary-900 font-semibold"
+                className="w-full py-3 bg-brand-300 hover:bg-brand-400 text-brand-900 font-semibold"
               >
                 Activate account
               </Button>
