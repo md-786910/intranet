@@ -1,5 +1,6 @@
 import React from 'react';
 import MaterialIcon from '../../components/common/MaterialIcon';
+import LatestAnnouncements from './LatestAnnouncements';
 
 const ELENA_AVATAR =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuCIl5VKJKj_27mYKCFtcZ5hucYOzUqslHYclQhePulGLJ9UXUeXzkjcQLaOr8D2gi8B-yLzNhGGiGGA8L-nR-n2urUw8cD14aYlm23qxIRn7NHboAifhEnuRXzDh9I1e7ftAyEJCT5tUSlZ9I8hFc9h9VFOUOyR3E06G2JlCPqAVwY3gqFQ8LkYtetDRg7BfqgsDVGG33GJfmfsiBwxoE7XOdMWmFB41vK1x57K18Ao8VmA_gztvxuxxD6NMmSEwKZfKts0dGyK62g';
@@ -11,54 +12,7 @@ export default function MainContentGrid() {
     <section className="grid grid-cols-1 lg:grid-cols-12 gap-gutter items-stretch">
       {/* Left column */}
       <div className="lg:col-span-8 flex flex-col gap-gutter h-full">
-        {/* Latest Announcements */}
-        <div className="bg-white border border-zinc-100 rounded-3xl p-unit-lg shadow-sm flex flex-col">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-h3 text-h3">Latest Announcements</h3>
-            <a
-              className="text-primary font-semibold text-body-sm hover:underline"
-              href="#"
-            >
-              View all
-            </a>
-          </div>
-          <div className="space-y-4">
-            <article className="flex gap-4 p-4 border border-zinc-50 rounded-2xl hover:bg-zinc-50 transition-colors">
-              <div className="w-20 h-20 bg-primary-container/20 rounded-xl flex-shrink-0 flex items-center justify-center">
-                <MaterialIcon name="campaign" className="text-primary text-3xl" />
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
-                  Strategy
-                </span>
-                <h4 className="font-semibold text-body-md mt-1">
-                  Q3 roadmap is available for review
-                </h4>
-                <p className="text-body-sm text-on-surface-variant mt-1">
-                  The leadership team has finalized the expansion roadmap for
-                  the upcoming quarter.
-                </p>
-              </div>
-            </article>
-            <article className="flex gap-4 p-4 border border-zinc-50 rounded-2xl hover:bg-zinc-50 transition-colors">
-              <div className="w-20 h-20 bg-primary-container/20 rounded-xl flex-shrink-0 flex items-center justify-center">
-                <MaterialIcon name="brush" className="text-primary text-3xl" />
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
-                  Marketing
-                </span>
-                <h4 className="font-semibold text-body-md mt-1">
-                  Marketing guidelines were refreshed
-                </h4>
-                <p className="text-body-sm text-on-surface-variant mt-1">
-                  Updated brand kit and social media templates are now
-                  available in the portal.
-                </p>
-              </div>
-            </article>
-          </div>
-        </div>
+        <LatestAnnouncements />
 
         {/* Recent Documents */}
         <div className="bg-white border border-zinc-100 rounded-3xl p-unit-lg shadow-sm flex flex-col flex-grow">
