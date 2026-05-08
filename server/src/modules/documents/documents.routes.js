@@ -23,7 +23,12 @@ router.get('/storage-summary', authorize('DOCUMENTS', 'VIEW'), controller.getSto
 // ── Documents ──
 router.get('/', authorize('DOCUMENTS', 'VIEW'), validate(schemas.listDocsSchema), controller.list);
 router.get('/:id', authorize('DOCUMENTS', 'VIEW'), validate(schemas.idParam), controller.getById);
-router.post('/:id/view', authorize('DOCUMENTS', 'VIEW'), validate(schemas.idParam), controller.recordView);
+// `recordView` is a per-user side-effect — any authenticated user who can
+// actually see the doc may log a view. The service calls `getById` which
+// already enforces audience visibility, so we skip the scope-aware
+// `authorize('DOCUMENTS','VIEW')` middleware here (it falls back to a
+// blanket ORGANISATION check that regular employees can't satisfy).
+router.post('/:id/view', validate(schemas.idParam), controller.recordView);
 router.post('/', authorize('DOCUMENTS', 'CREATE'), validate(schemas.createDocSchema), auditLogger('DOC_CREATED'), controller.create);
 router.put('/:id', authorize('DOCUMENTS', 'EDIT'), validate(schemas.updateDocSchema), auditLogger('DOC_UPDATED'), controller.update);
 router.delete('/:id', authorize('DOCUMENTS', 'DELETE'), auditLogger('DOC_DELETED'), controller.remove);

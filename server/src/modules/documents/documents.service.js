@@ -615,8 +615,8 @@ const documentsService = {
 
   async listRecentlyViewed(userId, limit = 10) {
     const { DocumentView, DocumentItem, DocumentVersion, Category, ContentAudienceRule } = require('../../database/models');
-    const userAudienceScopeKeys = await getUserAudienceScopeKeys(userId);
 
+    const managing = await canManageDocuments(userId);
     // Pull a generous slab so audience filtering still leaves us `limit`.
     const views = await DocumentView.findAll({
       where: { user_id: userId },
@@ -643,7 +643,16 @@ const documentsService = {
       }],
     });
 
-    const visible = views.filter((v) => v.document && documentMatchesAudience(v.document, userAudienceScopeKeys));
+    // Managers see every doc they've viewed. Regular users get the audience
+    // filter so a doc that was retargeted away from them stops surfacing
+    // here — view permission already had to be granted at the time of the
+    // view, but their scope may have changed since.
+    let visible = views.filter((v) => v.document);
+    if (!managing) {
+      const userAudienceScopeKeys = await getUserAudienceScopeKeys(userId);
+      visible = visible.filter((v) => documentMatchesAudience(v.document, userAudienceScopeKeys));
+    }
+
     return visible.slice(0, limit).map((v) => ({
       view_id: v.view_id,
       viewed_at: v.viewed_at,

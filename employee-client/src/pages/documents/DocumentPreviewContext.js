@@ -21,7 +21,13 @@ export function DocumentPreviewProvider({ children }) {
     setInitialFileIndex(Number.isInteger(options.fileIndex) ? options.fileIndex : 0);
     setCurrent(doc);
     if (doc.document_item_id) {
-      documentsService.recordView(doc.document_item_id).catch(() => {});
+      documentsService.recordView(doc.document_item_id).catch((err) => {
+        // Don't bubble — the drawer should still open even if view-tracking
+        // fails — but log so dev tools surface real bugs (broken endpoint,
+        // missing migration, audience mismatch, etc.).
+        // eslint-disable-next-line no-console
+        console.warn('recordView failed', err?.response?.status, err?.response?.data);
+      });
     }
   }, []);
 
