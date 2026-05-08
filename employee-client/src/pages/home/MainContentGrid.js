@@ -1,6 +1,7 @@
 import React from 'react';
 import Skeleton from '../../components/common/Skeleton';
 import LatestAnnouncements from './LatestAnnouncements';
+import RecentDocuments from './RecentDocuments';
 import { useMyVertical } from '../../hooks/useMyVertical';
 
 export default function MainContentGrid() {
@@ -14,18 +15,7 @@ export default function MainContentGrid() {
       <div className="lg:col-span-8 flex flex-col gap-gutter h-full">
         <LatestAnnouncements />
 
-        {/* Recent Documents */}
-        <div className="bg-white border border-zinc-100 rounded-3xl p-unit-lg shadow-sm flex flex-col flex-grow">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-h3 text-h3">Recent Documents</h3>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <DocCard color="red" badge="PDF" title="Q3 Strategy Roadmap" meta="Updated today" />
-            <DocCard color="blue" badge="DOC" title="Meeting Notes" meta="2 hours ago" />
-            <DocCard color="orange" badge="PPT" title="Town Hall Deck" meta="Yesterday" />
-            <DocCard color="green" badge="XLS" title="Budget Review v2" meta="Oct 12" />
-          </div>
-        </div>
+        <RecentDocuments />
       </div>
 
       {/* Right column */}
@@ -118,28 +108,6 @@ function renderAvatar(person, idx) {
       className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${variant}`}
     >
       {getInitials(person.firstName, person.lastName)}
-    </div>
-  );
-}
-
-function DocCard({ color, badge, title, meta }) {
-  const colors = {
-    red: 'bg-red-50 text-red-500',
-    blue: 'bg-blue-50 text-blue-500',
-    orange: 'bg-orange-50 text-orange-500',
-    green: 'bg-green-50 text-green-500',
-  };
-  return (
-    <div className="flex items-center gap-4 p-4 border border-zinc-50 rounded-2xl hover:border-primary-container/50 transition-all cursor-pointer bg-white">
-      <div
-        className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xs ${colors[color]}`}
-      >
-        {badge}
-      </div>
-      <div className="overflow-hidden">
-        <p className="font-semibold text-body-sm truncate">{title}</p>
-        <p className="text-[11px] text-zinc-400">{meta}</p>
-      </div>
     </div>
   );
 }
