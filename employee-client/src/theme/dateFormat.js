@@ -37,11 +37,22 @@ export function formatRelative(iso) {
   return formatDate(iso);
 }
 
-// "5 min read" style — body length / 200 wpm.
+// "5 min read" style — body length / 200 wpm + extra time for media.
 export function readingTime(body) {
   if (!body) return '1 min read';
-  const text = String(body).replace(/<[^>]*>/g, ' ').trim();
+  const raw = String(body);
+
+  // Count embedded media elements that take time to consume
+  const imageCount = (raw.match(/<img[\s>]/gi) || []).length;
+  const iframeCount = (raw.match(/<iframe[\s>]/gi) || []).length;
+
+  // Strip HTML tags and count words
+  const text = raw.replace(/<[^>]*>/g, ' ').trim();
   const words = text ? text.split(/\s+/).length : 0;
-  const minutes = Math.max(1, Math.round(words / 200));
+
+  // 200 wpm for text + 12s per image + 30s per iframe
+  const textMinutes = words / 200;
+  const mediaMinutes = (imageCount * 12 + iframeCount * 30) / 60;
+  const minutes = Math.max(1, Math.round(textMinutes + mediaMinutes));
   return `${minutes} min read`;
 }
