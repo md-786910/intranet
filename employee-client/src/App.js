@@ -13,6 +13,8 @@ import NewsListPage from './pages/news/NewsListPage';
 import NewsDetailPage from './pages/news/NewsDetailPage';
 import PeoplePage from './pages/people/PeoplePage';
 import DocumentsPage from './pages/documents/DocumentsPage';
+import PoliciesPage from './pages/policies/PoliciesPage';
+import OrgChartPage from './pages/org-chart/OrgChartPage';
 
 export default function App() {
   return (
@@ -37,6 +39,8 @@ export default function App() {
               <Route path="/news/:id" element={<NewsDetailPage />} />
               <Route path="/people" element={<PeoplePage />} />
               <Route path="/documents" element={<DocumentsPage />} />
+              <Route path="/policies" element={<PoliciesPage />} />
+              <Route path="/org-chart" element={<OrgChartPage />} />
               <Route path="/" element={<Navigate to="/home" replace />} />
             </Route>
 

@@ -12,17 +12,19 @@ const ITEMS = [
 
 export default function QuickAccessGrid() {
   return (
-    <section className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 lg:gap-gutter">
+    <section className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6 lg:gap-8">
       {ITEMS.map((item) => (
-        <Link key={item.to} to={item.to} className="group cursor-pointer">
-          <div className="bg-white border border-zinc-100 p-6 rounded-2xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] text-center transition-all group-hover:-translate-y-1 group-hover:shadow-md">
-            <div className="w-12 h-12 bg-primary-container/20 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:bg-primary-container transition-colors">
+        <Link key={item.to} to={item.to} className="group">
+          <div className="bg-white/70 backdrop-blur-sm border border-zinc-100 p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-center justify-center transition-all duration-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.08)] hover:-translate-y-2 hover:bg-white active:scale-95">
+            <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-indigo-100 transition-colors duration-300">
               <MaterialIcon
                 name={item.icon}
-                className="text-primary group-hover:text-on-primary-container"
+                className="text-indigo-600 !text-3xl group-hover:scale-110 transition-transform duration-300"
               />
             </div>
-            <span className="font-semibold text-body-md block">{item.label}</span>
+            <span className="font-bold text-zinc-800 text-lg tracking-tight group-hover:text-indigo-600 transition-colors">
+              {item.label}
+            </span>
           </div>
         </Link>
       ))}
