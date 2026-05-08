@@ -13,7 +13,7 @@ import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import { usePermission } from '../../hooks/usePermission';
-import { formatDate, truncate } from '../../utils/formatters';
+import { formatDate, formatDateTime, truncate } from '../../utils/formatters';
 
 const STATUS_TABS = ['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED'];
 
@@ -109,7 +109,7 @@ export default function NewsListPage() {
       <span className="text-gray-500">{row.author?.first_name} {row.author?.last_name}</span>
     )},
     { key: 'created_at', label: 'Created', render: (row) => (
-      <span className="text-gray-500">{formatDate(row.created_at)}</span>
+      <span className="text-gray-500">{formatDateTime(row.created_at)}</span>
     )},
   ];
 

@@ -110,6 +110,21 @@ function articleMatchesAudience(article, userAudienceScopeKeys) {
     userAudienceScopeKeys.has(`${rule.target_scope_type}:${rule.target_scope_id}`));
 }
 
+function buildAdminNewsOrder(sequelize, trash) {
+  return [
+    [
+      sequelize.literal(`CASE
+        WHEN "NewsItem"."status" = 'PUBLISHED' THEN 0
+        WHEN "NewsItem"."status" = 'ARCHIVED' THEN 1
+        WHEN "NewsItem"."status" = 'DRAFT' THEN 2
+        ELSE 3
+      END`),
+      'ASC',
+    ],
+    [trash ? 'deleted_at' : 'created_at', 'DESC'],
+  ];
+}
+
 const newsService = {
   async list(query, userId) {
     const { NewsItem, UserAccount, ContentAudienceRule, Category } = require('../../database/models');
@@ -174,9 +189,7 @@ const newsService = {
           limit,
           offset,
           include,
-          order: trash
-            ? [['deleted_at', 'DESC']]
-            : [['created_at', 'DESC']],
+          order: buildAdminNewsOrder(sequelize, trash),
         }),
         Model.findAll({
           where: countWhere,
