@@ -16,9 +16,12 @@ const storage = multer.diskStorage({
   },
 });
 
+// 50 MB per file. Set via MEDIA_UPLOAD_MAX_BYTES if you need to override.
+const MAX_UPLOAD_BYTES = Number(process.env.MEDIA_UPLOAD_MAX_BYTES) || 50 * 1024 * 1024;
+
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: MAX_UPLOAD_BYTES },
 });
 
 router.use(authenticate);

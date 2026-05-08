@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 
-const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
+const DEFAULT_MAX_BYTES = 50 * 1024 * 1024;
 
 function matchesAccept(file, accept) {
   if (!accept) return true;

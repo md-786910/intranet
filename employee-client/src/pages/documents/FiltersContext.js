@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 
 // Filter state shared between the documents page header (FilterPopover) and
 // the visible content surfaces (CategoryGrid on /documents,
-// CategoryDocList on /documents/categories/:id).
+// AllFilesGrid on /documents/categories/:id).
 const DEFAULT_FILTERS = {
   search: '',
   categoryIds: [],

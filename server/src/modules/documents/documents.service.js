@@ -140,7 +140,7 @@ const documentsService = {
       include.push({
         model: DocumentVersion,
         as: 'versions',
-        attributes: ['document_version_id', 'version_no', 'file_name', 'file_size', 'mime_type', 'file_url'],
+        attributes: ['document_version_id', 'version_no', 'file_name', 'file_size', 'mime_type', 'file_url', 'files'],
         required: false,
         separate: true,
         order: [['version_no', 'DESC']],
@@ -546,7 +546,7 @@ const documentsService = {
   // `doc_count`. Without `userId` (admin flows), every DOCUMENT category is
   // returned with no count attached.
   async listCategories(userId = null) {
-    const { Category } = require('../../database/models');
+    const { Category, DocumentVersion } = require('../../database/models');
     const allCategories = await Category.findAll({
       where: { deleted_at: null, entity_type: 'DOCUMENT' },
       order: [['sort_order', 'ASC'], ['name', 'ASC']],
@@ -554,18 +554,44 @@ const documentsService = {
 
     if (!userId) return allCategories;
 
-    const visibleDocs = await getVisibleDocumentsForUser(userId);
-    const countByCategory = new Map();
+    // Pull the latest version for each visible doc so we can count files
+    // (one document can carry several attachments).
+    const visibleDocs = await getVisibleDocumentsForUser(userId, {
+      extraInclude: [{
+        model: DocumentVersion,
+        as: 'versions',
+        attributes: ['document_version_id', 'version_no', 'files', 'file_url'],
+        required: false,
+        separate: true,
+        order: [['version_no', 'DESC']],
+        limit: 1,
+      }],
+    });
+
+    const docCount = new Map();
+    const fileCount = new Map();
     for (const doc of visibleDocs) {
       if (!doc.category_id) continue;
-      countByCategory.set(doc.category_id, (countByCategory.get(doc.category_id) || 0) + 1);
+      docCount.set(doc.category_id, (docCount.get(doc.category_id) || 0) + 1);
+
+      const v0 = doc.versions?.[0];
+      let n = 0;
+      if (v0) {
+        if (Array.isArray(v0.files) && v0.files.length > 0) {
+          n = v0.files.filter((f) => f && f.url).length;
+        } else if (v0.file_url) {
+          n = 1;
+        }
+      }
+      fileCount.set(doc.category_id, (fileCount.get(doc.category_id) || 0) + n);
     }
 
     return allCategories
-      .filter((c) => countByCategory.has(c.category_id))
+      .filter((c) => docCount.has(c.category_id))
       .map((c) => {
         const plain = c.toJSON();
-        plain.doc_count = countByCategory.get(c.category_id) || 0;
+        plain.doc_count = docCount.get(c.category_id) || 0;
+        plain.file_count = fileCount.get(c.category_id) || 0;
         return plain;
       });
   },
@@ -607,7 +633,7 @@ const documentsService = {
           {
             model: DocumentVersion,
             as: 'versions',
-            attributes: ['document_version_id', 'version_no', 'file_name', 'file_size', 'mime_type', 'file_url'],
+            attributes: ['document_version_id', 'version_no', 'file_name', 'file_size', 'mime_type', 'file_url', 'files'],
             required: false,
             separate: true,
             order: [['version_no', 'DESC']],
@@ -631,7 +657,7 @@ const documentsService = {
       extraInclude: [{
         model: DocumentVersion,
         as: 'versions',
-        attributes: ['document_version_id', 'version_no', 'file_name', 'file_size', 'mime_type', 'file_url'],
+        attributes: ['document_version_id', 'version_no', 'file_name', 'file_size', 'mime_type', 'file_url', 'files'],
         required: false,
         separate: true,
         order: [['version_no', 'DESC']],
@@ -688,18 +714,40 @@ const documentsService = {
   // with `doc_count` attached. Otherwise throws notFound — no signal that
   // the category exists at all.
   async getCategoryById(categoryId, userId) {
-    const { Category } = require('../../database/models');
+    const { Category, DocumentVersion } = require('../../database/models');
     const cat = await Category.findOne({
       where: { category_id: categoryId, entity_type: 'DOCUMENT', deleted_at: null },
     });
     if (!cat) throw ApiError.notFound('Category not found');
 
     if (userId) {
-      const visibleDocs = await getVisibleDocumentsForUser(userId);
+      const visibleDocs = await getVisibleDocumentsForUser(userId, {
+        extraInclude: [{
+          model: DocumentVersion,
+          as: 'versions',
+          attributes: ['document_version_id', 'version_no', 'files', 'file_url'],
+          required: false,
+          separate: true,
+          order: [['version_no', 'DESC']],
+          limit: 1,
+        }],
+      });
       const inCategory = visibleDocs.filter((d) => d.category_id === Number(categoryId));
       if (inCategory.length === 0) throw ApiError.notFound('Category not found');
+
+      let fileCount = 0;
+      for (const d of inCategory) {
+        const v0 = d.versions?.[0];
+        if (v0 && Array.isArray(v0.files) && v0.files.length > 0) {
+          fileCount += v0.files.filter((f) => f && f.url).length;
+        } else if (v0?.file_url) {
+          fileCount += 1;
+        }
+      }
+
       const plain = cat.toJSON();
       plain.doc_count = inCategory.length;
+      plain.file_count = fileCount;
       return plain;
     }
     return cat;

@@ -12,11 +12,14 @@ const DocumentPreviewContext = createContext({
 
 export function DocumentPreviewProvider({ children }) {
   const [current, setCurrent] = useState(null);
+  const [initialFileIndex, setInitialFileIndex] = useState(0);
 
-  const openDocument = useCallback((doc) => {
+  // `options.fileIndex` lets the All Files grid open the drawer to a
+  // specific file inside the doc (not always the first one).
+  const openDocument = useCallback((doc, options = {}) => {
     if (!doc) return;
+    setInitialFileIndex(Number.isInteger(options.fileIndex) ? options.fileIndex : 0);
     setCurrent(doc);
-    // Bump the view timestamp; ignore failures (server enforces visibility).
     if (doc.document_item_id) {
       documentsService.recordView(doc.document_item_id).catch(() => {});
     }
@@ -32,7 +35,7 @@ export function DocumentPreviewProvider({ children }) {
   return (
     <DocumentPreviewContext.Provider value={value}>
       {children}
-      <DocumentPreviewDrawer doc={current} onClose={closeDocument} />
+      <DocumentPreviewDrawer doc={current} initialFileIndex={initialFileIndex} onClose={closeDocument} />
     </DocumentPreviewContext.Provider>
   );
 }

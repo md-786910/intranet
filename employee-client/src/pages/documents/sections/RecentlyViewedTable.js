@@ -4,7 +4,7 @@ import Skeleton from '../../../components/common/Skeleton';
 import { documentsService } from '../../../services/documentsService';
 import { formatRelative } from '../../../theme/dateFormat';
 import { iconForFile } from '../data';
-import { formatBytes, pickPrimaryFile } from '../documentActions';
+import { formatBytes, pickPrimaryFile, resolveAllFiles } from '../documentActions';
 import { useDocumentPreview } from '../DocumentPreviewContext';
 
 const PAGE_LIMIT = 4;
@@ -67,6 +67,7 @@ export default function RecentlyViewedTable() {
               {rows.map((row, i) => {
                 const doc = row.document || {};
                 const primary = pickPrimaryFile(doc);
+                const extra = Math.max(0, resolveAllFiles(doc).length - 1);
                 const { icon, color } = iconForFile(primary.name, primary.mime);
                 return (
                   <tr
@@ -81,6 +82,11 @@ export default function RecentlyViewedTable() {
                         <MaterialIcon name={icon} className={color} />
                         <span className="font-semibold text-on-background">
                           {primary.name || doc.title}
+                          {extra > 0 && (
+                            <span className="ml-2 inline-block font-label-caps text-label-caps bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded align-middle">
+                              +{extra} more
+                            </span>
+                          )}
                         </span>
                       </div>
                     </td>

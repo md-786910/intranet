@@ -7,21 +7,27 @@ import { FiltersProvider, useDocumentsFilters } from './FiltersContext';
 import { DocumentPreviewProvider } from './DocumentPreviewContext';
 import { themeForCategory } from './data';
 import FilterPopover from './sections/FilterPopover';
-import RecentlyAddedStrip from './sections/RecentlyAddedStrip';
-import CategoryDocList from './sections/CategoryDocList';
+import AllFilesGrid from './sections/AllFilesGrid';
 
 // Inside a single category, search/priority/file-type all apply; category
 // chips don't (we're already scoped to this one category).
 const DETAIL_PAGE_DIMENSIONS = { search: true, categoryIds: false, priorities: true, fileTypes: true };
 
-const RECENT_LIMIT = 4;
+// Cap how many docs we slurp for the All Files grid. Each doc can carry
+// several files, so 50 docs can easily render ~100 tiles — beyond that we
+// rely on the All Documents list with its filter+pagination.
+const TOP_DOCS_LIMIT = 50;
 
 function CategoryHero({ category }) {
   const { activeCount } = useDocumentsFilters();
   const [open, setOpen] = useState(false);
   const buttonRef = useRef(null);
   const theme = themeForCategory(category);
-  const docCount = category?.doc_count ?? 0;
+  const fileCount = Number(category?.file_count);
+  const docCount = Number(category?.doc_count) || 0;
+  const chipText = Number.isFinite(fileCount) && fileCount > 0
+    ? `${fileCount} ${fileCount === 1 ? 'File' : 'Files'}`
+    : `${docCount} ${docCount === 1 ? 'Doc' : 'Docs'}`;
 
   return (
     <section className="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-unit-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
@@ -52,7 +58,7 @@ function CategoryHero({ category }) {
             <span
               className={`inline-block mt-3 font-label-caps text-label-caps ${theme.countText} ${theme.countBg} px-2 py-1 rounded`}
             >
-              {docCount} {docCount === 1 ? 'Doc' : 'Docs'}
+              {chipText}
             </span>
           </div>
         </div>
@@ -115,8 +121,8 @@ function CategoryDetailInner() {
   const [category, setCategory] = useState(null);
   const [loadingCategory, setLoadingCategory] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [recent, setRecent] = useState([]);
-  const [loadingRecent, setLoadingRecent] = useState(true);
+  const [topDocs, setTopDocs] = useState([]);
+  const [loadingTopDocs, setLoadingTopDocs] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,19 +142,20 @@ function CategoryDetailInner() {
     return () => { cancelled = true; };
   }, [categoryId]);
 
-  // Recent strip — independent of filter state, always shows newest first.
+  // Top docs — feeds the flat All Files grid. Independent of filter state
+  // so users always have a complete view at the top of the page.
   useEffect(() => {
     let cancelled = false;
-    setLoadingRecent(true);
+    setLoadingTopDocs(true);
     documentsService
-      .listDocuments({ category_id: categoryId, page: 1, limit: RECENT_LIMIT, status: 'PUBLISHED' })
+      .listDocuments({ category_id: categoryId, page: 1, limit: TOP_DOCS_LIMIT, status: 'PUBLISHED' })
       .then((res) => {
         if (cancelled) return;
         const list = res.data?.data?.documents || [];
-        setRecent(Array.isArray(list) ? list : []);
+        setTopDocs(Array.isArray(list) ? list : []);
       })
-      .catch(() => { if (!cancelled) setRecent([]); })
-      .finally(() => { if (!cancelled) setLoadingRecent(false); });
+      .catch(() => { if (!cancelled) setTopDocs([]); })
+      .finally(() => { if (!cancelled) setLoadingTopDocs(false); });
     return () => { cancelled = true; };
   }, [categoryId]);
 
@@ -162,9 +169,7 @@ function CategoryDetailInner() {
         <CategoryHero category={category} />
       )}
 
-      <RecentlyAddedStrip documents={recent} loading={loadingRecent} />
-
-      <CategoryDocList categoryId={categoryId} />
+      <AllFilesGrid documents={topDocs} loading={loadingTopDocs} />
     </main>
   );
 }

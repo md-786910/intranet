@@ -191,7 +191,7 @@ export default function FilePicker({
               <FileDropzone
                 multiple={multiple}
                 accept={acceptStr}
-                maxSizeBytes={10 * 1024 * 1024}
+                maxSizeBytes={50 * 1024 * 1024}
                 onFiles={handleUploaded}
                 onRejected={handleRejected}
                 disabled={uploading}
@@ -202,8 +202,8 @@ export default function FilePicker({
                     : 'Drop a file here, or click to browse'}
                 hint={
                   mode === 'image'
-                    ? 'Images only, up to 10 MB each'
-                    : 'Up to 10 MB each. Most document and image types accepted.'
+                    ? 'Images only, up to 50 MB each'
+                    : 'Up to 50 MB each. PDFs, Office docs, images, video, audio, and archives are accepted.'
                 }
               />
             )}

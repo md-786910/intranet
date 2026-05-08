@@ -46,6 +46,20 @@ const errorHandler = (err, req, res, next) => {
     error = ApiError.badRequest('Request body too large');
   }
 
+  // Handle multer upload errors so the admin sees the real reason
+  // ("File size exceeds 50 MB limit") instead of a generic 500.
+  if (err.name === 'MulterError') {
+    const limitBytes = Number(process.env.MEDIA_UPLOAD_MAX_BYTES) || 50 * 1024 * 1024;
+    const limitMb = Math.round(limitBytes / (1024 * 1024));
+    const messageByCode = {
+      LIMIT_FILE_SIZE: `File size exceeds ${limitMb} MB limit`,
+      LIMIT_FILE_COUNT: 'Too many files in this upload',
+      LIMIT_UNEXPECTED_FILE: `Unexpected upload field: ${err.field || 'unknown'}`,
+      LIMIT_PART_COUNT: 'Too many parts in this upload',
+    };
+    error = ApiError.badRequest(messageByCode[err.code] || `Upload failed: ${err.message}`);
+  }
+
   const statusCode = error.statusCode || 500;
   const isOperational = error.isOperational !== undefined ? error.isOperational : false;
 

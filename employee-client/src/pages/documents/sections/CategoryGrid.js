@@ -5,8 +5,15 @@ import Skeleton from '../../../components/common/Skeleton';
 import { themeForCategory } from '../data';
 import { useDocumentsFilters } from '../FiltersContext';
 
-function pluralLabel(count) {
-  return `${count} ${count === 1 ? 'Doc' : 'Docs'}`;
+// Prefer file count (matches the All Files grid inside the category). Fall
+// back to doc_count if the API didn't include file_count for some reason.
+function chipLabel(category) {
+  const fileCount = Number(category?.file_count);
+  if (Number.isFinite(fileCount) && fileCount > 0) {
+    return `${fileCount} ${fileCount === 1 ? 'File' : 'Files'}`;
+  }
+  const docCount = Number(category?.doc_count) || 0;
+  return `${docCount} ${docCount === 1 ? 'Doc' : 'Docs'}`;
 }
 
 export default function CategoryGrid({ categories, loading, error }) {
@@ -69,7 +76,7 @@ export default function CategoryGrid({ categories, loading, error }) {
           id: c.category_id,
           name: c.name,
           desc: c.description || 'Documents in this category.',
-          count: pluralLabel(c.doc_count || 0),
+          count: chipLabel(c),
           ...theme,
         };
         return (

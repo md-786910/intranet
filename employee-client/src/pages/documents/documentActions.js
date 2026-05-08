@@ -31,16 +31,37 @@ export function typeLabelFor(name = '', mime = '') {
   return sub ? sub.toUpperCase().slice(0, 5) : 'FILE';
 }
 
-export function pickPrimaryFile(doc = {}) {
+// Returns every file attached to the document's latest version, with absolute
+// URLs. Falls back to the legacy single-file fields if the JSONB array is
+// empty (older records).
+export function resolveAllFiles(doc = {}) {
   const v0 = doc.versions?.[0] || null;
-  if (v0) {
-    return {
-      name: v0.file_name,
-      mime: v0.mime_type,
-      size: v0.file_size,
-      url: resolveFileUrl(v0.file_url),
-    };
+  if (!v0) return [];
+  const arr = Array.isArray(v0.files) ? v0.files.filter((f) => f && f.url) : [];
+  if (arr.length > 0) {
+    return arr.map((f) => ({
+      name: f.name || (f.url || '').split('/').pop() || 'file',
+      mime: f.mime || '',
+      size: f.size != null ? Number(f.size) : null,
+      url: resolveFileUrl(f.url),
+    }));
   }
+  if (v0.file_url) {
+    return [{
+      name: v0.file_name || (v0.file_url || '').split('/').pop() || 'file',
+      mime: v0.mime_type || '',
+      size: v0.file_size != null ? Number(v0.file_size) : null,
+      url: resolveFileUrl(v0.file_url),
+    }];
+  }
+  return [];
+}
+
+// First attached file (the legacy "primary file" — used by row displays that
+// only show one filename + size).
+export function pickPrimaryFile(doc = {}) {
+  const all = resolveAllFiles(doc);
+  if (all.length > 0) return all[0];
   return { name: doc.title, mime: '', size: null, url: null };
 }
 

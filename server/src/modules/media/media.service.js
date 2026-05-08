@@ -25,19 +25,43 @@ function resolveContextDir(context) {
 }
 
 const ALLOWED_MIME_TYPES = [
+  // Images
   'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
-  'application/pdf',
-  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'text/plain', 'text/csv',
+  'image/bmp', 'image/tiff', 'image/heic', 'image/heif', 'image/avif',
+  // PDF (and the rare 'x-pdf' variant some browsers report)
+  'application/pdf', 'application/x-pdf',
+  // Word
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  // Excel
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  // PowerPoint
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // Open / Apple office formats
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'application/vnd.oasis.opendocument.presentation',
+  'application/vnd.apple.pages', 'application/vnd.apple.numbers', 'application/vnd.apple.keynote',
+  // Plain text & data
+  'text/plain', 'text/csv', 'text/markdown', 'text/html',
+  'application/json', 'application/xml', 'text/xml',
+  'application/rtf',
   // Archives
   'application/zip', 'application/x-zip-compressed',
   'application/x-rar-compressed', 'application/vnd.rar',
   'application/x-7z-compressed',
+  'application/x-tar', 'application/gzip',
+  // Video
+  'video/mp4', 'video/quicktime', 'video/webm', 'video/x-msvideo', 'video/x-matroska',
+  // Audio
+  'audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/webm', 'audio/ogg',
 ];
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+// 50 MB per file by default. Override with MEDIA_UPLOAD_MAX_BYTES (also
+// honoured by multer's `limits.fileSize`).
+const MAX_FILE_SIZE = Number(process.env.MEDIA_UPLOAD_MAX_BYTES) || 50 * 1024 * 1024;
 
 const mediaService = {
   async upload(file, userId, options = {}) {
@@ -48,7 +72,8 @@ const mediaService = {
       throw ApiError.badRequest(`File type ${file.mimetype} is not allowed`);
     }
     if (file.size > MAX_FILE_SIZE) {
-      throw ApiError.badRequest('File size exceeds 10MB limit');
+      const limitMb = Math.round(MAX_FILE_SIZE / (1024 * 1024));
+      throw ApiError.badRequest(`File size exceeds ${limitMb} MB limit`);
     }
 
     const { dir, urlPrefix } = resolveContextDir(options.context);
