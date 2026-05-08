@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import MaterialIcon from '../common/MaterialIcon';
+import { resolveMediaUrl } from '../../utils/mediaUtils';
 
 // Vertical card used in the "Related Articles" section on the detail page.
 export default function RelatedCard({ article }) {
@@ -18,7 +19,7 @@ export default function RelatedCard({ article }) {
           <img
             alt={article.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            src={article.cover_image_url}
+            src={resolveMediaUrl(article.cover_image_url)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

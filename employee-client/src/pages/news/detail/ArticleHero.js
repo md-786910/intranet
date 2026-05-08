@@ -1,5 +1,6 @@
 import React from 'react';
 import MaterialIcon from '../../../components/common/MaterialIcon';
+import { resolveMediaUrl } from '../../../utils/mediaUtils';
 
 export default function ArticleHero({ article }) {
   if (!article) return null;
@@ -10,7 +11,7 @@ export default function ArticleHero({ article }) {
           <img
             alt={article.title}
             className="w-full h-full object-cover"
-            src={article.cover_image_url}
+            src={resolveMediaUrl(article.cover_image_url)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

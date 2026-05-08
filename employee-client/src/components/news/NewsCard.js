@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import MaterialIcon from '../common/MaterialIcon';
 import CategoryPill from './CategoryPill';
 import { formatRelative, readingTime } from '../../theme/dateFormat';
+import { resolveMediaUrl } from '../../utils/mediaUtils';
 
 // Small horizontal card used in:
 //   - News list "Latest News" 2-col grid
@@ -28,8 +29,9 @@ export default function NewsCard({ article, size = 'sm' }) {
         {article.cover_image_url ? (
           <img
             className="w-full h-full object-cover"
-            src={article.cover_image_url}
+            src={resolveMediaUrl(article.cover_image_url)}
             alt={article.title}
+
           />
         ) : (
           <MaterialIcon name="article" className="text-primary text-3xl" />

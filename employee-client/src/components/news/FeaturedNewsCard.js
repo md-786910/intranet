@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import MaterialIcon from '../common/MaterialIcon';
 import CategoryPill from './CategoryPill';
 import { formatDate } from '../../theme/dateFormat';
+import { resolveMediaUrl } from '../../utils/mediaUtils';
 
 // Big 21:9 hero card used at the top of NewsListPage
 export default function FeaturedNewsCard({ article }) {
@@ -20,7 +21,7 @@ export default function FeaturedNewsCard({ article }) {
           <img
             alt={article.title}
             className="w-full h-full object-cover"
-            src={article.cover_image_url}
+            src={resolveMediaUrl(article.cover_image_url)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
