@@ -138,6 +138,10 @@ export default function TopNav() {
                   </div>
                   <button
                     type="button"
+                    onClick={() => {
+                      setNotificationsOpen(false);
+                      navigate('/settings', { state: { activeTab: 'notifications' } });
+                    }}
                     className="w-full py-3 text-sm font-bold text-zinc-600 hover:text-primary hover:bg-zinc-50 transition-all border-t border-zinc-100"
                   >
                     View All Notifications

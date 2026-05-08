@@ -1,11 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import MaterialIcon from '../../components/common/MaterialIcon';
 import { useAuth } from '../../hooks/useAuth';
 import { authService } from '../../services/authService';
 
 export default function SettingsPage() {
   const { user, setUser } = useAuth();
-  const [activeTab, setActiveTab] = useState('security');
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'security');
+
+  useEffect(() => {
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
+  }, [location.state]);
 
   // Password State
   const [passwordData, setPasswordData] = useState({
@@ -24,6 +32,29 @@ export default function SettingsPage() {
   });
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileMessage, setProfileMessage] = useState({ type: '', text: '' });
+
+  // Notifications State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
+  const mockNotifications = useMemo(() => Array.from({ length: 24 }).map((_, i) => ({
+    id: i + 1,
+    title: i % 3 === 0 ? 'New Policy Update' : i % 3 === 1 ? 'Happy Birthday!' : 'System Maintenance',
+    description: i % 3 === 0 
+      ? 'The Hybrid Work Policy has been updated for Q3. Please review the changes.'
+      : i % 3 === 1
+      ? 'Join us in wishing Sarah a very happy birthday today!'
+      : 'Scheduled system maintenance will occur this weekend from 12 AM to 4 AM EST.',
+    time: `${i + 1} hours ago`,
+    icon: i % 3 === 0 ? 'article' : i % 3 === 1 ? 'celebration' : 'build',
+    color: i % 3 === 0 ? 'blue' : i % 3 === 1 ? 'green' : 'amber',
+  })), []);
+
+  const totalPages = Math.ceil(mockNotifications.length / itemsPerPage);
+  const currentNotifications = mockNotifications.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   // Populate profile data when user changes
   useEffect(() => {
@@ -131,7 +162,14 @@ export default function SettingsPage() {
                   <MaterialIcon name="person" className="text-[20px]" />
                   <span>Profile Info</span>
                 </button>
-                <button className="w-full flex items-center gap-3 p-3 text-zinc-400 font-medium rounded-xl cursor-not-allowed">
+                <button
+                  onClick={() => setActiveTab('notifications')}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold transition-all ${
+                    activeTab === 'notifications'
+                      ? 'bg-zinc-50 text-primary shadow-sm ring-1 ring-zinc-200/50'
+                      : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'
+                  }`}
+                >
                   <MaterialIcon name="notifications" className="text-[20px]" />
                   <span>Notifications</span>
                 </button>
@@ -328,6 +366,63 @@ export default function SettingsPage() {
                       </button>
                     </div>
                   </form>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'notifications' && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm overflow-hidden flex flex-col h-full min-h-[500px]">
+                  <div className="px-8 py-6 border-b border-zinc-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
+                        <MaterialIcon name="notifications_active" />
+                      </div>
+                      <div>
+                        <h2 className="font-bold text-zinc-900">Notifications History</h2>
+                        <p className="text-xs text-zinc-500 font-medium">Review your past alerts and updates</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto">
+                    {currentNotifications.map((notif) => (
+                      <div key={notif.id} className="p-6 border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors group">
+                        <div className="flex gap-4">
+                          <div className={`w-12 h-12 rounded-full bg-${notif.color}-50 flex items-center justify-center shrink-0 group-hover:bg-${notif.color}-100 transition-colors`}>
+                            <MaterialIcon name={notif.icon} className={`text-${notif.color}-600 text-[24px]`} />
+                          </div>
+                          <div>
+                            <p className="text-base font-bold text-zinc-900">{notif.title}</p>
+                            <p className="text-sm text-zinc-500 mt-1 leading-relaxed">{notif.description}</p>
+                            <span className="text-xs text-zinc-400 font-semibold mt-2 block">{notif.time}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="px-8 py-4 border-t border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
+                    <span className="text-sm font-semibold text-zinc-500">
+                      Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, mockNotifications.length)} of {mockNotifications.length}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="w-10 h-10 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      >
+                        <MaterialIcon name="chevron_left" />
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="w-10 h-10 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      >
+                        <MaterialIcon name="chevron_right" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
