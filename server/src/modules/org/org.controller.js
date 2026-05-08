@@ -21,6 +21,12 @@ const getSubtree = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: subtree });
 });
 
+const getMyVertical = catchAsync(async (req, res) => {
+  const peopleLimit = Number(req.query.peopleLimit) || undefined;
+  const result = await orgService.getMyVertical(req.user.user_id, { peopleLimit });
+  res.status(200).json({ status: 'success', data: result });
+});
+
 // Office Locations
 const createOfficeLocation = catchAsync(async (req, res) => {
   const office = await orgService.createOfficeLocation(req.body, req.user.user_id);
@@ -71,6 +77,7 @@ const deleteDepartment = catchAsync(async (req, res) => {
 
 module.exports = {
   getTree,
+  getMyVertical,
   getById,
   getChildren,
   getSubtree,

@@ -1,13 +1,13 @@
 import React from 'react';
-import MaterialIcon from '../../components/common/MaterialIcon';
+import Skeleton from '../../components/common/Skeleton';
 import LatestAnnouncements from './LatestAnnouncements';
-
-const ELENA_AVATAR =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuCIl5VKJKj_27mYKCFtcZ5hucYOzUqslHYclQhePulGLJ9UXUeXzkjcQLaOr8D2gi8B-yLzNhGGiGGA8L-nR-n2urUw8cD14aYlm23qxIRn7NHboAifhEnuRXzDh9I1e7ftAyEJCT5tUSlZ9I8hFc9h9VFOUOyR3E06G2JlCPqAVwY3gqFQ8LkYtetDRg7BfqgsDVGG33GJfmfsiBwxoE7XOdMWmFB41vK1x57K18Ao8VmA_gztvxuxxD6NMmSEwKZfKts0dGyK62g';
-const MARCUS_AVATAR =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuCJraYN2dJROdkNaGo4I2AUkmkYY8lTTiJYxTRovytcmq5kkQm30bDTg-hFiJ8M9IhvTFYdfhjbpANcGCPIPiME3Ic_Up_MW3NqzQlD7QTkcOntps4CvxGSrsOefJsoaYi1NouD_bh5Hbw3SUE8jWMJNSh15TAbGA6IQM0TomEeGLlbBQABDnZgf2LMdmP4wewdCga1xQXwVkLeJE1ShlhxAceP5IEBGDqjCe8AHIxnYWRA6nHz1oCCUKmsyX9ltSncxo7M6tDLnE4';
+import { useMyVertical } from '../../hooks/useMyVertical';
 
 export default function MainContentGrid() {
+  const { data, loading } = useMyVertical();
+  const people = data?.people || [];
+  const departments = data?.departments || [];
+
   return (
     <section className="grid grid-cols-1 lg:grid-cols-12 gap-gutter items-stretch">
       {/* Left column */}
@@ -34,34 +34,26 @@ export default function MainContentGrid() {
         <div className="bg-white border border-zinc-100 rounded-3xl p-unit-lg shadow-sm flex flex-col">
           <h3 className="font-h3 text-h3 mb-6">Key Contacts</h3>
           <div className="space-y-3">
-            <ContactRow
-              avatar={<img alt="Elena Rodriguez" className="w-10 h-10 rounded-full object-cover" src={ELENA_AVATAR} />}
-              name="Elena Rodriguez"
-              role="Director of Strategy"
-            />
-            <ContactRow
-              avatar={<img alt="Marcus Chen" className="w-10 h-10 rounded-full object-cover" src={MARCUS_AVATAR} />}
-              name="Marcus Chen"
-              role="Lead Project Manager"
-            />
-            <ContactRow
-              avatar={
-                <div className="w-10 h-10 rounded-full bg-primary-container/40 flex items-center justify-center text-primary font-bold text-xs">
-                  JM
-                </div>
-              }
-              name="Jordan Miller"
-              role="HR Manager"
-            />
-            <ContactRow
-              avatar={
-                <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center text-secondary font-bold text-xs">
-                  SJ
-                </div>
-              }
-              name="Sarah Jenkins"
-              role="Operations Lead"
-            />
+            {loading ? (
+              <>
+                <Skeleton className="h-16 rounded-2xl" />
+                <Skeleton className="h-16 rounded-2xl" />
+                <Skeleton className="h-16 rounded-2xl" />
+              </>
+            ) : people.length === 0 ? (
+              <p className="text-body-sm text-on-surface-variant px-3 py-4">
+                No colleagues in your vertical yet.
+              </p>
+            ) : (
+              people.map((p, idx) => (
+                <ContactRow
+                  key={p.userId}
+                  avatar={renderAvatar(p, idx)}
+                  name={`${p.firstName} ${p.lastName}`.trim()}
+                  role={p.jobTitle || p.departmentName || ''}
+                />
+              ))
+            )}
           </div>
         </div>
 
@@ -73,13 +65,60 @@ export default function MainContentGrid() {
             organization.
           </p>
           <div className="space-y-3">
-            <OrgRow name="Marketing" count="12 Team Members" />
-            <OrgRow name="Product" count="24 Team Members" />
-            <OrgRow name="Operations" count="8 Team Members" />
+            {loading ? (
+              <>
+                <Skeleton className="h-16 rounded-2xl" />
+                <Skeleton className="h-16 rounded-2xl" />
+                <Skeleton className="h-16 rounded-2xl" />
+              </>
+            ) : departments.length === 0 ? (
+              <p className="text-body-sm text-on-surface-variant px-3 py-4">
+                No departments in your vertical yet.
+              </p>
+            ) : (
+              departments.map((d) => (
+                <OrgRow
+                  key={d.id}
+                  name={d.name}
+                  count={`${d.memberCount} Team Member${d.memberCount === 1 ? '' : 's'}`}
+                />
+              ))
+            )}
           </div>
         </div>
       </div>
     </section>
+  );
+}
+
+function getInitials(firstName, lastName) {
+  const f = (firstName || '').trim().charAt(0).toUpperCase();
+  const l = (lastName || '').trim().charAt(0).toUpperCase();
+  return `${f}${l}` || '?';
+}
+
+const AVATAR_VARIANTS = [
+  'bg-primary-container/40 text-primary',
+  'bg-secondary-container text-secondary',
+];
+
+function renderAvatar(person, idx) {
+  if (person.avatarUrl) {
+    return (
+      <img
+        alt={`${person.firstName} ${person.lastName}`.trim()}
+        className="w-10 h-10 rounded-full object-cover"
+        src={person.avatarUrl}
+      />
+    );
+  }
+  const variant = AVATAR_VARIANTS[idx % AVATAR_VARIANTS.length];
+  return (
+    <div
+      className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${variant}`}
+    >
+      {getInitials(person.firstName, person.lastName)}
+    </div>
   );
 }
 
@@ -109,9 +148,9 @@ function ContactRow({ avatar, name, role }) {
   return (
     <div className="flex items-center gap-3 p-3 bg-zinc-50 rounded-2xl">
       {avatar}
-      <div className="flex-grow">
-        <p className="font-semibold text-body-sm">{name}</p>
-        <p className="text-[11px] text-on-surface-variant">{role}</p>
+      <div className="flex-grow min-w-0">
+        <p className="font-semibold text-body-sm truncate">{name}</p>
+        <p className="text-[11px] text-on-surface-variant truncate">{role}</p>
       </div>
       <button
         type="button"

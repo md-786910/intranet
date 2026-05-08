@@ -294,6 +294,133 @@ const orgService = {
     await cacheService.deletePattern('bh:org:tree:*');
     return { message: 'Department deleted successfully' };
   },
+
+  // ── My Vertical (logged-in user's organisational neighbourhood) ──
+
+  async getMyVertical(userId, { peopleLimit = 8 } = {}) {
+    const { Op, fn, col, literal } = require('sequelize');
+    const {
+      DepartmentMembership, Department, Vertical, OfficeLocation,
+      UserAccount, PersonProfile,
+    } = require('../../database/models');
+
+    const empty = { vertical: null, departments: [], people: [] };
+
+    const membership = await DepartmentMembership.findOne({
+      where: { user_id: userId },
+      order: [['is_primary', 'DESC'], ['joined_at', 'ASC']],
+      include: [{
+        model: Department,
+        as: 'department',
+        where: { deleted_at: null },
+        required: true,
+        include: [{
+          model: Vertical,
+          as: 'vertical',
+          where: { deleted_at: null },
+          required: true,
+          include: [{
+            model: OfficeLocation,
+            as: 'officeLocation',
+            where: { deleted_at: null },
+            required: false,
+          }],
+        }],
+      }],
+    });
+
+    if (!membership || !membership.department || !membership.department.vertical) {
+      return empty;
+    }
+
+    const vertical = membership.department.vertical;
+
+    const siblingDepartments = await Department.findAll({
+      where: { vertical_id: vertical.id, deleted_at: null },
+      order: [['sort_order', 'ASC'], ['name', 'ASC']],
+    });
+
+    const deptIds = siblingDepartments.map((d) => d.id);
+
+    let countsByDept = new Map();
+    if (deptIds.length > 0) {
+      const countRows = await DepartmentMembership.findAll({
+        attributes: [
+          'department_id',
+          [fn('COUNT', literal('DISTINCT "DepartmentMembership"."user_id"')), 'count'],
+        ],
+        where: { department_id: deptIds },
+        include: [{
+          model: UserAccount,
+          as: 'user',
+          attributes: [],
+          required: true,
+          where: { deleted_at: null, status: 'ACTIVE' },
+        }],
+        group: ['DepartmentMembership.department_id'],
+        raw: true,
+      });
+      countsByDept = new Map(countRows.map((r) => [Number(r.department_id), Number(r.count)]));
+    }
+
+    const departments = siblingDepartments.map((d) => ({
+      id: d.id,
+      name: d.name,
+      memberCount: countsByDept.get(Number(d.id)) || 0,
+    }));
+
+    const peopleRows = deptIds.length === 0 ? [] : await UserAccount.findAll({
+      where: {
+        deleted_at: null,
+        status: 'ACTIVE',
+        user_id: { [Op.ne]: userId },
+      },
+      include: [
+        { model: PersonProfile, as: 'profile', required: false },
+        {
+          model: DepartmentMembership,
+          as: 'departmentMemberships',
+          required: true,
+          where: { department_id: deptIds },
+          include: [{
+            model: Department,
+            as: 'department',
+            attributes: ['id', 'name'],
+            required: true,
+          }],
+        },
+      ],
+      order: [['first_name', 'ASC'], ['last_name', 'ASC']],
+      subQuery: false,
+      limit: peopleLimit,
+    });
+
+    const people = peopleRows.map((u) => {
+      const primary = (u.departmentMemberships || []).find((m) => m.is_primary)
+        || (u.departmentMemberships || [])[0];
+      return {
+        userId: u.user_id,
+        firstName: u.first_name,
+        lastName: u.last_name,
+        jobTitle: u.profile?.job_title || null,
+        avatarUrl: u.avatar_url || null,
+        departmentName: primary?.department?.name || null,
+      };
+    });
+
+    return {
+      vertical: {
+        id: vertical.id,
+        name: vertical.name,
+        officeLocation: vertical.officeLocation ? {
+          id: vertical.officeLocation.id,
+          name: vertical.officeLocation.name,
+        } : null,
+      },
+      departments,
+      people,
+    };
+  },
 };
 
 module.exports = orgService;

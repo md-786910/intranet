@@ -13,6 +13,8 @@ router.use(authenticate);
 
 router.get('/tree', controller.getTree);
 
+router.get('/my-vertical', controller.getMyVertical);
+
 router.get('/:id', validate(schemas.idParam), controller.getById);
 
 router.get('/:id/children', validate(schemas.idParam), controller.getChildren);
