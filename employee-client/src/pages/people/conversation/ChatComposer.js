@@ -55,11 +55,19 @@ export default function ChatComposer({ onSend, onTyping }) {
   };
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Stub for file upload
-      toast.success(`Attached ${file.name}`);
-      onSend(`[Attached File: ${file.name}]`);
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      files.forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (file.type.startsWith('image/')) {
+            onSend(`[IMAGE:${file.name}]${event.target.result}`);
+          } else {
+            onSend(`[FILE:${file.name}]${event.target.result}`);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
       e.target.value = null; // reset
     }
   };
@@ -81,12 +89,14 @@ export default function ChatComposer({ onSend, onTyping }) {
       {/* Hidden file inputs */}
       <input
         type="file"
+        multiple
         ref={fileInputRef}
         className="hidden"
         onChange={handleFileChange}
       />
       <input
         type="file"
+        multiple
         accept="image/*"
         ref={imageInputRef}
         className="hidden"

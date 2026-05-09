@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import AttachmentChip from './AttachmentChip';
 
 function formatMessageTime(dateStr) {
@@ -16,6 +16,8 @@ function getInitials(firstName, lastName) {
 }
 
 export default function MessageBubble({ message, contact, myInitials = 'JD', myUserId }) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   if (!message) return null;
   const isMe = message.senderId === myUserId;
   const time = formatMessageTime(message.createdAt);
@@ -33,6 +35,75 @@ export default function MessageBubble({ message, contact, myInitials = 'JD', myU
     );
   }
 
+  // Parse custom image and file formats
+  let contentEl = null;
+  if (message.content && message.content.startsWith('[IMAGE:')) {
+    const splitIndex = message.content.indexOf(']');
+    if (splitIndex > -1) {
+      const fileName = message.content.substring(7, splitIndex);
+      const base64Data = message.content.substring(splitIndex + 1);
+
+      contentEl = (
+        <div className="flex flex-col gap-1">
+          <img
+            src={base64Data}
+            alt={fileName}
+            className="w-48 h-48 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity border border-outline-variant/30"
+            onClick={() => setIsModalOpen(true)}
+          />
+          {isModalOpen && (
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+              onClick={() => setIsModalOpen(false)}
+            >
+              <img
+                src={base64Data}
+                alt={fileName}
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              />
+              <button
+                type="button"
+                className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                onClick={() => setIsModalOpen(false)}
+              >
+                <span className="material-symbols-rounded">close</span>
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+  } else if (message.content && message.content.startsWith('[FILE:')) {
+    const splitIndex = message.content.indexOf(']');
+    if (splitIndex > -1) {
+      const fileName = message.content.substring(6, splitIndex);
+      const base64Data = message.content.substring(splitIndex + 1);
+      
+      const parts = fileName.split('.');
+      const ext = parts.length > 1 ? parts[parts.length - 1].toUpperCase() : 'FILE';
+      
+      const attachmentData = {
+        name: fileName,
+        kind: `${ext} Document`,
+        url: base64Data, // Data URL acts as href
+      };
+
+      contentEl = (
+        <div className="mt-1">
+          <AttachmentChip attachment={attachmentData} />
+        </div>
+      );
+    }
+  }
+
+  if (!contentEl) {
+    contentEl = (
+      <p className={`text-body-sm break-words whitespace-pre-wrap ${isMe ? 'text-white' : 'text-on-surface'}`}>
+        {message.content}
+      </p>
+    );
+  }
+
   if (isMe) {
     return (
       <div className="flex items-end gap-unit-sm max-w-[80%] self-end flex-row-reverse">
@@ -40,7 +111,7 @@ export default function MessageBubble({ message, contact, myInitials = 'JD', myU
           <span className="text-on-primary-container text-xs font-bold">{myInitials}</span>
         </div>
         <div className="bg-primary text-white p-unit-md rounded-2xl rounded-br-none shadow-sm">
-          {message.content && <p className="text-body-sm">{message.content}</p>}
+          {contentEl}
           {time && (
             <span className="text-[10px] text-blue-100 mt-1 block text-right">{time}</span>
           )}
@@ -69,7 +140,7 @@ export default function MessageBubble({ message, contact, myInitials = 'JD', myU
         </div>
       )}
       <div className="bg-white border border-outline-variant p-unit-md rounded-2xl rounded-bl-none shadow-sm">
-        {message.content && <p className="text-body-sm text-on-surface">{message.content}</p>}
+        {contentEl}
         {time && (
           <span className="text-[10px] text-outline mt-1 block text-right">{time}</span>
         )}
