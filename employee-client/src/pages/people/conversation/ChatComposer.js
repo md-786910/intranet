@@ -1,13 +1,17 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import EmojiPicker from 'emoji-picker-react';
 import MaterialIcon from '../../../components/common/MaterialIcon';
 import { useToast } from '../../../hooks/useToast';
 
 export default function ChatComposer({ onSend, onTyping }) {
   const [text, setText] = useState('');
+  const [showEmoji, setShowEmoji] = useState(false);
   const toast = useToast();
   const typingRef = useRef(false);
   const typingTimer = useRef(null);
-  const stub = (label) => () => toast.info(`${label} coming soon.`);
+  const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const emojiPickerRef = useRef(null);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -15,6 +19,7 @@ export default function ChatComposer({ onSend, onTyping }) {
     if (!value) return;
     onSend(value);
     setText('');
+    setShowEmoji(false);
 
     // Stop typing indicator
     if (onTyping) {
@@ -45,24 +50,72 @@ export default function ChatComposer({ onSend, onTyping }) {
     [onTyping],
   );
 
+  const onEmojiClick = (emojiObject) => {
+    setText((prev) => prev + emojiObject.emoji);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Stub for file upload
+      toast.success(`Attached ${file.name}`);
+      onSend(`[Attached File: ${file.name}]`);
+      e.target.value = null; // reset
+    }
+  };
+
+  // Close emoji picker on outside click
+  useEffect(() => {
+    if (!showEmoji) return;
+    const handler = (e) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
+        setShowEmoji(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showEmoji]);
+
   return (
-    <footer className="p-unit-lg bg-white border-t border-outline-variant shrink-0">
+    <footer className="p-unit-lg bg-white border-t border-outline-variant shrink-0 relative">
+      {/* Hidden file inputs */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        onChange={handleFileChange}
+      />
+      <input
+        type="file"
+        accept="image/*"
+        ref={imageInputRef}
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      {/* Emoji Picker Popup */}
+      {showEmoji && (
+        <div className="absolute bottom-full left-4 mb-2 z-50 shadow-lg rounded-lg" ref={emojiPickerRef}>
+          <EmojiPicker onEmojiClick={onEmojiClick} />
+        </div>
+      )}
+
       <form
         onSubmit={handleSubmit}
         className="flex items-center gap-unit-md bg-surface-container-low border border-outline-variant rounded-xl p-unit-sm shadow-inner"
       >
-        <div className="flex gap-1">
+        <div className="flex gap-1 relative">
           <button
             type="button"
-            onClick={stub('Attachments')}
+            onClick={() => fileInputRef.current?.click()}
             className="p-2 hover:bg-white rounded-lg transition-all text-outline"
             aria-label="Add attachment"
           >
-            <MaterialIcon name="add_circle" />
+            <MaterialIcon name="attach_file" />
           </button>
           <button
             type="button"
-            onClick={stub('Image upload')}
+            onClick={() => imageInputRef.current?.click()}
             className="p-2 hover:bg-white rounded-lg transition-all text-outline"
             aria-label="Add image"
           >
@@ -70,7 +123,7 @@ export default function ChatComposer({ onSend, onTyping }) {
           </button>
           <button
             type="button"
-            onClick={stub('Emoji picker')}
+            onClick={() => setShowEmoji((prev) => !prev)}
             className="p-2 hover:bg-white rounded-lg transition-all text-outline"
             aria-label="Emoji"
           >

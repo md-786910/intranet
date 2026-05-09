@@ -8,6 +8,7 @@
     "autoprefixer": "^10.4.19",
     "axios": "^1.7.4",
     "dompurify": "^3.4.2",
+    "emoji-picker-react": "^4.19.1",
     "postcss": "^8.4.41",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

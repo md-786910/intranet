@@ -8,10 +8,10 @@ function groupMessagesByDate(messages) {
   let currentDate = null;
 
   messages.forEach((m) => {
-    const msgDate = new Date(m.createdAt).toDateString();
+    const msgDate = new Date(m.createdAt || new Date()).toDateString();
     if (msgDate !== currentDate) {
       currentDate = msgDate;
-      groups.push({ type: 'divider', label: formatDateLabel(m.createdAt) });
+      groups.push({ type: 'divider', label: formatDateLabel(m.createdAt || new Date()) });
     }
     groups.push({ type: 'message', data: m });
   });
@@ -20,7 +20,10 @@ function groupMessagesByDate(messages) {
 }
 
 function formatDateLabel(dateStr) {
+  if (!dateStr) return 'Unknown Date';
   const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return 'Invalid Date';
+
   const now = new Date();
   const today = now.toDateString();
   const yesterday = new Date(now.getTime() - 86400000).toDateString();
@@ -51,20 +54,21 @@ export default function MessageList({
 
   // Auto-scroll to bottom on new messages (but not on load-more)
   useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
     if (isInitialLoad.current && messages.length > 0) {
-      bottomRef.current?.scrollIntoView();
+      container.scrollTop = container.scrollHeight;
       isInitialLoad.current = false;
       return;
     }
 
     // Check if user is near the bottom
-    const container = containerRef.current;
-    if (!container) return;
     const { scrollTop, scrollHeight, clientHeight } = container;
     const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
 
     if (isNearBottom) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     }
   }, [messages]);
 

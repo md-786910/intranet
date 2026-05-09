@@ -56,21 +56,6 @@ export default function ChatHeader({ contact, isOnline, onBack }) {
         <button
           type="button"
           className="p-2 hover:bg-surface-container-low rounded-lg transition-colors text-outline"
-          aria-label="Video call"
-        >
-          <MaterialIcon name="videocam" />
-        </button>
-        <button
-          type="button"
-          className="p-2 hover:bg-surface-container-low rounded-lg transition-colors text-outline"
-          aria-label="Voice call"
-        >
-          <MaterialIcon name="call" />
-        </button>
-        <span className="w-px h-6 bg-outline-variant mx-1" aria-hidden="true" />
-        <button
-          type="button"
-          className="p-2 hover:bg-surface-container-low rounded-lg transition-colors text-outline"
           aria-label="More"
         >
           <MaterialIcon name="more_vert" />
