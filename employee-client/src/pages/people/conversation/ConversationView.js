@@ -20,19 +20,15 @@ export default function ConversationView({
   const [page, setPage] = useState(1);
   const [typingUserId, setTypingUserId] = useState(null);
   const typingTimeout = useRef(null);
-  const prevConvId = useRef(null);
 
   // Load messages when conversation changes
   useEffect(() => {
     if (!conversation?.id) return;
 
-    // Only reload if conversation actually changed
-    if (prevConvId.current === conversation.id) return;
-    prevConvId.current = conversation.id;
-
     let cancelled = false;
     setLoading(true);
     setMessages([]);
+    setHasMore(false);
     setPage(1);
 
     chatService
@@ -54,25 +50,36 @@ export default function ConversationView({
     // Mark as read
     chatService.markAsRead(conversation.id).catch(() => {});
 
-    // Join conversation room for typing indicators
-    if (socket) {
-      socket.emit('chat:join', { conversationId: conversation.id });
-    }
-
     return () => {
       cancelled = true;
-      if (socket && conversation?.id) {
-        socket.emit('chat:leave', { conversationId: conversation.id });
-      }
+    };
+  }, [conversation?.id]);
+
+  // Join conversation room for typing indicators
+  useEffect(() => {
+    if (!socket || !conversation?.id) return undefined;
+
+    socket.emit('chat:join', { conversationId: conversation.id });
+
+    return () => {
+      socket.emit('chat:leave', { conversationId: conversation.id });
     };
   }, [conversation?.id, socket]);
+
+  useEffect(() => {
+    if (conversation?.id) return;
+    setMessages([]);
+    setHasMore(false);
+    setPage(1);
+    setLoading(false);
+  }, [conversation?.id]);
 
   // Listen for incoming messages
   useEffect(() => {
     if (!socket || !conversation?.id) return;
 
     const handleReceive = ({ conversationId, message }) => {
-      if (conversationId !== conversation.id) return;
+      if (String(conversationId) !== String(conversation.id)) return;
       setMessages((prev) => {
         // Avoid duplicates
         if (prev.find((m) => m.id === message.id)) return prev;
@@ -84,7 +91,7 @@ export default function ConversationView({
     };
 
     const handleTyping = ({ conversationId, userId, isTyping }) => {
-      if (conversationId !== conversation.id) return;
+      if (String(conversationId) !== String(conversation.id)) return;
       if (userId === myUserId) return;
       if (isTyping) {
         setTypingUserId(userId);
@@ -124,7 +131,11 @@ export default function ConversationView({
       });
       const data = res.data?.data;
       const older = data?.messages || [];
-      setMessages((prev) => [...older, ...prev]);
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const newOlder = older.filter((m) => !existingIds.has(m.id));
+        return [...newOlder, ...prev];
+      });
       setHasMore(data?.pagination?.hasNextPage || false);
       setPage(nextPage);
     } catch {

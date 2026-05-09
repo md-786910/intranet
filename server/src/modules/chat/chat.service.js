@@ -234,7 +234,7 @@ const chatService = {
         as: 'sender',
         attributes: ['user_id', 'first_name', 'last_name', 'avatar_url'],
       }],
-      order: [['created_at', 'DESC']],
+      order: [['created_at', 'DESC'], ['id', 'DESC']],
       limit,
       offset,
     });
