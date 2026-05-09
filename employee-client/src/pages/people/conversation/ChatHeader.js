@@ -1,8 +1,17 @@
 import React from 'react';
 import MaterialIcon from '../../../components/common/MaterialIcon';
 
-export default function ChatHeader({ contact, onBack }) {
+function getInitials(firstName, lastName) {
+  const f = (firstName || '').charAt(0).toUpperCase();
+  const l = (lastName || '').charAt(0).toUpperCase();
+  return `${f}${l}` || '?';
+}
+
+export default function ChatHeader({ contact, isOnline, onBack }) {
   if (!contact) return null;
+
+  const name = `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 'Unknown';
+
   return (
     <header className="px-unit-lg py-unit-md border-b border-outline-variant bg-white flex justify-between items-center z-10 shrink-0">
       <div className="flex items-center gap-unit-sm min-w-0">
@@ -16,16 +25,24 @@ export default function ChatHeader({ contact, onBack }) {
             <MaterialIcon name="arrow_back" />
           </button>
         )}
-        <img
-          className="w-10 h-10 rounded-full object-cover border border-outline-variant shrink-0"
-          alt={contact.name}
-          src={contact.avatarUrl}
-        />
+        {contact.avatarUrl ? (
+          <img
+            className="w-10 h-10 rounded-full object-cover border border-outline-variant shrink-0"
+            alt={name}
+            src={contact.avatarUrl}
+          />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-primary-container/40 flex items-center justify-center shrink-0 border border-outline-variant">
+            <span className="text-primary text-xs font-bold">
+              {getInitials(contact.firstName, contact.lastName)}
+            </span>
+          </div>
+        )}
         <div className="min-w-0">
           <h3 className="font-h3 text-body-md font-bold text-on-surface truncate">
-            {contact.name}
+            {name}
           </h3>
-          {contact.online ? (
+          {isOnline ? (
             <p className="text-[12px] text-green-600 flex items-center gap-1">
               <span className="w-1.5 h-1.5 bg-green-600 rounded-full" aria-hidden="true" />
               Online

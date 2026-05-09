@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import MaterialIcon from '../../../components/common/MaterialIcon';
 import { useToast } from '../../../hooks/useToast';
 
-export default function ChatComposer({ onSend }) {
+export default function ChatComposer({ onSend, onTyping }) {
   const [text, setText] = useState('');
   const toast = useToast();
+  const typingRef = useRef(false);
+  const typingTimer = useRef(null);
   const stub = (label) => () => toast.info(`${label} coming soon.`);
 
   const handleSubmit = (e) => {
@@ -13,7 +15,35 @@ export default function ChatComposer({ onSend }) {
     if (!value) return;
     onSend(value);
     setText('');
+
+    // Stop typing indicator
+    if (onTyping) {
+      onTyping(false);
+      typingRef.current = false;
+    }
   };
+
+  const handleChange = useCallback(
+    (e) => {
+      setText(e.target.value);
+
+      if (!onTyping) return;
+
+      // Emit typing start
+      if (!typingRef.current) {
+        typingRef.current = true;
+        onTyping(true);
+      }
+
+      // Reset the stop-typing timer
+      clearTimeout(typingTimer.current);
+      typingTimer.current = setTimeout(() => {
+        typingRef.current = false;
+        onTyping(false);
+      }, 2000);
+    },
+    [onTyping],
+  );
 
   return (
     <footer className="p-unit-lg bg-white border-t border-outline-variant shrink-0">
@@ -50,7 +80,7 @@ export default function ChatComposer({ onSend }) {
         <input
           type="text"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={handleChange}
           placeholder="Type a message..."
           className="flex-grow bg-transparent border-none focus:ring-0 font-body-sm outline-none placeholder:text-outline"
         />

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import Skeleton from '../../components/common/Skeleton';
 import LatestAnnouncements from './LatestAnnouncements';
 import RecentDocuments from './RecentDocuments';
@@ -6,8 +7,13 @@ import { useMyVertical } from '../../hooks/useMyVertical';
 
 export default function MainContentGrid() {
   const { data, loading } = useMyVertical();
+  const navigate = useNavigate();
   const people = data?.people || [];
   const departments = data?.departments || [];
+
+  const handleChat = (userId) => {
+    navigate(`/people?userId=${userId}`);
+  };
 
   return (
     <section className="grid grid-cols-1 lg:grid-cols-12 gap-gutter items-stretch">
@@ -41,6 +47,7 @@ export default function MainContentGrid() {
                   avatar={renderAvatar(p, idx)}
                   name={`${p.firstName} ${p.lastName}`.trim()}
                   role={p.jobTitle || p.departmentName || ''}
+                  onChat={() => handleChat(p.userId)}
                 />
               ))
             )}
@@ -112,7 +119,7 @@ function renderAvatar(person, idx) {
   );
 }
 
-function ContactRow({ avatar, name, role }) {
+function ContactRow({ avatar, name, role, onChat }) {
   return (
     <div className="flex items-center gap-3 p-3 bg-zinc-50 rounded-2xl">
       {avatar}
@@ -122,6 +129,7 @@ function ContactRow({ avatar, name, role }) {
       </div>
       <button
         type="button"
+        onClick={onChat}
         className="px-3 py-1 bg-white border border-zinc-200 rounded-lg text-xs font-bold text-primary hover:bg-primary-container/20 transition-colors"
       >
         Chat

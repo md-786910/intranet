@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { SocketProvider } from './contexts/SocketContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import EmployeeLayout from './components/layout/EmployeeLayout';
 import LoginPage from './pages/auth/LoginPage';
@@ -32,7 +33,9 @@ export default function App() {
             <Route
               element={
                 <ProtectedRoute>
-                  <EmployeeLayout />
+                  <SocketProvider>
+                    <EmployeeLayout />
+                  </SocketProvider>
                 </ProtectedRoute>
               }
             >

@@ -1,8 +1,11 @@
 require("./config/env");
 
+const http = require("http");
 const app = require("./app");
 const { sequelize } = require("./database/models");
 const { createRedisClient } = require("./config/redis");
+const { initSocketIO } = require("./config/socket");
+const { startChatWorker, shutdownBullMQ } = require("./config/bullmq");
 const logger = require("./config/logger");
 
 const PORT = process.env.PORT || 8000;
@@ -32,8 +35,15 @@ const start = async () => {
     process.exit(1);
   }
 
+  // Create HTTP server and attach Socket.IO
+  const server = http.createServer(app);
+  initSocketIO(server);
+
+  // Start BullMQ chat worker
+  startChatWorker();
+
   // Start HTTP server
-  const server = app.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "0.0.0.0", () => {
     logger.info(
       `Server running on port ${PORT} [${process.env.NODE_ENV || "development"}]`,
     );
@@ -45,6 +55,9 @@ const start = async () => {
 
     server.close(async () => {
       try {
+        // Close BullMQ worker and queue
+        await shutdownBullMQ();
+
         await sequelize.close();
         logger.info("PostgreSQL connection closed");
 

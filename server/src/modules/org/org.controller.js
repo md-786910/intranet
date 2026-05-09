@@ -27,6 +27,11 @@ const getMyVertical = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
+const getMyHierarchy = catchAsync(async (req, res) => {
+  const result = await orgService.getMyHierarchy(req.user.user_id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
 // Office Locations
 const createOfficeLocation = catchAsync(async (req, res) => {
   const office = await orgService.createOfficeLocation(req.body, req.user.user_id);
@@ -78,6 +83,7 @@ const deleteDepartment = catchAsync(async (req, res) => {
 module.exports = {
   getTree,
   getMyVertical,
+  getMyHierarchy,
   getById,
   getChildren,
   getSubtree,

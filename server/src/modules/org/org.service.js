@@ -421,6 +421,72 @@ const orgService = {
       people,
     };
   },
+
+  /**
+   * Returns the user's full org hierarchy chain:
+   *   Organisation -> OfficeLocation -> Vertical -> Department(s)
+   *
+   * The chain follows the user's primary department membership. All
+   * department memberships are returned (with isPrimary flag) so that
+   * users with multiple memberships under the same vertical see them all.
+   */
+  async getMyHierarchy(userId) {
+    const {
+      DepartmentMembership, Department, Vertical, OfficeLocation, Organisation,
+    } = require('../../database/models');
+
+    const memberships = await DepartmentMembership.findAll({
+      where: { user_id: userId },
+      order: [['is_primary', 'DESC'], ['joined_at', 'ASC']],
+      include: [{
+        model: Department,
+        as: 'department',
+        where: { deleted_at: null },
+        required: true,
+        include: [{
+          model: Vertical,
+          as: 'vertical',
+          where: { deleted_at: null },
+          required: true,
+          include: [{
+            model: OfficeLocation,
+            as: 'officeLocation',
+            where: { deleted_at: null },
+            required: false,
+            include: [{
+              model: Organisation,
+              as: 'organisation',
+              required: false,
+            }],
+          }],
+        }],
+      }],
+    });
+
+    if (!memberships || memberships.length === 0) {
+      return { organisation: null, officeLocation: null, vertical: null, departments: [] };
+    }
+
+    const primary = memberships[0];
+    const vertical = primary.department.vertical;
+    const officeLocation = vertical.officeLocation || null;
+    const organisation = officeLocation?.organisation || null;
+
+    const departments = memberships.map((m) => ({
+      id: m.department.id,
+      name: m.department.name,
+      isPrimary: !!m.is_primary,
+      verticalId: m.department.vertical?.id || null,
+      verticalName: m.department.vertical?.name || null,
+    }));
+
+    return {
+      organisation: organisation ? { id: organisation.id, name: organisation.name } : null,
+      officeLocation: officeLocation ? { id: officeLocation.id, name: officeLocation.name } : null,
+      vertical: { id: vertical.id, name: vertical.name },
+      departments,
+    };
+  },
 };
 
 module.exports = orgService;

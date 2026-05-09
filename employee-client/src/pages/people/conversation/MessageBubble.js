@@ -1,13 +1,27 @@
 import React from 'react';
 import AttachmentChip from './AttachmentChip';
 
-export default function MessageBubble({ message, contact, myInitials = 'JD' }) {
-  if (!message) return null;
-  const isMe = message.from === 'me';
+function formatMessageTime(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
 
-  // Attachment-only message renders just the chip, with the same alignment
-  // logic but no bubble or avatar (matches the design's "ml-10" indent).
-  if (message.attachment && !message.text) {
+function getInitials(firstName, lastName) {
+  const f = (firstName || '').charAt(0).toUpperCase();
+  const l = (lastName || '').charAt(0).toUpperCase();
+  return `${f}${l}` || '?';
+}
+
+export default function MessageBubble({ message, contact, myInitials = 'JD', myUserId }) {
+  if (!message) return null;
+  const isMe = message.senderId === myUserId;
+  const time = formatMessageTime(message.createdAt);
+
+  // Attachment-only message
+  if (message.attachment && !message.content) {
     return (
       <div
         className={`flex items-end gap-unit-sm max-w-[80%] ${
@@ -26,32 +40,38 @@ export default function MessageBubble({ message, contact, myInitials = 'JD' }) {
           <span className="text-on-primary-container text-xs font-bold">{myInitials}</span>
         </div>
         <div className="bg-primary text-white p-unit-md rounded-2xl rounded-br-none shadow-sm">
-          {message.text && <p className="text-body-sm">{message.text}</p>}
-          {message.at && (
-            <span className="text-[10px] text-blue-100 mt-1 block text-right">
-              {message.at}
-            </span>
+          {message.content && <p className="text-body-sm">{message.content}</p>}
+          {time && (
+            <span className="text-[10px] text-blue-100 mt-1 block text-right">{time}</span>
           )}
         </div>
       </div>
     );
   }
 
+  const senderAvatar = contact?.avatarUrl || message.sender?.avatarUrl;
+  const senderInitials = getInitials(
+    contact?.firstName || message.sender?.firstName,
+    contact?.lastName || message.sender?.lastName,
+  );
+
   return (
     <div className="flex items-end gap-unit-sm max-w-[80%]">
-      {contact?.avatarUrl ? (
+      {senderAvatar ? (
         <img
           className="w-8 h-8 rounded-full shrink-0 border border-outline-variant"
-          alt={contact.name}
-          src={contact.avatarUrl}
+          alt={senderInitials}
+          src={senderAvatar}
         />
       ) : (
-        <div className="w-8 h-8 shrink-0" aria-hidden="true" />
+        <div className="w-8 h-8 rounded-full bg-primary-container/40 shrink-0 flex items-center justify-center border border-outline-variant">
+          <span className="text-primary text-[10px] font-bold">{senderInitials}</span>
+        </div>
       )}
       <div className="bg-white border border-outline-variant p-unit-md rounded-2xl rounded-bl-none shadow-sm">
-        {message.text && <p className="text-body-sm text-on-surface">{message.text}</p>}
-        {message.at && (
-          <span className="text-[10px] text-outline mt-1 block text-right">{message.at}</span>
+        {message.content && <p className="text-body-sm text-on-surface">{message.content}</p>}
+        {time && (
+          <span className="text-[10px] text-outline mt-1 block text-right">{time}</span>
         )}
       </div>
     </div>
