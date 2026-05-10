@@ -7,6 +7,7 @@ import ConfirmDialog from '../../components/common/ConfirmDialog';
 import AudienceTree from '../../components/common/AudienceTree';
 import RichTextView from '../../components/common/RichTextView';
 import PriorityBadge from '../../components/common/PriorityBadge';
+import NewsEngagementPanel from './detail/NewsEngagementPanel';
 import { newsService } from '../../services/newsService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
@@ -167,6 +168,10 @@ export default function NewsDetailPage() {
           <h3 className="text-sm font-medium text-gray-700 mb-3">Audience</h3>
           <AudienceTree rules={article.audienceRules || []} />
         </div>
+      </div>
+
+      <div className="mt-6">
+        <NewsEngagementPanel articleId={article.news_item_id} />
       </div>
 
       <ConfirmDialog

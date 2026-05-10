@@ -12,6 +12,7 @@ import InvitationAcceptPage from './pages/auth/InvitationAcceptPage';
 import HomePage from './pages/home/HomePage';
 import NewsListPage from './pages/news/NewsListPage';
 import NewsDetailPage from './pages/news/NewsDetailPage';
+import PublicNewsSharePage from './pages/news/PublicNewsSharePage';
 import PeoplePage from './pages/people/PeoplePage';
 import DocumentsPage from './pages/documents/DocumentsPage';
 import CategoryDetailPage from './pages/documents/CategoryDetailPage';
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
             <Route path="/invitations/:token" element={<InvitationAcceptPage />} />
+            <Route path="/s/:token" element={<PublicNewsSharePage />} />
 
             <Route
               element={

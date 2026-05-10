@@ -57,6 +57,31 @@ const getUserAudienceScopeKeys = (userId) => audienceService.getUserAudienceScop
 const articleMatchesAudience = (article, userAudienceScopeKeys) =>
   audienceService.matchesAudience(article.audienceRules, userAudienceScopeKeys);
 
+// Decorates an array of NewsItem instances with engagement counts and the
+// caller's own `my_like` / `my_save` flags. Mutates each article via
+// `setDataValue` so the server's JSON serialiser picks them up alongside the
+// existing fields.
+async function enrichWithEngagement(articles, userId) {
+  if (!Array.isArray(articles) || articles.length === 0) return;
+  const newsEngagement = require('./news-engagement.service');
+  const ids = articles.map((a) => Number(a.news_item_id));
+  const [counts, mine] = await Promise.all([
+    newsEngagement.getCountsForArticles(ids),
+    userId ? newsEngagement.getMyInteractions(ids, userId) : Promise.resolve(new Map()),
+  ]);
+  articles.forEach((article) => {
+    const id = Number(article.news_item_id);
+    const c = counts.get(id) || { like_count: 0, comment_count: 0, share_count: 0, save_count: 0 };
+    article.setDataValue('like_count', c.like_count);
+    article.setDataValue('comment_count', c.comment_count);
+    article.setDataValue('share_count', c.share_count);
+    article.setDataValue('save_count', c.save_count);
+    const m = mine.get(id) || { my_like: false, my_save: false };
+    article.setDataValue('my_like', m.my_like);
+    article.setDataValue('my_save', m.my_save);
+  });
+}
+
 function buildAdminNewsOrder(sequelize, trash) {
   return [
     [
@@ -154,6 +179,8 @@ const newsService = {
         statusCounts.ALL += c;
       });
 
+      await enrichWithEngagement(rows, userId);
+
       return {
         articles: rows,
         pagination: buildPagination(page, limit, count),
@@ -170,6 +197,8 @@ const newsService = {
 
     const visibleArticles = rows.filter((article) => articleMatchesAudience(article, userAudienceScopeKeys));
     const paginatedArticles = visibleArticles.slice(offset, offset + limit);
+
+    await enrichWithEngagement(paginatedArticles, userId);
 
     return {
       articles: paginatedArticles,
@@ -229,6 +258,8 @@ const newsService = {
     // existing fields.
     const relatedNews = await loadRelatedNews(article.related_news_ids || []);
     article.setDataValue('relatedNews', relatedNews);
+
+    await enrichWithEngagement([article], userId);
 
     return article;
   },

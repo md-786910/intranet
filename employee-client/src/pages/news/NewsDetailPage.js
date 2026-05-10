@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import MaterialIcon from '../../components/common/MaterialIcon';
 import { Link, useParams } from 'react-router-dom';
 import { newsService } from '../../services/newsService';
@@ -8,16 +8,21 @@ import ArticleHeader from './detail/ArticleHeader';
 import ArticleHero from './detail/ArticleHero';
 import ArticleBody from './detail/ArticleBody';
 import EngagementBar from './detail/EngagementBar';
+import CommentsSection from './detail/CommentsSection';
 import TakeActionCard from './detail/TakeActionCard';
 import RelatedArticles from './detail/RelatedArticles';
 import { getErrorMessage } from '../../utils/errorUtils';
 import { formatRelative } from '../../theme/dateFormat';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function NewsDetailPage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [commentCount, setCommentCount] = useState(0);
+  const commentsRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,7 +33,9 @@ export default function NewsDetailPage() {
       .getArticle(id)
       .then((res) => {
         if (cancelled) return;
-        setArticle(res.data?.data || res.data);
+        const a = res.data?.data || res.data;
+        setArticle(a);
+        if (a?.comment_count != null) setCommentCount(a.comment_count);
       })
       .catch((err) => {
         if (!cancelled)
@@ -87,7 +94,23 @@ export default function NewsDetailPage() {
                     Posted {formatRelative(article.published_at || article.created_at)}
                   </p>
                 )}
-                <EngagementBar likes={0} comments={0} />
+                <EngagementBar
+                  articleId={article.news_item_id}
+                  title={article.title}
+                  initialLiked={!!article.my_like}
+                  initialSaved={!!article.my_save}
+                  initialLikeCount={article.like_count || 0}
+                  initialCommentCount={commentCount}
+                  initialShareCount={article.share_count || 0}
+                  onCommentClick={() => commentsRef.current?.focusComposer()}
+                />
+
+                <CommentsSection
+                  ref={commentsRef}
+                  articleId={article.news_item_id}
+                  currentUserId={user?.user_id}
+                  onCountChange={setCommentCount}
+                />
               </article>
 
               <aside className="md:col-span-12 lg:col-span-4">

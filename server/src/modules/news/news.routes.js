@@ -1,10 +1,12 @@
 const router = require('express').Router();
 const controller = require('./news.controller');
+const engagement = require('./news-engagement.controller');
 const authenticate = require('../../middleware/authenticate');
 const authorize = require('../../middleware/authorize');
 const validate = require('../../middleware/validate');
 const auditLogger = require('../../middleware/auditLogger');
 const schemas = require('./news.validation');
+const engagementSchemas = require('./news-engagement.validation');
 
 router.use(authenticate);
 
@@ -19,5 +21,27 @@ router.post('/:id/archive', authorize('NEWS', 'EDIT'), auditLogger('NEWS_ARCHIVE
 router.post('/:id/audience', authorize('NEWS', 'EDIT'), validate(schemas.setAudienceSchema), controller.setAudience);
 router.post('/bulk-restore', authorize('NEWS', 'DELETE'), validate(schemas.bulkIdsSchema), auditLogger('NEWS_RESTORED'), controller.bulkRestore);
 router.post('/bulk-purge', authorize('NEWS', 'DELETE'), validate(schemas.bulkIdsSchema), auditLogger('NEWS_PURGED'), controller.bulkPurge);
+
+// ── Engagement (employee) ──
+// Authentication only at the route layer. The service's `assertVisibleAndLoad`
+// is the gate: it loads the article, runs the audience-rule match, and throws
+// 404 if the caller can't see it. The strict-scope `authorize` middleware
+// would mis-fire here (it falls back to ORGANISATION scope for non-GET, which
+// regular employees don't hold).
+router.post('/:id/like', validate(engagementSchemas.idParam), engagement.like);
+router.delete('/:id/like', validate(engagementSchemas.idParam), engagement.unlike);
+router.get('/:id/comments', validate(engagementSchemas.listCommentsSchema), engagement.listComments);
+router.post('/:id/comments', validate(engagementSchemas.createCommentSchema), engagement.addComment);
+router.delete('/:id/comments/:commentId', validate(engagementSchemas.newsAndCommentParams), engagement.deleteComment);
+router.post('/:id/share', validate(engagementSchemas.shareSchema), engagement.share);
+router.post('/:id/save', validate(engagementSchemas.idParam), engagement.save);
+router.delete('/:id/save', validate(engagementSchemas.idParam), engagement.unsave);
+
+// ── Engagement (admin) — NEWS:EDIT ──
+router.get('/:id/engagement', authorize('NEWS', 'EDIT'), validate(engagementSchemas.idParam), engagement.adminEngagementSummary);
+router.get('/:id/engagement/likes', authorize('NEWS', 'EDIT'), validate(engagementSchemas.adminListSchema), engagement.adminListLikes);
+router.get('/:id/engagement/comments', authorize('NEWS', 'EDIT'), validate(engagementSchemas.adminListSchema), engagement.adminListComments);
+router.get('/:id/engagement/shares', authorize('NEWS', 'EDIT'), validate(engagementSchemas.adminListSchema), engagement.adminListShares);
+router.delete('/:id/engagement/comments/:commentId', authorize('NEWS', 'EDIT'), validate(engagementSchemas.newsAndCommentParams), engagement.adminModerateComment);
 
 module.exports = router;
