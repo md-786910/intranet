@@ -11,6 +11,7 @@ export function SocketProvider({ children }) {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(new Set());
+  const [lastSeenUpdates, setLastSeenUpdates] = useState({});
   const socketRef = useRef(null);
   const reconnectAttempt = useRef(0);
 
@@ -73,12 +74,15 @@ export function SocketProvider({ children }) {
       });
     });
 
-    newSocket.on('presence:offline', ({ userId }) => {
+    newSocket.on('presence:offline', ({ userId, lastSeenAt }) => {
       setOnlineUsers((prev) => {
         const next = new Set(prev);
         next.delete(userId);
         return next;
       });
+      if (lastSeenAt) {
+        setLastSeenUpdates((prev) => ({ ...prev, [userId]: lastSeenAt }));
+      }
     });
 
     socketRef.current = newSocket;
@@ -113,6 +117,7 @@ export function SocketProvider({ children }) {
     socket,
     isConnected,
     onlineUsers,
+    lastSeenUpdates,
     connect,
     disconnect,
   };

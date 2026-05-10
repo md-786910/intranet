@@ -45,6 +45,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
+    last_seen_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
     password_changed_at: {
       type: DataTypes.DATE,
       allowNull: true,

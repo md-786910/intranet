@@ -1,5 +1,25 @@
 import React from 'react';
 import MaterialIcon from '../../../components/common/MaterialIcon';
+import { useSocket } from '../../../contexts/SocketContext';
+
+function formatLastSeen(dateString) {
+  if (!dateString) return 'Offline';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now - date) / 1000);
+
+  if (diffInSeconds < 60) return 'Last seen just now';
+  if (diffInSeconds < 3600) {
+    const mins = Math.floor(diffInSeconds / 60);
+    return `Last seen ${mins} ${mins === 1 ? 'minute' : 'minutes'} ago`;
+  }
+  if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `Last seen ${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  }
+  if (diffInSeconds < 172800) return 'Last seen yesterday';
+  return `Last seen on ${date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
 
 function getInitials(firstName, lastName) {
   const f = (firstName || '').charAt(0).toUpperCase();
@@ -8,9 +28,11 @@ function getInitials(firstName, lastName) {
 }
 
 export default function ChatHeader({ contact, isOnline, onBack }) {
+  const { lastSeenUpdates } = useSocket();
   if (!contact) return null;
 
   const name = `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 'Unknown';
+  const lastSeenAt = lastSeenUpdates[contact.userId] || contact.lastSeenAt;
 
   return (
     <header className="px-unit-lg py-unit-md border-b border-outline-variant bg-white flex justify-between items-center z-10 shrink-0">
@@ -48,7 +70,9 @@ export default function ChatHeader({ contact, isOnline, onBack }) {
               Online
             </p>
           ) : (
-            <p className="text-[12px] text-outline">Offline</p>
+            <p className="text-[12px] text-outline italic">
+              {formatLastSeen(lastSeenAt)}
+            </p>
           )}
         </div>
       </div>

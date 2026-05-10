@@ -143,7 +143,7 @@ const chatService = {
           include: [{
             model: UserAccount,
             as: 'user',
-            attributes: ['user_id', 'first_name', 'last_name', 'avatar_url', 'status'],
+            attributes: ['user_id', 'first_name', 'last_name', 'avatar_url', 'status', 'last_seen_at'],
             include: [{
               model: PersonProfile,
               as: 'profile',
@@ -189,6 +189,7 @@ const chatService = {
             lastName: other.last_name,
             avatarUrl: other.avatar_url,
             jobTitle: other.profile?.job_title || null,
+            lastSeenAt: other.last_seen_at,
           } : null,
           lastMessage: lastMessage ? {
             id: lastMessage.id,
@@ -331,6 +332,7 @@ const chatService = {
 
     const users = await UserAccount.findAll({
       where: userWhere,
+      attributes: ['user_id', 'first_name', 'last_name', 'email', 'avatar_url', 'last_seen_at'],
       include: [
         { model: PersonProfile, as: 'profile', required: false },
         {
@@ -361,6 +363,7 @@ const chatService = {
         email: u.email,
         avatarUrl: u.avatar_url || null,
         jobTitle: u.profile?.job_title || null,
+        lastSeenAt: u.last_seen_at,
         departmentName: primary?.department?.name || null,
       };
     });
@@ -410,7 +413,7 @@ const chatService = {
       include: [{
         model: UserAccount,
         as: 'user',
-        attributes: ['user_id', 'first_name', 'last_name', 'avatar_url', 'status'],
+        attributes: ['user_id', 'first_name', 'last_name', 'avatar_url', 'status', 'last_seen_at'],
         include: [{
           model: PersonProfile,
           as: 'profile',
@@ -436,6 +439,7 @@ const chatService = {
         lastName: other.last_name,
         avatarUrl: other.avatar_url,
         jobTitle: other.profile?.job_title || null,
+        lastSeenAt: other.last_seen_at,
       } : null,
       lastMessage: lastMessage ? {
         id: lastMessage.id,

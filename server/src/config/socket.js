@@ -24,6 +24,16 @@ const initSocketIO = (httpServer) => {
     transports: ['websocket', 'polling'],
   });
 
+  // Clear online users on startup
+  try {
+    const redis = getRedisClient();
+    redis.del(ONLINE_SET_KEY).catch((err) => {
+      logger.error('Failed to clear online users on startup:', err.message);
+    });
+  } catch (err) {
+    logger.error('Redis client not available for startup cleanup:', err.message);
+  }
+
   // ── Authentication middleware ──
   io.use(socketAuth);
 
@@ -165,7 +175,16 @@ const initSocketIO = (httpServer) => {
         if (sockets.length === 0) {
           const redis = getRedisClient();
           await redis.srem(ONLINE_SET_KEY, String(userId));
-          socket.broadcast.emit('presence:offline', { userId });
+
+          const lastSeenAt = new Date();
+          // Update database
+          const { UserAccount } = require('../database/models');
+          await UserAccount.update(
+            { last_seen_at: lastSeenAt },
+            { where: { user_id: userId } }
+          ).catch(err => logger.error(`Failed to update last_seen_at for user ${userId}:`, err.message));
+
+          socket.broadcast.emit('presence:offline', { userId, lastSeenAt });
         }
       } catch (err) {
         logger.error(`Failed to clear online presence for user ${userId}:`, err.message);
