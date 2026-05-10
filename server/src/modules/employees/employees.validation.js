@@ -28,6 +28,9 @@ const createEmployeeSchema = {
     phone: Joi.string().trim().max(20).optional().allow('', null),
     job_title: Joi.string().trim().max(255).optional().allow('', null),
     employee_id: Joi.string().trim().max(50).optional().allow('', null),
+    role_category_id: idPattern.required()
+      .messages({ 'any.required': 'Role category is required' }),
+    reports_to_user_id: idPattern.optional().allow(null),
     department_ids: Joi.array().items(idPattern).min(1).required()
       .messages({ 'array.min': 'At least one department is required' }),
     primary_department_id: idPattern.optional(),
@@ -43,6 +46,8 @@ const updateEmployeeSchema = {
     status: Joi.string().valid('ACTIVE', 'INACTIVE', 'LOCKED').optional(),
     job_title: Joi.string().trim().max(255).optional().allow('', null),
     employee_id: Joi.string().trim().max(50).optional().allow('', null),
+    role_category_id: idPattern.optional().allow(null),
+    reports_to_user_id: idPattern.optional().allow(null),
     department_ids: Joi.array().items(idPattern).min(1).optional(),
     primary_department_id: idPattern.optional(),
   }),

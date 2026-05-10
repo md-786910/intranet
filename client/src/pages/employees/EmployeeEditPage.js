@@ -5,7 +5,9 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
+import ReportsToPicker from './ReportsToPicker';
 import { employeeService } from '../../services/employeeService';
+import { roleCategoryService } from '../../services/roleCategoryService';
 import { useToast } from '../../hooks/useToast';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
 
@@ -38,11 +40,19 @@ export default function EmployeeEditPage() {
   const [employee, setEmployee] = useState(null);
   const [form, setForm] = useState({
     first_name: '', last_name: '', phone: '', status: 'ACTIVE',
-    job_title: '', employee_id: '',
+    job_title: '', employee_id: '', role_category_id: '',
   });
+  const [reportsTo, setReportsTo] = useState(null);
+  const [roleCategories, setRoleCategories] = useState([]);
   const [scopes, setScopes] = useState([]);
   const [primaryDeptId, setPrimaryDeptId] = useState('');
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    roleCategoryService.list()
+      .then((res) => setRoleCategories(res.data?.data || []))
+      .catch(() => addToast('Failed to load role categories', 'error'));
+  }, [addToast]);
 
   const fetchEmployee = useCallback(() => {
     setLoading(true);
@@ -54,7 +64,18 @@ export default function EmployeeEditPage() {
           first_name: e.first_name || '', last_name: e.last_name || '',
           phone: e.phone || '', status: e.status === 'INVITED' ? 'INVITED' : (e.status || 'ACTIVE'),
           job_title: e.profile?.job_title || '', employee_id: e.profile?.employee_id || '',
+          role_category_id: e.profile?.role_category_id ? String(e.profile.role_category_id) : '',
         });
+        if (e.profile?.manager) {
+          setReportsTo({
+            user_id: e.profile.manager.user_id,
+            first_name: e.profile.manager.first_name,
+            last_name: e.profile.manager.last_name,
+            email: e.profile.manager.email,
+          });
+        } else {
+          setReportsTo(null);
+        }
         setScopes(buildScopesFromMemberships(e.departmentMemberships));
         const primary = (e.departmentMemberships || []).find((membership) => membership.is_primary);
         if (primary) setPrimaryDeptId(String(primary.department?.id || primary.department_id));
@@ -64,6 +85,11 @@ export default function EmployeeEditPage() {
   }, [id, addToast]);
 
   useEffect(() => { fetchEmployee(); }, [fetchEmployee]);
+
+  const roleCategoryOptions = useMemo(
+    () => roleCategories.map((c) => ({ value: String(c.id), label: c.name })),
+    [roleCategories],
+  );
 
   const departmentScopes = useMemo(
     () => scopes.filter((scope) => scope.scope_type === 'DEPARTMENT'),
@@ -115,6 +141,8 @@ export default function EmployeeEditPage() {
         phone: form.phone || undefined,
         job_title: form.job_title || undefined,
         employee_id: form.employee_id || undefined,
+        role_category_id: form.role_category_id ? Number(form.role_category_id) : null,
+        reports_to_user_id: reportsTo ? reportsTo.user_id : null,
         department_ids,
         primary_department_id: primaryDeptId ? Number(primaryDeptId) : department_ids[0],
       };
@@ -159,6 +187,24 @@ export default function EmployeeEditPage() {
             <div className="grid grid-cols-2 gap-4">
               <Input label="Job Title" name="job_title" value={form.job_title} onChange={handleChange} />
               <Input label="Employee ID" name="employee_id" value={form.employee_id} onChange={handleChange} />
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <Select
+                label="Role Category"
+                name="role_category_id"
+                value={form.role_category_id}
+                onChange={handleChange}
+                options={roleCategoryOptions}
+                placeholder="Select a category"
+                error={errors.role_category_id}
+              />
+              <ReportsToPicker
+                label="Reporting To"
+                value={reportsTo}
+                onChange={setReportsTo}
+                excludeUserId={Number(id)}
+                helpText="Search by name or email."
+              />
             </div>
           </div>
 

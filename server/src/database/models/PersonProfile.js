@@ -38,6 +38,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(64),
       allowNull: true,
     },
+    role_category_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    reports_to_user_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
   }, {
     tableName: 'person_profile',
   });
@@ -46,6 +54,14 @@ module.exports = (sequelize, DataTypes) => {
     PersonProfile.belongsTo(models.UserAccount, {
       foreignKey: 'user_id',
       as: 'user',
+    });
+    PersonProfile.belongsTo(models.RoleCategory, {
+      foreignKey: 'role_category_id',
+      as: 'roleCategory',
+    });
+    PersonProfile.belongsTo(models.UserAccount, {
+      foreignKey: 'reports_to_user_id',
+      as: 'manager',
     });
   };
 

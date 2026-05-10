@@ -65,6 +65,7 @@ const menuItems = [
     defaultOpen: false,
     children: [
       { label: 'Manage Employees', path: '/employees', icon: ICONS.employees, module: 'ADMIN', action: 'MANAGE_EMPLOYEES' },
+      { label: 'Role Categories', path: '/role-categories', icon: ICONS.roles, module: 'ADMIN', action: 'MANAGE_EMPLOYEES' },
     ],
   },
   {

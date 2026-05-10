@@ -32,6 +32,11 @@ const getMyHierarchy = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
+const getPeopleTree = catchAsync(async (req, res) => {
+  const result = await orgService.getPeopleTree();
+  res.status(200).json({ status: 'success', data: result });
+});
+
 // Office Locations
 const createOfficeLocation = catchAsync(async (req, res) => {
   const office = await orgService.createOfficeLocation(req.body, req.user.user_id);
@@ -84,6 +89,7 @@ module.exports = {
   getTree,
   getMyVertical,
   getMyHierarchy,
+  getPeopleTree,
   getById,
   getChildren,
   getSubtree,

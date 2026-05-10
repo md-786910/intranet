@@ -487,6 +487,68 @@ const orgService = {
       departments,
     };
   },
+
+  async getPeopleTree() {
+    const { QueryTypes } = require('sequelize');
+    const { sequelize, Organisation } = require('../../database/models');
+
+    const organisation = await Organisation.findOne({
+      attributes: ['id', 'name'],
+      order: [['id', 'ASC']],
+    });
+
+    const rows = await sequelize.query(
+      `SELECT
+         ua.user_id,
+         ua.first_name,
+         ua.last_name,
+         ua.email,
+         ua.avatar_url,
+         pp.job_title,
+         pp.reports_to_user_id,
+         rc.id      AS role_category_id,
+         rc.name    AS role_category_name,
+         rc.rank    AS role_category_rank,
+         d.id       AS department_id,
+         d.name     AS department_name
+       FROM user_account ua
+       LEFT JOIN person_profile pp ON pp.user_id = ua.user_id
+       LEFT JOIN role_category   rc ON rc.id     = pp.role_category_id
+       LEFT JOIN LATERAL (
+         SELECT dm.department_id
+         FROM department_membership dm
+         WHERE dm.user_id = ua.user_id
+         ORDER BY dm.is_primary DESC, dm.joined_at ASC NULLS LAST, dm.membership_id ASC
+         LIMIT 1
+       ) primary_dm ON TRUE
+       LEFT JOIN department d ON d.id = primary_dm.department_id
+       WHERE ua.deleted_at IS NULL
+         AND EXISTS (SELECT 1 FROM employee_invitation ei WHERE ei.user_id = ua.user_id)
+       ORDER BY rc.rank NULLS LAST, ua.first_name, ua.last_name`,
+      { type: QueryTypes.SELECT },
+    );
+
+    const nodes = rows.map((r) => ({
+      user_id: r.user_id,
+      first_name: r.first_name,
+      last_name: r.last_name,
+      email: r.email,
+      avatar_url: r.avatar_url,
+      job_title: r.job_title,
+      reports_to_user_id: r.reports_to_user_id,
+      role_category: r.role_category_id
+        ? { id: r.role_category_id, name: r.role_category_name, rank: r.role_category_rank }
+        : null,
+      primary_department: r.department_id
+        ? { id: r.department_id, name: r.department_name }
+        : null,
+    }));
+
+    return {
+      organisation: organisation ? { id: organisation.id, name: organisation.name } : null,
+      nodes,
+    };
+  },
 };
 
 module.exports = orgService;

@@ -13,6 +13,8 @@ router.use(authenticate);
 
 router.get('/tree', controller.getTree);
 
+router.get('/people-tree', controller.getPeopleTree);
+
 router.get('/my-vertical', controller.getMyVertical);
 
 router.get('/my-hierarchy', controller.getMyHierarchy);

@@ -135,6 +135,11 @@ export default function EmployeesListPage() {
     { key: 'job', label: 'Job Title', render: (row) => (
       <span className="text-gray-500">{row.profile?.job_title || '—'}</span>
     )},
+    { key: 'role_category', label: 'Role', render: (row) => (
+      row.profile?.roleCategory?.name
+        ? <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-primary-50 text-primary-700 text-xs font-medium">{row.profile.roleCategory.name}</span>
+        : <span className="text-gray-400">—</span>
+    )},
     { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
     { key: 'created_at', label: 'Created', render: (row) => (
       <span className="text-gray-500">{formatDate(row.created_at)}</span>

@@ -63,6 +63,45 @@ async function validateDepartmentsExist(departmentIds) {
   }
 }
 
+async function validateRoleCategoryExists(roleCategoryId) {
+  if (!roleCategoryId) return;
+  const { RoleCategory } = require('../../database/models');
+  const row = await RoleCategory.findOne({
+    where: { id: roleCategoryId, tenant_id: DEFAULT_TENANT_ID },
+    attributes: ['id'],
+  });
+  if (!row) throw ApiError.badRequest('role_category_id is invalid');
+}
+
+async function validateReportsTo({ reportsToUserId, selfUserId }) {
+  if (!reportsToUserId) return;
+  if (selfUserId && Number(reportsToUserId) === Number(selfUserId)) {
+    throw ApiError.badRequest('An employee cannot report to themselves');
+  }
+  const { UserAccount, PersonProfile } = require('../../database/models');
+  const manager = await UserAccount.findOne({
+    where: { user_id: reportsToUserId },
+    attributes: ['user_id'],
+  });
+  if (!manager) throw ApiError.badRequest('reports_to_user_id is invalid');
+
+  // Cycle detection: walking up the manager chain from `reportsToUserId`
+  // must never land back on `selfUserId`. Capped to 50 hops as a safety net.
+  if (!selfUserId) return;
+  let cursor = reportsToUserId;
+  for (let i = 0; i < 50 && cursor; i += 1) {
+    if (Number(cursor) === Number(selfUserId)) {
+      throw ApiError.badRequest('Reporting chain would create a cycle');
+    }
+    // eslint-disable-next-line no-await-in-loop
+    const profile = await PersonProfile.findOne({
+      where: { user_id: cursor },
+      attributes: ['reports_to_user_id'],
+    });
+    cursor = profile ? profile.reports_to_user_id : null;
+  }
+}
+
 async function createInvitationForUser({ user, invitedByUserId, transaction }) {
   const { EmployeeInvitation } = require('../../database/models');
   const rawToken = generateToken(32);
@@ -142,7 +181,7 @@ const employeesService = {
     const { QueryTypes } = require('sequelize');
     const {
       UserAccount, PersonProfile, DepartmentMembership, Department, Vertical, OfficeLocation,
-      sequelize,
+      RoleCategory, sequelize,
     } = require('../../database/models');
     const { page, limit, offset } = parsePagination(query);
 
@@ -207,7 +246,15 @@ const employeesService = {
     const rows = await UserAccount.findAll({
       where: { user_id: userIds },
       include: [
-        { model: PersonProfile, as: 'profile', required: false },
+        {
+          model: PersonProfile,
+          as: 'profile',
+          required: false,
+          include: [
+            { model: RoleCategory, as: 'roleCategory', attributes: ['id', 'name', 'rank'], required: false },
+            { model: UserAccount, as: 'manager', attributes: ['user_id', 'first_name', 'last_name'], required: false },
+          ],
+        },
         {
           model: DepartmentMembership,
           as: 'departmentMemberships',
@@ -240,7 +287,7 @@ const employeesService = {
 
   async getById(id) {
     const models = require('../../database/models');
-    const { UserAccount, PersonProfile, DepartmentMembership, UserRoleAssignment, Role, EmployeeInvitation } = models;
+    const { UserAccount, PersonProfile, DepartmentMembership, UserRoleAssignment, Role, RoleCategory, EmployeeInvitation } = models;
 
     const invitationMarker = await EmployeeInvitation.findOne({
       where: { user_id: id },
@@ -250,7 +297,15 @@ const employeesService = {
 
     const user = await UserAccount.findByPk(id, {
       include: [
-        { model: PersonProfile, as: 'profile', required: false },
+        {
+          model: PersonProfile,
+          as: 'profile',
+          required: false,
+          include: [
+            { model: RoleCategory, as: 'roleCategory', attributes: ['id', 'name', 'rank'], required: false },
+            { model: UserAccount, as: 'manager', attributes: ['user_id', 'first_name', 'last_name', 'email'], required: false },
+          ],
+        },
         {
           model: DepartmentMembership,
           as: 'departmentMemberships',
@@ -297,6 +352,8 @@ const employeesService = {
       if (existing) throw ApiError.conflict('Email already in use');
 
       await validateDepartmentsExist(data.department_ids);
+      await validateRoleCategoryExists(data.role_category_id);
+      await validateReportsTo({ reportsToUserId: data.reports_to_user_id, selfUserId: null });
 
       // Placeholder password — user sets their own via invitation acceptance
       const rounds = parseInt(process.env.BCRYPT_ROUNDS, 10) || 12;
@@ -315,6 +372,8 @@ const employeesService = {
         user_id: user.user_id,
         job_title: data.job_title || null,
         employee_id: data.employee_id || null,
+        role_category_id: data.role_category_id || null,
+        reports_to_user_id: data.reports_to_user_id || null,
       }, { transaction });
 
       await syncDepartmentMemberships({
@@ -383,11 +442,21 @@ const employeesService = {
       });
       await user.save({ transaction });
 
-      if (data.job_title !== undefined || data.employee_id !== undefined) {
-        let profile = await PersonProfile.findOne({ where: { user_id: id }, transaction });
+      const profileFieldsTouched = ['job_title', 'employee_id', 'role_category_id', 'reports_to_user_id']
+        .some((key) => data[key] !== undefined);
+      if (profileFieldsTouched) {
+        if (data.role_category_id !== undefined && data.role_category_id !== null) {
+          await validateRoleCategoryExists(data.role_category_id);
+        }
+        if (data.reports_to_user_id !== undefined && data.reports_to_user_id !== null) {
+          await validateReportsTo({ reportsToUserId: data.reports_to_user_id, selfUserId: id });
+        }
+        const profile = await PersonProfile.findOne({ where: { user_id: id }, transaction });
         const patch = {};
         if (data.job_title !== undefined) patch.job_title = data.job_title || null;
         if (data.employee_id !== undefined) patch.employee_id = data.employee_id || null;
+        if (data.role_category_id !== undefined) patch.role_category_id = data.role_category_id || null;
+        if (data.reports_to_user_id !== undefined) patch.reports_to_user_id = data.reports_to_user_id || null;
         if (profile) {
           await profile.update(patch, { transaction });
         } else {
