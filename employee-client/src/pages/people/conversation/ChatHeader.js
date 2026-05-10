@@ -18,6 +18,10 @@ function formatLastSeen(dateString) {
     return `Last seen ${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
   }
   if (diffInSeconds < 172800) return 'Last seen yesterday';
+  if (diffInSeconds < 604800) {
+    const days = Math.floor(diffInSeconds / 86400);
+    return `Last seen ${days} ${days === 1 ? 'day' : 'days'} ago`;
+  }
   return `Last seen on ${date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 

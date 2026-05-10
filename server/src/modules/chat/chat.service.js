@@ -102,7 +102,7 @@ const chatService = {
       senderId: message.sender_id,
       content: message.content,
       messageType: message.message_type,
-      createdAt: message.created_at,
+      createdAt: message.createdAt,
       sender: sender ? {
         userId: sender.user_id,
         firstName: sender.first_name,
@@ -195,10 +195,10 @@ const chatService = {
             id: lastMessage.id,
             content: lastMessage.content,
             senderId: lastMessage.sender_id,
-            createdAt: lastMessage.created_at,
+            createdAt: lastMessage.createdAt,
           } : null,
           unreadCount,
-          updatedAt: lastMessage?.created_at || null,
+          updatedAt: lastMessage?.createdAt || null,
         };
       }),
     );
@@ -246,7 +246,7 @@ const chatService = {
       senderId: m.sender_id,
       content: m.content,
       messageType: m.message_type,
-      createdAt: m.created_at,
+      createdAt: m.createdAt,
       sender: m.sender ? {
         userId: m.sender.user_id,
         firstName: m.sender.first_name,
@@ -445,10 +445,10 @@ const chatService = {
         id: lastMessage.id,
         content: lastMessage.content,
         senderId: lastMessage.sender_id,
-        createdAt: lastMessage.created_at,
+        createdAt: lastMessage.createdAt,
       } : null,
       unreadCount: 0,
-      updatedAt: lastMessage?.created_at || conversation.created_at,
+      updatedAt: lastMessage?.createdAt || conversation.createdAt,
     };
   },
 };

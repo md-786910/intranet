@@ -8,10 +8,10 @@ function groupMessagesByDate(messages) {
   let currentDate = null;
 
   messages.forEach((m) => {
-    const msgDate = new Date(m.createdAt || new Date()).toDateString();
+    const msgDate = new Date(m.createdAt).toDateString();
     if (msgDate !== currentDate) {
       currentDate = msgDate;
-      groups.push({ type: 'divider', label: formatDateLabel(m.createdAt || new Date()) });
+      groups.push({ type: 'divider', label: formatDateLabel(m.createdAt) });
     }
     groups.push({ type: 'message', data: m });
   });
@@ -25,15 +25,23 @@ function formatDateLabel(dateStr) {
   if (isNaN(date.getTime())) return 'Invalid Date';
 
   const now = new Date();
-  const today = now.toDateString();
-  const yesterday = new Date(now.getTime() - 86400000).toDateString();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  
+  const diffTime = today - targetDate;
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-  if (date.toDateString() === today) return 'Today';
-  if (date.toDateString() === yesterday) return 'Yesterday';
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays > 1 && diffDays < 7) {
+    return `${diffDays} days ago`;
+  }
+
   return date.toLocaleDateString(undefined, {
-    weekday: 'long',
+    weekday: 'short',
     month: 'short',
     day: 'numeric',
+    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
   });
 }
 
