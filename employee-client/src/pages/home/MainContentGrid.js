@@ -10,6 +10,20 @@ export default function MainContentGrid() {
   const navigate = useNavigate();
   const people = data?.people || [];
   const departments = data?.departments || [];
+  const peopleScope = data?.peopleScope || 'DEPARTMENT';
+  const peopleEmptyMessage = {
+    DEPARTMENT: 'No colleagues in your department yet.',
+    VERTICAL: 'No colleagues in your vertical yet.',
+    OFFICE_LOCATION: 'No colleagues in your office yet.',
+    ORGANISATION: 'No colleagues yet.',
+  }[peopleScope] || 'No colleagues yet.';
+  const departmentsScope = data?.departmentsScope || 'VERTICAL';
+  const departmentsEmptyMessage = {
+    DEPARTMENT: 'You’re not in a department yet.',
+    VERTICAL: 'No departments in your vertical yet.',
+    OFFICE_LOCATION: 'No departments in your office yet.',
+    ORGANISATION: 'No departments yet.',
+  }[departmentsScope] || 'No departments yet.';
 
   const handleChat = (userId) => {
     navigate(`/people?userId=${userId}`);
@@ -38,7 +52,7 @@ export default function MainContentGrid() {
               </>
             ) : people.length === 0 ? (
               <p className="text-body-sm text-on-surface-variant px-3 py-4">
-                No colleagues in your vertical yet.
+                {peopleEmptyMessage}
               </p>
             ) : (
               people.map((p, idx) => (
@@ -61,7 +75,9 @@ export default function MainContentGrid() {
             Explore our leadership hierarchy and team structures across the
             organization.
           </p>
-          <div className="space-y-3">
+          <div
+            className={`space-y-3 ${departments.length > 5 ? 'max-h-[420px] overflow-y-auto pr-1 -mr-1' : ''}`}
+          >
             {loading ? (
               <>
                 <Skeleton className="h-16 rounded-2xl" />
@@ -70,13 +86,14 @@ export default function MainContentGrid() {
               </>
             ) : departments.length === 0 ? (
               <p className="text-body-sm text-on-surface-variant px-3 py-4">
-                No departments in your vertical yet.
+                {departmentsEmptyMessage}
               </p>
             ) : (
               departments.map((d) => (
                 <OrgRow
                   key={d.id}
                   name={d.name}
+                  path={[d.officeLocationName, d.verticalName].filter(Boolean).join(' › ')}
                   count={`${d.memberCount} Team Member${d.memberCount === 1 ? '' : 's'}`}
                 />
               ))
@@ -138,16 +155,21 @@ function ContactRow({ avatar, name, role, onChat }) {
   );
 }
 
-function OrgRow({ name, count }) {
+function OrgRow({ name, path, count }) {
   return (
-    <div className="bg-primary-container/10 rounded-2xl p-4 flex items-center justify-between border border-primary-container/20">
-      <div>
-        <p className="font-semibold text-body-sm">{name}</p>
+    <div className="bg-primary-container/10 rounded-2xl p-3 flex items-center justify-between gap-3 border border-primary-container/20">
+      <div className="min-w-0">
+        {path && (
+          <p className="text-[10px] uppercase tracking-wide text-on-surface-variant truncate">
+            {path}
+          </p>
+        )}
+        <p className="font-semibold text-body-sm truncate">{name}</p>
         <p className="text-[11px] text-on-surface-variant">{count}</p>
       </div>
       <button
         type="button"
-        className="px-4 py-2 bg-primary-container text-on-background rounded-xl text-xs font-bold hover:bg-primary-container/80 transition-all"
+        className="shrink-0 px-3 py-1.5 bg-primary-container text-on-background rounded-lg text-xs font-bold hover:bg-primary-container/80 transition-all"
       >
         View
       </button>

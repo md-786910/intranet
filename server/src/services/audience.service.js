@@ -10,11 +10,22 @@ const SCOPE_KEY_FIELD = {
   DEPARTMENT: 'department_id',
 };
 
-function resolveMinLevel(entity) {
-  const cfg = visibilityConfig[entity];
-  const lvl = cfg && cfg.minLevel;
-  if (lvl && SCOPE_HIERARCHY.includes(lvl)) return lvl;
-  return 'DEPARTMENT';
+// Resolve the set of scope levels honoured for an entity. Precedence:
+//   1. `audienceLevels` allow-list (explicit set of levels)
+//   2. `minLevel` shorthand (everything from ORG down to that level)
+//   3. fallback — all four levels
+function resolveAllowedLevels(entity) {
+  const cfg = visibilityConfig[entity] || {};
+  if (Array.isArray(cfg.audienceLevels) && cfg.audienceLevels.length > 0) {
+    const valid = cfg.audienceLevels.filter((l) => SCOPE_HIERARCHY.includes(l));
+    if (valid.length > 0) return new Set(valid);
+  }
+  const lvl = cfg.minLevel;
+  if (lvl && SCOPE_HIERARCHY.includes(lvl)) {
+    const minIdx = SCOPE_HIERARCHY.indexOf(lvl);
+    return new Set(SCOPE_HIERARCHY.filter((_, idx) => idx <= minIdx));
+  }
+  return new Set(SCOPE_HIERARCHY);
 }
 
 async function getUserAudienceScopeKeys(userId, entity = 'documents') {
@@ -24,8 +35,7 @@ async function getUserAudienceScopeKeys(userId, entity = 'documents') {
     DepartmentMembership,
   } = require('../database/models');
 
-  const minLevel = resolveMinLevel(entity);
-  const minIdx = SCOPE_HIERARCHY.indexOf(minLevel);
+  const allowedLevels = resolveAllowedLevels(entity);
   const scopeKeys = new Set();
 
   const addAncestors = async (scopeType, scopeId) => {
@@ -33,9 +43,9 @@ async function getUserAudienceScopeKeys(userId, entity = 'documents') {
     const ancestors = await scopeService.resolveAncestors(scopeType, scopeId);
     if (!ancestors) return;
 
-    // Only include levels at-or-above the configured minimum (lower index = broader).
-    SCOPE_HIERARCHY.forEach((level, idx) => {
-      if (idx > minIdx) return;
+    // Only include levels enabled by the visibility config.
+    SCOPE_HIERARCHY.forEach((level) => {
+      if (!allowedLevels.has(level)) return;
       const id = ancestors[SCOPE_KEY_FIELD[level]];
       if (id) scopeKeys.add(`${level}:${id}`);
     });
@@ -75,5 +85,6 @@ function matchesAudience(audienceRules, userScopeKeys) {
 module.exports = {
   getUserAudienceScopeKeys,
   matchesAudience,
+  resolveAllowedLevels,
   SCOPE_HIERARCHY,
 };

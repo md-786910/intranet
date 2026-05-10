@@ -303,8 +303,23 @@ const orgService = {
       DepartmentMembership, Department, Vertical, OfficeLocation,
       UserAccount, PersonProfile,
     } = require('../../database/models');
+    const visibilityConfig = require('../../config/visibility.config');
 
-    const empty = { vertical: null, departments: [], people: [] };
+    const ALLOWED_LEVELS = new Set(['ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT']);
+    const keyContactsLevel = ALLOWED_LEVELS.has(visibilityConfig.keyContacts?.level)
+      ? visibilityConfig.keyContacts.level
+      : 'DEPARTMENT';
+    const homeOrgChartLevel = ALLOWED_LEVELS.has(visibilityConfig.homeOrgChart?.level)
+      ? visibilityConfig.homeOrgChart.level
+      : 'VERTICAL';
+
+    const empty = {
+      vertical: null,
+      departments: [],
+      people: [],
+      peopleScope: keyContactsLevel,
+      departmentsScope: homeOrgChartLevel,
+    };
 
     const membership = await DepartmentMembership.findOne({
       where: { user_id: userId },
@@ -335,9 +350,40 @@ const orgService = {
 
     const vertical = membership.department.vertical;
 
+    // Resolve which departments to show in the home page "Organisation Chart"
+    // widget, based on visibilityConfig.homeOrgChart.level.
+    let departmentsWhere;
+    if (homeOrgChartLevel === 'DEPARTMENT') {
+      departmentsWhere = { id: membership.department.id, deleted_at: null };
+    } else if (homeOrgChartLevel === 'OFFICE_LOCATION' && vertical.officeLocation?.id) {
+      const verticalsInOffice = await Vertical.findAll({
+        where: { office_location_id: vertical.officeLocation.id, deleted_at: null },
+        attributes: ['id'],
+      });
+      const verticalIds = verticalsInOffice.map((v) => v.id);
+      departmentsWhere = { vertical_id: verticalIds, deleted_at: null };
+    } else if (homeOrgChartLevel === 'ORGANISATION') {
+      departmentsWhere = { deleted_at: null };
+    } else {
+      // VERTICAL (default fallback) — sibling departments under the user's vertical
+      departmentsWhere = { vertical_id: vertical.id, deleted_at: null };
+    }
+
     const siblingDepartments = await Department.findAll({
-      where: { vertical_id: vertical.id, deleted_at: null },
+      where: departmentsWhere,
       order: [['sort_order', 'ASC'], ['name', 'ASC']],
+      include: [{
+        model: Vertical,
+        as: 'vertical',
+        attributes: ['id', 'name'],
+        required: false,
+        include: [{
+          model: OfficeLocation,
+          as: 'officeLocation',
+          attributes: ['id', 'name'],
+          required: false,
+        }],
+      }],
     });
 
     const deptIds = siblingDepartments.map((d) => d.id);
@@ -363,13 +409,48 @@ const orgService = {
       countsByDept = new Map(countRows.map((r) => [Number(r.department_id), Number(r.count)]));
     }
 
-    const departments = siblingDepartments.map((d) => ({
-      id: d.id,
-      name: d.name,
-      memberCount: countsByDept.get(Number(d.id)) || 0,
-    }));
+    const departments = siblingDepartments.map((d) => {
+      const dvertical = d.vertical;
+      const office = dvertical?.officeLocation;
+      return {
+        id: d.id,
+        name: d.name,
+        memberCount: countsByDept.get(Number(d.id)) || 0,
+        verticalName: dvertical?.name || null,
+        officeLocationName: office?.name || null,
+      };
+    });
 
-    const peopleRows = deptIds.length === 0 ? [] : await UserAccount.findAll({
+    // Resolve the department-id pool the "Key Contacts" people are drawn from,
+    // based on visibilityConfig.keyContacts.level. DEPARTMENT (default) keeps
+    // it tight to the user's own department(s); broader levels fan out.
+    let peopleDeptIds = deptIds; // VERTICAL — sibling departments (existing default)
+    if (keyContactsLevel === 'DEPARTMENT') {
+      const myMemberships = await DepartmentMembership.findAll({
+        where: { user_id: userId },
+        attributes: ['department_id'],
+      });
+      peopleDeptIds = [...new Set(myMemberships.map((m) => Number(m.department_id)))];
+    } else if (keyContactsLevel === 'OFFICE_LOCATION' && vertical.officeLocation?.id) {
+      const verticalsInOffice = await Vertical.findAll({
+        where: { office_location_id: vertical.officeLocation.id, deleted_at: null },
+        attributes: ['id'],
+      });
+      const verticalIds = verticalsInOffice.map((v) => v.id);
+      const deptsInOffice = verticalIds.length === 0 ? [] : await Department.findAll({
+        where: { vertical_id: verticalIds, deleted_at: null },
+        attributes: ['id'],
+      });
+      peopleDeptIds = deptsInOffice.map((d) => Number(d.id));
+    } else if (keyContactsLevel === 'ORGANISATION') {
+      const allDepts = await Department.findAll({
+        where: { deleted_at: null },
+        attributes: ['id'],
+      });
+      peopleDeptIds = allDepts.map((d) => Number(d.id));
+    }
+
+    const peopleRows = peopleDeptIds.length === 0 ? [] : await UserAccount.findAll({
       where: {
         deleted_at: null,
         status: 'ACTIVE',
@@ -381,7 +462,7 @@ const orgService = {
           model: DepartmentMembership,
           as: 'departmentMemberships',
           required: true,
-          where: { department_id: deptIds },
+          where: { department_id: peopleDeptIds },
           include: [{
             model: Department,
             as: 'department',
@@ -419,6 +500,8 @@ const orgService = {
       },
       departments,
       people,
+      peopleScope: keyContactsLevel,
+      departmentsScope: homeOrgChartLevel,
     };
   },
 
