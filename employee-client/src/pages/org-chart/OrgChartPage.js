@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Avatar from '../../components/common/Avatar';
 import Spinner from '../../components/common/Spinner';
 import MaterialIcon from '../../components/common/MaterialIcon';
@@ -51,7 +51,7 @@ function buildHierarchy(nodes) {
 
 function matchesQuery(node, q) {
   if (!q) return true;
-  const hay = `${fullName(node)} ${node.email || ''} ${node.job_title || ''} ${node.role_category?.name || ''}`.toLowerCase();
+  const hay = `${fullName(node)} ${node.email || ''} ${node.job_title || ''} ${node.role_category?.name || ''} ${node.primary_department?.name || ''}`.toLowerCase();
   return hay.includes(q);
 }
 
@@ -232,10 +232,11 @@ const TreeNode = memo(function TreeNode({
 
 export default function OrgChartPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState({ organisation: null, nodes: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => searchParams.get('dept') || '');
   const [expandedIds, setExpandedIds] = useState(() => new Set());
 
   const load = () => {

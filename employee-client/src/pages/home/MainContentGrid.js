@@ -95,6 +95,7 @@ export default function MainContentGrid() {
                   name={d.name}
                   path={[d.officeLocationName, d.verticalName].filter(Boolean).join(' › ')}
                   count={`${d.memberCount} Team Member${d.memberCount === 1 ? '' : 's'}`}
+                  onView={() => navigate(`/org-chart?dept=${encodeURIComponent(d.name)}`)}
                 />
               ))
             )}
@@ -155,7 +156,7 @@ function ContactRow({ avatar, name, role, onChat }) {
   );
 }
 
-function OrgRow({ name, path, count }) {
+function OrgRow({ name, path, count, onView }) {
   return (
     <div className="bg-primary-container/10 rounded-2xl p-3 flex items-center justify-between gap-3 border border-primary-container/20">
       <div className="min-w-0">
@@ -169,6 +170,7 @@ function OrgRow({ name, path, count }) {
       </div>
       <button
         type="button"
+        onClick={onView}
         className="shrink-0 px-3 py-1.5 bg-primary-container text-on-background rounded-lg text-xs font-bold hover:bg-primary-container/80 transition-all"
       >
         View
