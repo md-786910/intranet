@@ -1,0 +1,557 @@
+<!doctype html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Organizational Hierarchy | TeamPortal</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-fixed": "#ffdea6",
+              "on-tertiary-fixed-variant": "#5b430e",
+              secondary: "#5c5f60",
+              "surface-tint": "#4c5e83",
+              "inverse-on-surface": "#f2f0f3",
+              "on-surface-variant": "#44474e",
+              "on-tertiary": "#ffffff",
+              surface: "#fbf9fc",
+              "surface-bright": "#fbf9fc",
+              "on-secondary-fixed": "#191c1d",
+              "on-primary": "#ffffff",
+              "on-error": "#ffffff",
+              "on-background": "#1b1b1e",
+              "outline-variant": "#c5c6cf",
+              outline: "#75777f",
+              "inverse-primary": "#b4c7f1",
+              background: "#fbf9fc",
+              tertiary: "#755a24",
+              "secondary-fixed": "#e1e3e4",
+              "primary-container": "#bdd0fb",
+              "surface-container-low": "#f5f3f6",
+              "on-secondary-fixed-variant": "#454748",
+              error: "#ba1a1a",
+              "on-primary-fixed": "#041b3c",
+              "surface-container-highest": "#e4e2e5",
+              "on-tertiary-container": "#6f541f",
+              "error-container": "#ffdad6",
+              "surface-container": "#efedf1",
+              primary: "#4c5e83",
+              "on-primary-container": "#46597d",
+              "surface-container-high": "#e9e7eb",
+              "secondary-container": "#e1e3e4",
+              "primary-fixed": "#d7e2ff",
+              "surface-dim": "#dbd9dd",
+              "on-surface": "#1b1b1e",
+              "on-tertiary-fixed": "#271900",
+              "primary-fixed-dim": "#b4c7f1",
+              "surface-container-lowest": "#ffffff",
+              "secondary-fixed-dim": "#c5c7c8",
+              "inverse-surface": "#303033",
+              "on-secondary": "#ffffff",
+              "on-secondary-container": "#626566",
+              "on-primary-fixed-variant": "#34476a",
+              "on-error-container": "#93000a",
+              "tertiary-container": "#f0cb8a",
+              "surface-variant": "#e4e2e5",
+              "tertiary-fixed-dim": "#e6c181",
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "0.75rem",
+              full: "9999px",
+            },
+            spacing: {
+              "unit-lg": "1.5rem",
+              gutter: "1.5rem",
+              "unit-xs": "0.25rem",
+              "unit-sm": "0.5rem",
+              "unit-md": "1rem",
+              "container-max": "1280px",
+              "unit-xl": "2.5rem",
+              "unit-xxl": "4rem",
+            },
+            fontFamily: {
+              h2: ["Inter"],
+              "body-sm": ["Inter"],
+              h3: ["Inter"],
+              "label-caps": ["Inter"],
+              h1: ["Inter"],
+              "body-lg": ["Inter"],
+              display: ["Inter"],
+              "body-md": ["Inter"],
+            },
+            fontSize: {
+              h2: ["24px", { lineHeight: "1.3", fontWeight: "600" }],
+              "body-sm": ["14px", { lineHeight: "1.5", fontWeight: "400" }],
+              h3: ["20px", { lineHeight: "1.4", fontWeight: "600" }],
+              "label-caps": [
+                "12px",
+                { lineHeight: "1", letterSpacing: "0.05em", fontWeight: "700" },
+              ],
+              h1: [
+                "32px",
+                {
+                  lineHeight: "1.2",
+                  letterSpacing: "-0.01em",
+                  fontWeight: "600",
+                },
+              ],
+              "body-lg": ["18px", { lineHeight: "1.6", fontWeight: "400" }],
+              display: [
+                "48px",
+                {
+                  lineHeight: "1.1",
+                  letterSpacing: "-0.02em",
+                  fontWeight: "700",
+                },
+              ],
+              "body-md": ["16px", { lineHeight: "1.6", fontWeight: "400" }],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 24;
+      }
+      .tree-line-v {
+        width: 2px;
+        background-color: #e9ecef;
+        height: 40px;
+        margin: 0 auto;
+      }
+      .tree-line-h {
+        height: 2px;
+        background-color: #e9ecef;
+        position: absolute;
+        top: 0;
+      }
+    </style>
+  </head>
+  <body class="bg-background text-on-background font-body-md antialiased">
+    <!-- Top Announcement Marquee -->
+    <div
+      class="bg-primary text-on-primary py-2 overflow-hidden whitespace-nowrap"
+    >
+      <div class="flex animate-marquee space-x-unit-xl items-center">
+        <span class="font-label-caps uppercase tracking-widest px-4"
+          >New Project Kickoff: Q4 Initiatives starting next Monday. Check the
+          Resources tab for more details.</span
+        >
+        <span class="font-label-caps uppercase tracking-widest px-4"
+          >New Project Kickoff: Q4 Initiatives starting next Monday. Check the
+          Resources tab for more details.</span
+        >
+        <span class="font-label-caps uppercase tracking-widest px-4"
+          >New Project Kickoff: Q4 Initiatives starting next Monday. Check the
+          Resources tab for more details.</span
+        >
+      </div>
+    </div>
+    <!-- TopAppBar -->
+    <header
+      class="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.04)] sticky top-0 z-50"
+    >
+      <nav
+        class="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto"
+      >
+        <div class="flex items-center gap-unit-xl">
+          <span class="text-xl font-bold text-slate-900 dark:text-white font-h2"
+            >TeamPortal</span
+          >
+          <div class="hidden md:flex gap-unit-lg">
+            <a
+              class="text-slate-500 dark:text-slate-400 font-medium hover:text-blue-400 dark:hover:text-blue-200 transition-colors font-body-sm"
+              href="#"
+              >Dashboard</a
+            >
+            <a
+              class="text-slate-500 dark:text-slate-400 font-medium hover:text-blue-400 dark:hover:text-blue-200 transition-colors font-body-sm"
+              href="#"
+              >Projects</a
+            >
+            <a
+              class="text-slate-900 dark:text-white border-b-2 border-blue-200 pb-1 font-semibold font-body-sm"
+              href="#"
+              >Directory</a
+            >
+            <a
+              class="text-slate-500 dark:text-slate-400 font-medium hover:text-blue-400 dark:hover:text-blue-200 transition-colors font-body-sm"
+              href="#"
+              >Resources</a
+            >
+          </div>
+        </div>
+        <div class="flex items-center gap-unit-md">
+          <button
+            class="p-2 text-slate-500 hover:text-blue-400 transition-colors"
+          >
+            <span class="material-symbols-outlined" data-icon="notifications"
+              >notifications</span
+            >
+          </button>
+          <button
+            class="p-2 text-slate-500 hover:text-blue-400 transition-colors"
+          >
+            <span class="material-symbols-outlined" data-icon="settings"
+              >settings</span
+            >
+          </button>
+          <div
+            class="w-8 h-8 rounded-full overflow-hidden ml-unit-sm border border-outline-variant"
+          >
+            <img
+              alt="User Profile Avatar"
+              class="w-full h-full object-cover"
+              data-alt="A professional headshot of a middle-aged male executive with a kind smile, wearing a tailored navy suit and a white shirt. The background is a soft-focus office environment with natural light pouring in from a large window. The image has a bright, high-key lighting style typical of a modern corporate portrait."
+              src="https://lh3.googleusercontent.com/aida/ADBb0ujDg_fH21pPzcu5ravT_cnMw1YkFs4sr2uGc0TJtEfaFmYVc-6zDoiO7r3bkd0dGkqTecqpGg0yvyIFnNpGpGdOoBvvAoJhGw4mafv0XDp0x0eF4sH4lA5Z9ICbE9GSRCY9QdLDKIRv6XeIImpRV3Li9tdEYmICQ7wwBZG6EvIWu_vYOlXxjozA6croCmp_nQ_E85KibuSZAxcGprwpd6J7XHQMGFT-Yn17GJCFHKKqbgA5Fx7UA-b_4HhJYqB9RoH7_cjNLzP3qA"
+            />
+          </div>
+        </div>
+      </nav>
+    </header>
+    <main class="max-w-7xl mx-auto px-8 py-unit-xxl">
+      <header class="mb-unit-xxl text-center">
+        <h1 class="font-h1 text-h1 text-on-background mb-unit-sm">
+          Organizational Hierarchy
+        </h1>
+        <p class="font-body-lg text-secondary max-w-2xl mx-auto">
+          Our structure is designed for agility and clear communication. Connect
+          with any team member directly via the portal.
+        </p>
+      </header>
+      <!-- Tree Layout Container -->
+      <div class="relative">
+        <!-- Tier 1: CEO -->
+        <div class="flex justify-center relative mb-unit-xxl">
+          <div
+            class="bg-white border border-[#E9ECEF] rounded-xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] w-64 flex flex-col items-center text-center transition-transform hover:-translate-y-1"
+          >
+            <div
+              class="w-20 h-20 rounded-full overflow-hidden border-2 border-primary-container mb-4"
+            >
+              <img
+                alt="Sarah Jenkins"
+                class="w-full h-full object-cover"
+                data-alt="A professional portrait of a woman in her late 40s with a confident and approachable expression. She has short dark hair and is wearing a sleek charcoal blazer over a light blue silk blouse. The lighting is soft and flattering, highlighting her features against a minimalist, bright grey corporate background."
+                src="https://lh3.googleusercontent.com/aida/ADBb0uimEs_N4_d_bEAVXLq4TYbPvsDj4OtTgi4ycysBZI3hOtXXBOwAaDR9YQGwORclbn6O-zPDhFqnEPjZpbEJRy2rKX4dSPbGjLBc9YM6A-jpM3fVYe-_zETGhi2TlZQFc8hilh_uRzgechQRsHTzF-EPNL8WhveknV8B2rxMtfZfurvwJVKFr4c9q4yro8BIsYwnW2DBDi0Mmk5ieQXXwraPVfo_J7tfw0g6HgWAFCf-o8JXwesy9PxjXWmjxzFp8ZC6kq4PaWHvYQ"
+              />
+            </div>
+            <h3 class="font-h3 text-h3 text-on-background">Sarah Jenkins</h3>
+            <p class="font-body-sm text-secondary mb-4">
+              Chief Executive Officer
+            </p>
+            <button
+              class="flex items-center justify-center gap-2 bg-primary-container text-on-background px-6 py-2 rounded-lg font-semibold hover:opacity-80 transition-opacity w-full"
+            >
+              <span class="material-symbols-outlined text-sm" data-icon="chat"
+                >chat</span
+              >
+              <span class="font-body-sm">Chat</span>
+            </button>
+          </div>
+        </div>
+        <!-- Vertical connector from CEO -->
+        <div class="absolute left-1/2 -translate-x-1/2 top-52">
+          <div class="tree-line-v h-16"></div>
+        </div>
+        <!-- Tier 2: VPs -->
+        <div class="relative pt-16 mb-unit-xxl">
+          <!-- Horizontal connector for Tier 2 -->
+          <div
+            class="absolute top-0 left-1/4 right-1/4 h-0.5 bg-[#E9ECEF]"
+          ></div>
+          <div class="grid grid-cols-2 gap-unit-xxl">
+            <!-- VP 1 -->
+            <div class="flex flex-col items-center relative">
+              <!-- Connecting Line UP -->
+              <div
+                class="absolute -top-16 left-1/2 -translate-x-1/2 tree-line-v h-16"
+              ></div>
+              <div
+                class="bg-white border border-[#E9ECEF] rounded-xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] w-64 flex flex-col items-center text-center transition-transform hover:-translate-y-1"
+              >
+                <div
+                  class="w-16 h-16 rounded-full overflow-hidden border-2 border-primary-container mb-4"
+                >
+                  <img
+                    alt="Marcus Chen"
+                    class="w-full h-full object-cover"
+                    data-alt="Close-up portrait of a young male professional with glasses, smiling warmly. He is wearing a modern light grey knit sweater. The setting is a clean, bright coworking space with plants in the background, out of focus. The mood is friendly and professional."
+                    src="https://lh3.googleusercontent.com/aida/ADBb0uj8fEOkL4VMxGs3DPmUzs86NmvEM7NgibbYgNOwgrEfWFxbaUtbIuwpuRdZmbnYg64iz8FapihiUkPvgsCeHmdIphNr8hUR-1aCkRT_c1EZKLfEysKGUbfK0LTETXl1YjdVQmxWTAlXEFe2MDi_ntceThe1ohTvrOcl6N9pqcsgXVhsucbtnJizfcy5U0IrUiQYnZUkZkpAiptZUdAl2W3OT2Q-Wi0mXUrhzOvvgxcWvNcOJralep_J-fulRnyW42Kza_hNXaUDrQ"
+                  />
+                </div>
+                <h3 class="font-h3 text-h3 text-on-background">Marcus Chen</h3>
+                <p class="font-body-sm text-secondary mb-4">
+                  VP of Engineering
+                </p>
+                <button
+                  class="flex items-center justify-center gap-2 border border-outline-variant text-on-background px-6 py-2 rounded-lg font-semibold hover:bg-surface-container-low transition-colors w-full"
+                >
+                  <span
+                    class="material-symbols-outlined text-sm"
+                    data-icon="chat"
+                    >chat</span
+                  >
+                  <span class="font-body-sm">Chat</span>
+                </button>
+              </div>
+              <!-- Connector Down to Directors -->
+              <div class="tree-line-v h-12"></div>
+            </div>
+            <!-- VP 2 -->
+            <div class="flex flex-col items-center relative">
+              <!-- Connecting Line UP -->
+              <div
+                class="absolute -top-16 left-1/2 -translate-x-1/2 tree-line-v h-16"
+              ></div>
+              <div
+                class="bg-white border border-[#E9ECEF] rounded-xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] w-64 flex flex-col items-center text-center transition-transform hover:-translate-y-1"
+              >
+                <div
+                  class="w-16 h-16 rounded-full overflow-hidden border-2 border-primary-container mb-4"
+                >
+                  <img
+                    alt="Elena Rodriguez"
+                    class="w-full h-full object-cover"
+                    data-alt="A portrait of a Hispanic woman in professional attire, leaning against a white wall with a soft window light. She is wearing a cream-colored blazer and a subtle silver necklace. Her expression is focused and capable. The lighting is airy and creates a serene corporate atmosphere."
+                    src="https://lh3.googleusercontent.com/aida/ADBb0ugLzfJNkTdE8IV8swSSJk3BuDAb1zMuWtDsAIjRp5dzrNCOW6hZAt-cHQWg7p2EmWYgNddEiaLTGVDtKp5ewEzUFpkyM2k5dgcehEukbDcHoS8EVUo7rmdzcCnCh5eYvUbn5nt4LzO4awWb39Vvr909bFrJ-NRsXeVplgZBtx4nIJvj21T5JkKA7j0G8GN0ncWNjFg32EYSDj07DDlad2dvHa5laTVXVdXa4BRMSI6J6MRuisqJvxz0qKrTd3GZ2i43zq2DUeM_tw"
+                  />
+                </div>
+                <h3 class="font-h3 text-h3 text-on-background">
+                  Elena Rodriguez
+                </h3>
+                <p class="font-body-sm text-secondary mb-4">VP of Operations</p>
+                <button
+                  class="flex items-center justify-center gap-2 border border-outline-variant text-on-background px-6 py-2 rounded-lg font-semibold hover:bg-surface-container-low transition-colors w-full"
+                >
+                  <span
+                    class="material-symbols-outlined text-sm"
+                    data-icon="chat"
+                    >chat</span
+                  >
+                  <span class="font-body-sm">Chat</span>
+                </button>
+              </div>
+              <!-- Connector Down to Directors -->
+              <div class="tree-line-v h-12"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Tier 3: Directors -->
+        <div class="grid grid-cols-2 gap-unit-xxl">
+          <!-- Group 1 (under Engineering) -->
+          <div class="relative flex justify-center gap-unit-lg pt-8">
+            <div
+              class="absolute top-0 left-1/4 right-1/4 h-0.5 bg-[#E9ECEF]"
+            ></div>
+            <!-- Director 1 -->
+            <div class="flex flex-col items-center relative">
+              <div
+                class="absolute -top-8 left-1/2 -translate-x-1/2 tree-line-v h-8"
+              ></div>
+              <div
+                class="bg-white border border-[#E9ECEF] rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.04)] w-52 flex flex-col items-center text-center transition-transform hover:-translate-y-1"
+              >
+                <div
+                  class="w-12 h-12 rounded-full overflow-hidden border border-primary-container mb-3"
+                >
+                  <img
+                    alt="David Kim"
+                    class="w-full h-full object-cover"
+                    data-alt="Portrait of an Asian male executive in a smart casual white shirt. He has a friendly but professional demeanor, with soft studio lighting that creates a clean, corporate look. The background is a very light grey, emphasizing the brightness of the scene."
+                    src="https://lh3.googleusercontent.com/aida/ADBb0uj52QXmpGEP4GUw_4_H3TVTbsxwNgu-kuNxXLN7W1LHGdOmNr0E2R7bVm0kC3qZjUdkH0B9M9BKPK3heMxRzj2g6Zm6jpM4JtHHIAZjuAisCuPlrGo1SsecvlUkotc8MXmvZxaAOgdaAht4pXhtn6yachCgFpMBMSt7ppNahDrp1Qt3UdLw8WTxBkQ0oJBycU0ya5c4z6o_qR9kyruaAMdpeZdH8Vc7EFdhmduTVd0tnYjV0YRijW4pUtH7iXgiSRKouOx-JBvGwQ"
+                  />
+                </div>
+                <h4 class="font-h3 text-body-md text-on-background font-bold">
+                  David Kim
+                </h4>
+                <p class="font-body-sm text-secondary mb-3">
+                  Director of Cloud
+                </p>
+                <button
+                  class="text-primary font-semibold text-body-sm hover:underline flex items-center gap-1"
+                >
+                  <span
+                    class="material-symbols-outlined text-[16px]"
+                    data-icon="chat"
+                    >chat</span
+                  >
+                  Chat
+                </button>
+              </div>
+            </div>
+            <!-- Director 2 -->
+            <div class="flex flex-col items-center relative">
+              <div
+                class="absolute -top-8 left-1/2 -translate-x-1/2 tree-line-v h-8"
+              ></div>
+              <div
+                class="bg-white border border-[#E9ECEF] rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.04)] w-52 flex flex-col items-center text-center transition-transform hover:-translate-y-1"
+              >
+                <div
+                  class="w-12 h-12 rounded-full overflow-hidden border border-primary-container mb-3"
+                >
+                  <img
+                    alt="Sophia Wright"
+                    class="w-full h-full object-cover"
+                    data-alt="Close up of a young professional woman with auburn hair and a friendly smile. She is wearing a simple black turtleneck. The lighting is warm and soft, captured in a bright, modern office setting with blurred architectural elements in the distance."
+                    src="https://lh3.googleusercontent.com/aida/ADBb0uj7bI6oh_3gMY5UoMWy3hRINJWKDChK6VzqgGlWCN8PqZtnemhzX0pK4oJVZ0OfHYFbfRy3i5ULukqGAaqpAVCRHaPwVP1nojKDLa-Vxmb90IkmU8AJ0muDxz8o9uJRQ2DRZcIImuL_aZIukOL9jb_jnTmJoUeUu7iH9aOw3Y-7Vs99xQ9HAXHfg8wZkRnQWvRELLIiT-65FhjeohDBu6jDwOglHDdfAs_EpHhNcbL36DmCl0eCVyGXpQR8cNY2Q8aU7_r1dK30"
+                  />
+                </div>
+                <h4 class="font-h3 text-body-md text-on-background font-bold">
+                  Sophia Wright
+                </h4>
+                <p class="font-body-sm text-secondary mb-3">Director of AI</p>
+                <button
+                  class="text-primary font-semibold text-body-sm hover:underline flex items-center gap-1"
+                >
+                  <span
+                    class="material-symbols-outlined text-[16px]"
+                    data-icon="chat"
+                    >chat</span
+                  >
+                  Chat
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- Group 2 (under Operations) -->
+          <div class="relative flex justify-center gap-unit-lg pt-8">
+            <div
+              class="absolute top-0 left-1/4 right-1/4 h-0.5 bg-[#E9ECEF]"
+            ></div>
+            <!-- Director 3 -->
+            <div class="flex flex-col items-center relative">
+              <div
+                class="absolute -top-8 left-1/2 -translate-x-1/2 tree-line-v h-8"
+              ></div>
+              <div
+                class="bg-white border border-[#E9ECEF] rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.04)] w-52 flex flex-col items-center text-center transition-transform hover:-translate-y-1"
+              >
+                <div
+                  class="w-12 h-12 rounded-full overflow-hidden border border-primary-container mb-3"
+                >
+                  <img
+                    alt="James O'Connor"
+                    class="w-full h-full object-cover"
+                    data-alt="Profile of a professional man in his late 30s wearing a blue denim shirt over a white tee. He is standing in a light-filled corridor of a modern tech office. His expression is thoughtful and approachable. High-key lighting highlights the minimalist architectural lines around him."
+                    src="https://lh3.googleusercontent.com/aida/ADBb0ujZbtVIZ1OL5HSlCKd1P0KaGIrrKGBCN3YXWLNLnx_EUnKlL2shlV0HBG5t5Hwq2Z3Wss8Sc0P-5gFYczX6vNRaeigujWnDPBDR9T9fehACNPpaL44v5eb9otP91UBJcd7FJalZx8dY6ic-id9eIGiGoD76HqxUlY21LkqsCNUjQYuwhWSDbLPwxDR4zvRRRDlIGKJC8MZUZ7pBIjjnmU1pnnnKmrGv8NFsdnhun4j3yzA_fVBdabuo_wi_Ulz1R2l4UWhaaMeAqQ"
+                  />
+                </div>
+                <h4 class="font-h3 text-body-md text-on-background font-bold">
+                  James O'Connor
+                </h4>
+                <p class="font-body-sm text-secondary mb-3">
+                  Director of Logistics
+                </p>
+                <button
+                  class="text-primary font-semibold text-body-sm hover:underline flex items-center gap-1"
+                >
+                  <span
+                    class="material-symbols-outlined text-[16px]"
+                    data-icon="chat"
+                    >chat</span
+                  >
+                  Chat
+                </button>
+              </div>
+            </div>
+            <!-- Director 4 -->
+            <div class="flex flex-col items-center relative">
+              <div
+                class="absolute -top-8 left-1/2 -translate-x-1/2 tree-line-v h-8"
+              ></div>
+              <div
+                class="bg-white border border-[#E9ECEF] rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.04)] w-52 flex flex-col items-center text-center transition-transform hover:-translate-y-1"
+              >
+                <div
+                  class="w-12 h-12 rounded-full overflow-hidden border border-primary-container mb-3"
+                >
+                  <img
+                    alt="Lisa Patterson"
+                    class="w-full h-full object-cover"
+                    data-alt="A portrait of a professional woman with blonde hair, wearing a navy blue dress. She has a bright, engaging smile. The photo is taken in a professional office lobby with high ceilings and glass walls, creating an open and airy feel with lots of natural daylight."
+                    src="https://lh3.googleusercontent.com/aida/ADBb0uj8fEOkL4VMxGs3DPmUzs86NmvEM7NgibbYgNOwgrEfWFxbaUtbIuwpuRdZmbnYg64iz8FapihiUkPvgsCeHmdIphNr8hUR-1aCkRT_c1EZKLfEysKGUbfK0LTETXl1YjdVQmxWTAlXEFe2MDi_ntceThe1ohTvrOcl6N9pqcsgXVhsucbtnJizfcy5U0IrUiQYnZUkZkpAiptZUdAl2W3OT2Q-Wi0mXUrhzOvvgxcWvNcOJralep_J-fulRnyW42Kza_hNXaUDrQ"
+                  />
+                </div>
+                <h4 class="font-h3 text-body-md text-on-background font-bold">
+                  Lisa Patterson
+                </h4>
+                <p class="font-body-sm text-secondary mb-3">Director of HR</p>
+                <button
+                  class="text-primary font-semibold text-body-sm hover:underline flex items-center gap-1"
+                >
+                  <span
+                    class="material-symbols-outlined text-[16px]"
+                    data-icon="chat"
+                    >chat</span
+                  >
+                  Chat
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+    <!-- Footer -->
+    <footer
+      class="w-full border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 mt-unit-xxl"
+    >
+      <div
+        class="flex justify-between items-center w-full px-8 py-6 max-w-7xl mx-auto"
+      >
+        <div class="flex flex-col md:flex-row gap-unit-md items-center">
+          <span
+            class="text-sm font-semibold text-slate-900 dark:text-white font-label-caps"
+            >TeamPortal</span
+          >
+          <span class="text-slate-500 dark:text-slate-400 font-body-sm"
+            >© 2024 TeamPortal Organization</span
+          >
+        </div>
+        <div class="flex gap-unit-lg items-center">
+          <a
+            class="text-slate-500 dark:text-slate-400 hover:text-blue-400 transition-colors font-body-sm"
+            href="#"
+            >Support</a
+          >
+          <a
+            class="text-slate-500 dark:text-slate-400 hover:text-blue-400 transition-colors font-body-sm"
+            href="#"
+            >Privacy Policy</a
+          >
+          <a
+            class="text-slate-500 dark:text-slate-400 hover:text-blue-400 transition-colors font-body-sm"
+            href="#"
+            >Contact Us</a
+          >
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
