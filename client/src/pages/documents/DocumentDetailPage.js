@@ -81,8 +81,11 @@ export default function DocumentDetailPage() {
     setNotifyLoading(true);
     try {
       const res = await documentService.resendNotification(id);
-      const sent = res.data?.data?.sent ?? 0;
-      addToast(`Sent to ${sent} employee${sent === 1 ? '' : 's'}`, 'success');
+      // `sent` = fresh bell rows; `nudged` = existing rows that got a live
+      // re-toast without duplicating. The admin sees a single total.
+      const { sent = 0, nudged = 0 } = res.data?.data || {};
+      const total = sent + nudged;
+      addToast(`Notified ${total} employee${total === 1 ? '' : 's'}`, 'success');
     } catch (err) {
       addToast(err.response?.data?.message || 'Failed to send notification', 'error');
     } finally {

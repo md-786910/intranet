@@ -45,12 +45,16 @@ export function useNotifications() {
     fetchInitial();
   }, [fetchInitial]);
 
-  // Live socket pushes. Treated as a cache update — the persisted DB row is
-  // already there, the server emits to give us instant UI without a refetch.
-  // Also fires an info toast so the user notices without watching the bell.
+  // Two live event streams from the server:
+  //   `notification:new`   — fresh DB row was inserted. Prepend to the list,
+  //                          bump the unread badge, fire a toast.
+  //   `notification:nudge` — admin re-fired notify for an item that already
+  //                          has a row for this user. Toast only — the bell
+  //                          row already exists; we don't multiply or unread it.
   useEffect(() => {
     if (!socket) return undefined;
-    const handler = ({ notification }) => {
+
+    const onNew = ({ notification }) => {
       if (!notification) return;
       let alreadySeen = false;
       setItems((prev) => {
@@ -60,17 +64,26 @@ export function useNotifications() {
         if (alreadySeen) return prev;
         return [notification, ...prev].slice(0, FEED_LIMIT);
       });
-      // Skip the toast + badge bump if the socket re-emits the same row
-      // (e.g. quick reconnect). Otherwise notify the user.
+      // Skip if the socket re-emits the same row (e.g. quick reconnect).
       if (alreadySeen) return;
       if (!notification.read_at) {
         setUnreadCount((c) => c + 1);
       }
       toast.info(toastMessageFor(notification));
     };
-    socket.on('notification:new', handler);
+
+    const onNudge = ({ notification }) => {
+      if (!notification) return;
+      // Re-notify path — toast only. We do not touch `items` or `unreadCount`
+      // because the bell row already exists from the original publish.
+      toast.info(toastMessageFor(notification));
+    };
+
+    socket.on('notification:new', onNew);
+    socket.on('notification:nudge', onNudge);
     return () => {
-      socket.off('notification:new', handler);
+      socket.off('notification:new', onNew);
+      socket.off('notification:nudge', onNudge);
     };
   }, [socket, toast]);
 

@@ -77,6 +77,16 @@ async function markAllRead(userId) {
 //
 // `entity` keys map to server/src/config/visibility.config.js — pass 'news'
 // or 'documents' so per-entity audienceLevels / minLevel is honoured.
+// Tries to emit `event` to user `userId`'s personal socket room. Never throws.
+function safeEmit(io, userId, event, payload) {
+  if (!io) return;
+  try {
+    io.to(`user:${userId}`).emit(event, payload);
+  } catch (err) {
+    logger.error(`Failed to emit ${event} to user ${userId}: ${err.message}`);
+  }
+}
+
 async function notifyOnPublish({ type, entity, audienceRules, entityKey }) {
   try {
     const { Notification } = require('../../database/models');
@@ -87,52 +97,56 @@ async function notifyOnPublish({ type, entity, audienceRules, entityKey }) {
       entityKey,
     );
 
-    // Always log the fan-out outcome — operationally we need to see success
-    // counts, not just failures. Includes context for grep-friendly diagnosis.
     logger.info(
       `Fanning notification — type=${type} entityId=${entity.id} recipients=${recipientIds.length}`,
     );
-    if (recipientIds.length === 0) return { sent: 0 };
+    if (recipientIds.length === 0) return { sent: 0, nudged: 0 };
 
+    // Find rows that already exist for these recipients on this entity. The
+    // DB has a unique (user_id, type, entity_id) constraint, so re-fanning to
+    // a user who already has a row doesn't create a duplicate — they get a
+    // live `notification:nudge` toast instead of a fresh bell entry.
+    const existing = await Notification.findAll({
+      where: { type, entity_id: entity.id, user_id: { [Op.in]: recipientIds } },
+    });
+    const existingByUser = new Map(existing.map((row) => [row.user_id, row]));
+
+    const newUserIds = recipientIds.filter((uid) => !existingByUser.has(uid));
     const title = entity.title;
     const body = (entity.summary || '').slice(0, 500) || null;
 
-    const rows = recipientIds.map((uid) => ({
-      tenant_id: DEFAULT_TENANT_ID,
-      user_id: uid,
-      type,
-      entity_id: entity.id,
-      title,
-      body,
-    }));
+    let inserted = [];
+    if (newUserIds.length > 0) {
+      const rows = newUserIds.map((uid) => ({
+        tenant_id: DEFAULT_TENANT_ID,
+        user_id: uid,
+        type,
+        entity_id: entity.id,
+        title,
+        body,
+      }));
+      inserted = await Notification.bulkCreate(rows, { returning: true });
+    }
 
-    const created = await Notification.bulkCreate(rows, { returning: true });
-
-    // Emit to each recipient's personal socket room. Failures here are
-    // logged but never thrown — the DB row is the durable source of truth,
-    // so the user will still see it on their next portal load.
-    let io;
+    let io = null;
     try {
       io = getIO();
     } catch (err) {
       logger.warn('Socket.IO not available — skipping live notification emit');
-      io = null;
-    }
-    if (io) {
-      created.forEach((row) => {
-        try {
-          io.to(`user:${row.user_id}`).emit('notification:new', {
-            notification: toWire(row),
-          });
-        } catch (err) {
-          logger.error(
-            `Failed to emit notification:new to user ${row.user_id}: ${err.message}`,
-          );
-        }
-      });
     }
 
-    return { sent: created.length };
+    // Fresh delivery → adds to bell + bumps badge + toast on the client.
+    inserted.forEach((row) => {
+      safeEmit(io, row.user_id, 'notification:new', { notification: toWire(row) });
+    });
+
+    // Re-notify → toast only. The bell row already exists; we don't want it
+    // to multiply or re-flag itself as unread.
+    existing.forEach((row) => {
+      safeEmit(io, row.user_id, 'notification:nudge', { notification: toWire(row) });
+    });
+
+    return { sent: inserted.length, nudged: existing.length };
   } catch (err) {
     // Caller invokes us as a side effect of publish — never let our failure
     // bubble up and undo the publish. Log loudly so issues surface.
@@ -140,7 +154,7 @@ async function notifyOnPublish({ type, entity, audienceRules, entityKey }) {
       `notifyOnPublish failed — type=${type} entityKey=${entityKey} entityId=${entity?.id}: ${err.message}`,
       err,
     );
-    return { sent: 0, error: err.message };
+    return { sent: 0, nudged: 0, error: err.message };
   }
 }
 

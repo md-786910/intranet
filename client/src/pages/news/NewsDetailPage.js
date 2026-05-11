@@ -80,8 +80,12 @@ export default function NewsDetailPage() {
     setNotifyLoading(true);
     try {
       const res = await newsService.resendNotification(id);
-      const sent = res.data?.data?.sent ?? 0;
-      addToast(`Sent to ${sent} employee${sent === 1 ? '' : 's'}`, 'success');
+      // `sent` = brand-new bell rows. `nudged` = existing rows that got a live
+      // re-toast without a duplicate row. Surface the total — admin doesn't
+      // need the internal distinction.
+      const { sent = 0, nudged = 0 } = res.data?.data || {};
+      const total = sent + nudged;
+      addToast(`Notified ${total} employee${total === 1 ? '' : 's'}`, 'success');
     } catch (err) {
       addToast(err.response?.data?.message || 'Failed to send notification', 'error');
     } finally {
