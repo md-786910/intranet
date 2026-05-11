@@ -451,7 +451,7 @@ const newsService = {
   },
 
   async publish(id, userId) {
-    const { NewsItem } = require('../../database/models');
+    const { NewsItem, ContentAudienceRule } = require('../../database/models');
 
     const article = await NewsItem.findByPk(id);
     if (!article) throw ApiError.notFound('News article not found');
@@ -466,7 +466,67 @@ const newsService = {
       resource_id: id,
     });
 
+    // Fan notifications out to the audience. Fire-and-forget — the publish
+    // action must succeed even if notification persistence/socket fails.
+    // The internal try/catch in notifyOnPublish handles errors, but we add an
+    // extra `.catch()` here as a safety net in case it ever rethrows.
+    const audienceRules = await ContentAudienceRule.findAll({
+      where: { entity_type: 'NEWS', entity_id: id },
+    });
+    const notificationService = require('../notifications/notifications.service');
+    const logger = require('../../config/logger');
+    notificationService
+      .notifyOnPublish({
+        type: 'NEWS',
+        entity: { id, title: article.title, summary: article.summary },
+        audienceRules,
+        entityKey: 'news',
+      })
+      .catch((err) => logger.error(`notifyOnPublish (NEWS ${id}) rejected: ${err.message}`));
+
     return this.getById(id);
+  },
+
+  // Re-send the publish notification for an already-published article.
+  // Useful for:
+  //   - backfilling rows when a previous fan-out failed silently
+  //   - nudging employees about an older important post
+  //   - one-click smoke testing the pipeline in production
+  async resendNotification(id) {
+    const { NewsItem, ContentAudienceRule } = require('../../database/models');
+    const article = await NewsItem.findByPk(id);
+    if (!article) throw ApiError.notFound('News article not found');
+    if (article.status !== 'PUBLISHED') {
+      throw ApiError.badRequest('Only published articles can be re-sent');
+    }
+
+    const audienceRules = await ContentAudienceRule.findAll({
+      where: { entity_type: 'NEWS', entity_id: id },
+    });
+    const notificationService = require('../notifications/notifications.service');
+    return notificationService.notifyOnPublish({
+      type: 'NEWS',
+      entity: { id, title: article.title, summary: article.summary },
+      audienceRules,
+      entityKey: 'news',
+    });
+  },
+
+  // "Publish Now" flow: create a draft and immediately flip it to PUBLISHED.
+  // If publish fails after create, soft-delete the orphan draft to keep the
+  // list clean.
+  async createAndPublish(data, userId) {
+    const created = await this.create(data, userId);
+    try {
+      return await this.publish(created.news_item_id, userId);
+    } catch (err) {
+      try {
+        await this.delete(created.news_item_id, userId);
+      } catch (cleanupErr) {
+        // Logged via the audit/error pipeline elsewhere; nothing more to do.
+      }
+      throw err;
+    }
   },
 
   async archive(id, userId) {

@@ -18,6 +18,7 @@ export default function DocumentCreatePage() {
   const { addToast } = useToast();
   const { currentOrganisationId } = useCurrentOrganisation();
   const { hasPermission: canCreateDocuments } = usePermission('DOCUMENTS', 'CREATE');
+  const { hasPermission: canPublishDocuments } = usePermission('DOCUMENTS', 'PUBLISH');
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState({
     title: '', summary: '', category_id: '', priority: 'NORMAL',
@@ -25,6 +26,7 @@ export default function DocumentCreatePage() {
   const [files, setFiles] = useState([]);
   const [audienceTargets, setAudienceTargets] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -39,40 +41,66 @@ export default function DocumentCreatePage() {
     if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: null });
   };
 
-  const handleSave = async () => {
+  // Both Save Draft and Publish Now ship the same payload; only the
+  // endpoint differs.
+  const buildPayload = () => ({
+    title: form.title,
+    summary: form.summary || null,
+    category_id: form.category_id || undefined,
+    priority: form.priority || 'NORMAL',
+    files,
+    owning_scope_type: 'ORGANISATION',
+    owning_scope_id: currentOrganisationId,
+    audience_targets: audienceTargets.map((target) => ({
+      scope_type: target.scope_type,
+      scope_id: target.scope_id,
+    })),
+  });
+
+  const validate = () => {
     const nextErrors = {};
     if (!form.title.trim()) nextErrors.title = 'Title is required';
     if (!files.length) nextErrors.files = 'Attach at least one file or URL';
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
-      return;
+      return false;
     }
     if (!currentOrganisationId) {
       addToast('No active organisation available', 'error');
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const handleSave = async () => {
+    if (!validate()) return;
     setSaving(true);
     setErrors({});
     try {
-      await documentService.createDocument({
-        title: form.title,
-        summary: form.summary || null,
-        category_id: form.category_id || undefined,
-        priority: form.priority || 'NORMAL',
-        files,
-        owning_scope_type: 'ORGANISATION',
-        owning_scope_id: currentOrganisationId,
-        audience_targets: audienceTargets.map((target) => ({
-          scope_type: target.scope_type,
-          scope_id: target.scope_id,
-        })),
-      });
+      await documentService.createDocument(buildPayload());
       addToast('Document created', 'success');
       navigate('/documents');
     } catch (err) {
       addToast(err.response?.data?.message || 'Failed to create document', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Publish Now — create and publish in one shot. Backend fans notifications
+  // out to the matched audience as a side-effect.
+  const handlePublishNow = async () => {
+    if (!validate()) return;
+    setPublishing(true);
+    setErrors({});
+    try {
+      await documentService.createAndPublishDocument(buildPayload());
+      addToast('Document published — employees will be notified', 'success');
+      navigate('/documents');
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to publish document', 'error');
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -121,7 +149,12 @@ export default function DocumentCreatePage() {
         </div>
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
           <Button variant="secondary" onClick={() => navigate('/documents')}>Cancel</Button>
-          <Button onClick={handleSave} loading={saving}>Create Document</Button>
+          <Button variant="secondary" onClick={handleSave} loading={saving} disabled={publishing}>Save Draft</Button>
+          {canPublishDocuments && (
+            <Button onClick={handlePublishNow} loading={publishing} disabled={saving}>
+              Publish Now
+            </Button>
+          )}
         </div>
       </div>
     </div>

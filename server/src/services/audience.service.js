@@ -82,9 +82,42 @@ function matchesAudience(audienceRules, userScopeKeys) {
     userScopeKeys.has(`${rule.target_scope_type}:${rule.target_scope_id}`));
 }
 
+// Resolve the set of user_ids that should receive a notification for content
+// matching `audienceRules`. Reuses the exact visibility logic above so the
+// notification audience never drifts from the list-endpoint audience.
+//
+// Algorithm: enumerate every active user in the tenant, expand their scope
+// keys (which includes ORG / OFFICE_LOCATION / VERTICAL / DEPARTMENT ancestors
+// via scopeService.resolveAncestors), then keep those whose keys satisfy
+// matchesAudience for the given rules.
+//
+// Empty rules → org-wide → everyone in tenant.
+async function getRecipientUserIds(audienceRules, entity) {
+  const { UserAccount } = require('../database/models');
+
+  // user_account doesn't carry tenant_id — the deployment is single-tenant.
+  // The `active` scope filters status='ACTIVE' AND deleted_at IS NULL,
+  // matching how the rest of the codebase scopes "real" employees.
+  const users = await UserAccount.scope('active').findAll({
+    attributes: ['user_id'],
+  });
+  if (!audienceRules || audienceRules.length === 0) {
+    return users.map((u) => u.user_id);
+  }
+
+  const recipientIds = [];
+  for (const u of users) {
+    // eslint-disable-next-line no-await-in-loop
+    const keys = await getUserAudienceScopeKeys(u.user_id, entity);
+    if (matchesAudience(audienceRules, keys)) recipientIds.push(u.user_id);
+  }
+  return recipientIds;
+}
+
 module.exports = {
   getUserAudienceScopeKeys,
   matchesAudience,
+  getRecipientUserIds,
   resolveAllowedLevels,
   SCOPE_HIERARCHY,
 };

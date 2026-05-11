@@ -13,9 +13,14 @@ router.use(authenticate);
 router.get('/', authorize('NEWS', 'VIEW'), validate(schemas.listNewsSchema), controller.list);
 router.get('/:id', authorize('NEWS', 'VIEW'), validate(schemas.idParam), controller.getById);
 router.post('/', authorize('NEWS', 'CREATE'), validate(schemas.createNewsSchema), auditLogger('NEWS_CREATED'), controller.create);
+// "Publish Now" — create and immediately publish in one shot. Requires the
+// same payload as create plus the PUBLISH permission. Fires notifications.
+router.post('/publish-now', authorize('NEWS', 'PUBLISH'), validate(schemas.createNewsSchema), auditLogger('NEWS_PUBLISHED'), controller.createAndPublish);
 router.put('/:id', authorize('NEWS', 'EDIT'), validate(schemas.updateNewsSchema), auditLogger('NEWS_UPDATED'), controller.update);
 router.delete('/:id', authorize('NEWS', 'DELETE'), auditLogger('NEWS_DELETED'), controller.remove);
 router.post('/:id/publish', authorize('NEWS', 'PUBLISH'), auditLogger('NEWS_PUBLISHED'), controller.publish);
+// Re-send the publish notification for an already-published article.
+router.post('/:id/notify', authorize('NEWS', 'PUBLISH'), validate(schemas.idParam), controller.resendNotification);
 router.post('/:id/unpublish', authorize('NEWS', 'PUBLISH'), auditLogger('NEWS_UNPUBLISHED'), controller.unpublish);
 router.post('/:id/archive', authorize('NEWS', 'EDIT'), auditLogger('NEWS_ARCHIVED'), controller.archive);
 router.post('/:id/audience', authorize('NEWS', 'EDIT'), validate(schemas.setAudienceSchema), controller.setAudience);

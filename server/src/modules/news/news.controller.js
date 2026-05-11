@@ -31,6 +31,16 @@ const publish = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: article });
 });
 
+const createAndPublish = catchAsync(async (req, res) => {
+  const article = await newsService.createAndPublish(req.body, req.user.user_id);
+  res.status(201).json({ status: 'success', data: article });
+});
+
+const resendNotification = catchAsync(async (req, res) => {
+  const result = await newsService.resendNotification(req.params.id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
 const archive = catchAsync(async (req, res) => {
   const article = await newsService.archive(req.params.id, req.user.user_id);
   res.status(200).json({ status: 'success', data: article });
@@ -58,4 +68,4 @@ const bulkPurge = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
-module.exports = { list, getById, create, update, remove, publish, unpublish, archive, setAudience, bulkRestore, bulkPurge };
+module.exports = { list, getById, create, update, remove, publish, createAndPublish, resendNotification, unpublish, archive, setAudience, bulkRestore, bulkPurge };

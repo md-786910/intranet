@@ -21,6 +21,7 @@ export default function NewsCreatePage() {
   const { addToast } = useToast();
   const { currentOrganisationId } = useCurrentOrganisation();
   const { hasPermission: canCreateNews } = usePermission('NEWS', 'CREATE');
+  const { hasPermission: canPublishNews } = usePermission('NEWS', 'PUBLISH');
   const [form, setForm] = useState({
     title: '', summary: '', body: '', category_id: '', priority: 'NORMAL',
   });
@@ -30,6 +31,7 @@ export default function NewsCreatePage() {
   const [categories, setCategories] = useState([]);
   const [otherArticles, setOtherArticles] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -59,6 +61,31 @@ export default function NewsCreatePage() {
     if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: null });
   };
 
+  // Build the API payload from the current form once — both Save Draft and
+  // Publish Now ship the same body shape; only the endpoint differs.
+  const buildPayload = () => ({
+    title: form.title,
+    summary: form.summary || null,
+    body: form.body,
+    category_id: form.category_id ? Number(form.category_id) : null,
+    priority: form.priority || 'NORMAL',
+    cover_image_url: cover?.url || null,
+    cover_image_id: cover?.media_asset_id || null,
+    related_news_ids: relatedIds.map((v) => Number(v)).filter(Boolean),
+    owning_scope_type: 'ORGANISATION',
+    owning_scope_id: currentOrganisationId,
+    audience_targets: audienceTargets.map((target) => ({
+      scope_type: target.scope_type,
+      scope_id: target.scope_id,
+    })),
+  });
+
+  const handleError = (err, fallback) => {
+    addToast(getErrorMessage(err, fallback), 'error');
+    const validationErrors = extractValidationErrors(err);
+    if (Object.keys(validationErrors).length > 0) setErrors(validationErrors);
+  };
+
   const handleSave = async () => {
     if (!currentOrganisationId) {
       addToast('No active organisation available', 'error');
@@ -67,33 +94,33 @@ export default function NewsCreatePage() {
     setSaving(true);
     setErrors({});
     try {
-      await newsService.createArticle({
-        title: form.title,
-        summary: form.summary || null,
-        body: form.body,
-        category_id: form.category_id ? Number(form.category_id) : null,
-        priority: form.priority || 'NORMAL',
-        cover_image_url: cover?.url || null,
-        cover_image_id: cover?.media_asset_id || null,
-        related_news_ids: relatedIds.map((v) => Number(v)).filter(Boolean),
-        owning_scope_type: 'ORGANISATION',
-        owning_scope_id: currentOrganisationId,
-        audience_targets: audienceTargets.map((target) => ({
-          scope_type: target.scope_type,
-          scope_id: target.scope_id,
-        })),
-      });
+      await newsService.createArticle(buildPayload());
       addToast('Article created as draft', 'success');
       navigate('/news');
     } catch (err) {
-      const message = getErrorMessage(err, 'Failed to create article');
-      addToast(message, 'error');
-      const validationErrors = extractValidationErrors(err);
-      if (Object.keys(validationErrors).length > 0) {
-        setErrors(validationErrors);
-      }
+      handleError(err, 'Failed to create article');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Publish Now — create and publish in one shot. The backend fans
+  // notifications out to the matched audience as a side-effect.
+  const handlePublishNow = async () => {
+    if (!currentOrganisationId) {
+      addToast('No active organisation available', 'error');
+      return;
+    }
+    setPublishing(true);
+    setErrors({});
+    try {
+      await newsService.createAndPublishArticle(buildPayload());
+      addToast('Article published — employees will be notified', 'success');
+      navigate('/news');
+    } catch (err) {
+      handleError(err, 'Failed to publish article');
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -179,7 +206,12 @@ export default function NewsCreatePage() {
         </div>
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
           <Button variant="secondary" onClick={() => navigate('/news')}>Cancel</Button>
-          <Button onClick={handleSave} loading={saving}>Save Draft</Button>
+          <Button variant="secondary" onClick={handleSave} loading={saving} disabled={publishing}>Save Draft</Button>
+          {canPublishNews && (
+            <Button onClick={handlePublishNow} loading={publishing} disabled={saving}>
+              Publish Now
+            </Button>
+          )}
         </div>
       </div>
     </div>

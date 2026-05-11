@@ -30,9 +30,13 @@ router.get('/:id', authorize('DOCUMENTS', 'VIEW'), validate(schemas.idParam), co
 // blanket ORGANISATION check that regular employees can't satisfy).
 router.post('/:id/view', validate(schemas.idParam), controller.recordView);
 router.post('/', authorize('DOCUMENTS', 'CREATE'), validate(schemas.createDocSchema), auditLogger('DOC_CREATED'), controller.create);
+// "Publish Now" — create and immediately publish, fanning out notifications.
+router.post('/publish-now', authorize('DOCUMENTS', 'PUBLISH'), validate(schemas.createDocSchema), auditLogger('DOC_PUBLISHED'), controller.createAndPublish);
 router.put('/:id', authorize('DOCUMENTS', 'EDIT'), validate(schemas.updateDocSchema), auditLogger('DOC_UPDATED'), controller.update);
 router.delete('/:id', authorize('DOCUMENTS', 'DELETE'), auditLogger('DOC_DELETED'), controller.remove);
 router.post('/:id/publish', authorize('DOCUMENTS', 'PUBLISH'), auditLogger('DOC_PUBLISHED'), controller.publish);
+// Re-send the publish notification for an already-published document.
+router.post('/:id/notify', authorize('DOCUMENTS', 'PUBLISH'), validate(schemas.idParam), controller.resendNotification);
 router.post('/:id/unpublish', authorize('DOCUMENTS', 'PUBLISH'), auditLogger('DOC_UNPUBLISHED'), controller.unpublish);
 router.post('/bulk-restore', authorize('DOCUMENTS', 'DELETE'), validate(schemas.bulkIdsSchema), auditLogger('DOC_RESTORED'), controller.bulkRestore);
 router.post('/bulk-purge', authorize('DOCUMENTS', 'DELETE'), validate(schemas.bulkIdsSchema), auditLogger('DOC_PURGED'), controller.bulkPurge);

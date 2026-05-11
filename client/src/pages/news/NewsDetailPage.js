@@ -27,6 +27,7 @@ export default function NewsDetailPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
+  const [notifyLoading, setNotifyLoading] = useState(false);
 
   const fetchArticle = () => {
     newsService.getArticle(id)
@@ -73,6 +74,21 @@ export default function NewsDetailPage() {
     },
   });
 
+  // Re-fire the publish notification. Useful for older articles whose original
+  // fan-out failed or was missed (e.g., notification table didn't exist yet).
+  const handleResendNotification = async () => {
+    setNotifyLoading(true);
+    try {
+      const res = await newsService.resendNotification(id);
+      const sent = res.data?.data?.sent ?? 0;
+      addToast(`Sent to ${sent} employee${sent === 1 ? '' : 's'}`, 'success');
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to send notification', 'error');
+    } finally {
+      setNotifyLoading(false);
+    }
+  };
+
   const handleConfirm = async () => {
     if (!pendingAction) return;
     setActionLoading(true);
@@ -100,7 +116,12 @@ export default function NewsDetailPage() {
               <Button onClick={askPublish}>Publish</Button>
             )}
             {canPublishNews && article.status === 'PUBLISHED' && (
-              <Button variant="secondary" onClick={askUnpublish}>Unpublish</Button>
+              <>
+                <Button variant="secondary" onClick={handleResendNotification} loading={notifyLoading}>
+                  Send Notification
+                </Button>
+                <Button variant="secondary" onClick={askUnpublish}>Unpublish</Button>
+              </>
             )}
             {canEditNews && <Button variant="secondary" onClick={() => navigate(`/news/${id}/edit`)}>Edit</Button>}
             {canDeleteNews && article.status !== 'PUBLISHED' && (

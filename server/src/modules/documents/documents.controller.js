@@ -31,6 +31,16 @@ const publish = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: doc });
 });
 
+const createAndPublish = catchAsync(async (req, res) => {
+  const doc = await documentsService.createAndPublish(req.body, req.user.user_id);
+  res.status(201).json({ status: 'success', data: doc });
+});
+
+const resendNotification = catchAsync(async (req, res) => {
+  const result = await documentsService.resendNotification(req.params.id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
 const unpublish = catchAsync(async (req, res) => {
   const doc = await documentsService.unpublish(req.params.id, req.user.user_id);
   res.status(200).json({ status: 'success', data: doc });
@@ -107,7 +117,7 @@ const deleteCategory = catchAsync(async (req, res) => {
 });
 
 module.exports = {
-  list, getById, create, update, remove, publish, unpublish,
+  list, getById, create, update, remove, publish, createAndPublish, resendNotification, unpublish,
   bulkRestore, bulkPurge,
   listVersions, createVersion,
   listCategories, getCategoryById, createCategory, updateCategory, deleteCategory,

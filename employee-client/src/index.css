@@ -72,3 +72,20 @@ body {
   background: #e9ecef;
   border-radius: 10px;
 }
+
+/* Toast entrance — slides in from the right edge and fades in. Used by the
+   notification + status toast stack rendered in ToastContext. */
+@keyframes toastSlideInRight {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.toast-enter {
+  animation: toastSlideInRight 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}

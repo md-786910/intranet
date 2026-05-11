@@ -28,6 +28,7 @@ export default function DocumentDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
   const [previewAsset, setPreviewAsset] = useState(null);
+  const [notifyLoading, setNotifyLoading] = useState(false);
 
   const fetchDoc = () => {
     documentService.getDocument(id)
@@ -74,6 +75,21 @@ export default function DocumentDetailPage() {
     },
   });
 
+  // Re-fire the publish notification. Useful for older documents whose
+  // original fan-out failed or was missed.
+  const handleResendNotification = async () => {
+    setNotifyLoading(true);
+    try {
+      const res = await documentService.resendNotification(id);
+      const sent = res.data?.data?.sent ?? 0;
+      addToast(`Sent to ${sent} employee${sent === 1 ? '' : 's'}`, 'success');
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to send notification', 'error');
+    } finally {
+      setNotifyLoading(false);
+    }
+  };
+
   const handleConfirm = async () => {
     if (!pendingAction) return;
     setActionLoading(true);
@@ -101,7 +117,12 @@ export default function DocumentDetailPage() {
               <Button onClick={askPublish}>Publish</Button>
             )}
             {canPublishDocuments && doc.status === 'PUBLISHED' && (
-              <Button variant="secondary" onClick={askUnpublish}>Unpublish</Button>
+              <>
+                <Button variant="secondary" onClick={handleResendNotification} loading={notifyLoading}>
+                  Send Notification
+                </Button>
+                <Button variant="secondary" onClick={askUnpublish}>Unpublish</Button>
+              </>
             )}
             {canEditDocuments && <Button variant="secondary" onClick={() => navigate(`/documents/${id}/edit`)}>Edit</Button>}
             {canDeleteDocuments && doc.status !== 'PUBLISHED' && (

@@ -450,7 +450,7 @@ const documentsService = {
   },
 
   async publish(id, userId) {
-    const { DocumentItem } = require('../../database/models');
+    const { DocumentItem, ContentAudienceRule } = require('../../database/models');
 
     const doc = await DocumentItem.findByPk(id);
     if (!doc) throw ApiError.notFound('Document not found');
@@ -467,7 +467,61 @@ const documentsService = {
       resource_id: id,
     });
 
+    // Fan notifications out to the audience. Fire-and-forget — must not undo
+    // the publish if downstream notification persistence/socket fails. The
+    // `.catch()` here is a safety net beneath the internal try/catch.
+    const audienceRules = await ContentAudienceRule.findAll({
+      where: { entity_type: 'DOCUMENT', entity_id: id },
+    });
+    const notificationService = require('../notifications/notifications.service');
+    const logger = require('../../config/logger');
+    notificationService
+      .notifyOnPublish({
+        type: 'DOCUMENT',
+        entity: { id, title: doc.title, summary: doc.summary },
+        audienceRules,
+        entityKey: 'documents',
+      })
+      .catch((err) => logger.error(`notifyOnPublish (DOCUMENT ${id}) rejected: ${err.message}`));
+
     return this.getById(id, userId);
+  },
+
+  // Re-send the publish notification for an already-published document.
+  // Backfills missed fan-outs and lets admins nudge employees.
+  async resendNotification(id) {
+    const { DocumentItem, ContentAudienceRule } = require('../../database/models');
+    const doc = await DocumentItem.findByPk(id);
+    if (!doc) throw ApiError.notFound('Document not found');
+    if (doc.status !== 'PUBLISHED') {
+      throw ApiError.badRequest('Only published documents can be re-sent');
+    }
+
+    const audienceRules = await ContentAudienceRule.findAll({
+      where: { entity_type: 'DOCUMENT', entity_id: id },
+    });
+    const notificationService = require('../notifications/notifications.service');
+    return notificationService.notifyOnPublish({
+      type: 'DOCUMENT',
+      entity: { id, title: doc.title, summary: doc.summary },
+      audienceRules,
+      entityKey: 'documents',
+    });
+  },
+
+  // "Publish Now" flow for documents — create and immediately flip status.
+  async createAndPublish(data, userId) {
+    const created = await this.create(data, userId);
+    try {
+      return await this.publish(created.document_item_id, userId);
+    } catch (err) {
+      try {
+        await this.delete(created.document_item_id, userId);
+      } catch (cleanupErr) {
+        // Best-effort cleanup; not fatal.
+      }
+      throw err;
+    }
   },
 
   async unpublish(id, userId) {

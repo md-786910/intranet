@@ -3,6 +3,39 @@ import { NavLink, useNavigate } from "react-router-dom";
 import MaterialIcon from "../common/MaterialIcon";
 import Avatar from "../common/Avatar";
 import { useAuth } from "../../hooks/useAuth";
+import { useNotifications } from "../../hooks/useNotifications";
+import { deeplinkFor } from "../../utils/notificationDeeplink";
+import { formatRelative } from "../../theme/dateFormat";
+
+// Visual mapping for notification rows in the bell dropdown. Each type gets a
+// distinct icon, chip background, chip text colour, and a short label so the
+// user can scan news vs documents at a glance.
+const NOTIFICATION_TYPE_STYLES = {
+  NEWS: {
+    icon: "campaign",
+    iconBg: "bg-blue-50",
+    iconColor: "text-blue-600",
+    tagBg: "bg-blue-100",
+    tagText: "text-blue-700",
+    label: "News",
+  },
+  DOCUMENT: {
+    icon: "description",
+    iconBg: "bg-amber-50",
+    iconColor: "text-amber-700",
+    tagBg: "bg-amber-100",
+    tagText: "text-amber-800",
+    label: "Document",
+  },
+};
+const DEFAULT_TYPE_STYLE = {
+  icon: "notifications",
+  iconBg: "bg-zinc-50",
+  iconColor: "text-zinc-600",
+  tagBg: "bg-zinc-100",
+  tagText: "text-zinc-700",
+  label: "Update",
+};
 
 const NAV_ITEMS = [
   { to: "/home", label: "Home" },
@@ -25,6 +58,19 @@ export default function TopNav() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const menuRef = useRef(null);
   const notificationsRef = useRef(null);
+  const {
+    items: notifications,
+    unreadCount,
+    loading: notificationsLoading,
+    markRead,
+    markAllRead,
+  } = useNotifications();
+
+  const onNotificationClick = (notification) => {
+    setNotificationsOpen(false);
+    if (!notification.read_at) markRead(notification.notification_id);
+    navigate(deeplinkFor(notification));
+  };
 
   useEffect(() => {
     if (!open && !notificationsOpen) return;
@@ -86,77 +132,120 @@ export default function TopNav() {
                 type="button"
                 onClick={() => setNotificationsOpen((v) => !v)}
                 className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800 transition-all active:scale-90 relative"
+                aria-label="Notifications"
               >
                 <MaterialIcon name="notifications" className="text-[24px]" />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                )}
               </button>
 
               {notificationsOpen && (
                 <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl border border-zinc-100 shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
                     <h3 className="font-bold text-zinc-900">Notifications</h3>
-                    <span className="text-xs font-semibold text-primary px-2 py-0.5 bg-primary-container/20 rounded-full">
-                      2 New
-                    </span>
+                    {unreadCount > 0 && (
+                      <span className="text-xs font-semibold text-primary px-2 py-0.5 bg-primary-container/20 rounded-full">
+                        {unreadCount > 99 ? '99+' : unreadCount} New
+                      </span>
+                    )}
                   </div>
                   <div className="max-h-[400px] overflow-y-auto">
-                    <div className="p-4 border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors cursor-pointer group">
-                      <div className="flex gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
-                          <MaterialIcon
-                            name="article"
-                            className="text-blue-600 text-[20px]"
-                          />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-zinc-900 leading-snug">
-                            New Policy Update
-                          </p>
-                          <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">
-                            The Hybrid Work Policy has been updated for Q3.
-                            Please review the changes.
-                          </p>
-                          <span className="text-[10px] text-zinc-400 font-medium mt-1 block">
-                            2 hours ago
-                          </span>
-                        </div>
+                    {notificationsLoading ? (
+                      <div className="px-5 py-8 text-center text-sm text-zinc-500">
+                        Loading…
                       </div>
-                    </div>
-                    <div className="p-4 border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors cursor-pointer group">
-                      <div className="flex gap-3">
-                        <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-green-100 transition-colors">
-                          <MaterialIcon
-                            name="celebration"
-                            className="text-green-600 text-[20px]"
-                          />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-zinc-900 leading-snug">
-                            Happy Birthday!
-                          </p>
-                          <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">
-                            Join us in wishing Sarah a very happy birthday
-                            today!
-                          </p>
-                          <span className="text-[10px] text-zinc-400 font-medium mt-1 block">
-                            5 hours ago
-                          </span>
-                        </div>
+                    ) : notifications.length === 0 ? (
+                      <div className="px-5 py-10 text-center">
+                        <MaterialIcon
+                          name="notifications_none"
+                          className="text-zinc-300"
+                          style={{ fontSize: 40 }}
+                        />
+                        <p className="text-sm text-zinc-500 mt-2">
+                          No notifications yet.
+                        </p>
                       </div>
-                    </div>
+                    ) : (
+                      notifications.map((n) => {
+                        const style =
+                          NOTIFICATION_TYPE_STYLES[n.type] || DEFAULT_TYPE_STYLE;
+                        const isUnread = !n.read_at;
+                        return (
+                          <button
+                            key={n.notification_id}
+                            type="button"
+                            onClick={() => onNotificationClick(n)}
+                            className={`w-full text-left px-4 py-3 border-b border-zinc-50 hover:bg-zinc-50/70 transition-colors cursor-pointer group relative ${
+                              isUnread ? 'bg-primary-container/10' : ''
+                            }`}
+                          >
+                            {/* Left accent strip — colored when unread to draw the eye */}
+                            {isUnread && (
+                              <span
+                                className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${
+                                  n.type === 'DOCUMENT' ? 'bg-amber-500' : 'bg-blue-500'
+                                }`}
+                                aria-hidden
+                              />
+                            )}
+                            <div className="flex gap-3">
+                              <div
+                                className={`w-10 h-10 rounded-xl ${style.iconBg} flex items-center justify-center shrink-0`}
+                              >
+                                <MaterialIcon
+                                  name={style.icon}
+                                  className={`${style.iconColor} text-[20px]`}
+                                  style={{ fontVariationSettings: '"FILL" 1' }}
+                                />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <span
+                                    className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${style.tagBg} ${style.tagText}`}
+                                  >
+                                    {style.label}
+                                  </span>
+                                  <span
+                                    className="text-[10px] text-zinc-400 font-medium"
+                                    title={new Date(n.created_at).toLocaleString()}
+                                  >
+                                    {formatRelative(n.created_at)}
+                                  </span>
+                                </div>
+                                <p
+                                  className={`text-sm leading-snug line-clamp-1 ${
+                                    isUnread
+                                      ? 'font-semibold text-zinc-900'
+                                      : 'font-medium text-zinc-700'
+                                  }`}
+                                >
+                                  {n.title}
+                                </p>
+                                {n.body && (
+                                  <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">
+                                    {n.body}
+                                  </p>
+                                )}
+                              </div>
+                              {isUnread && (
+                                <span className="w-2 h-2 mt-1.5 rounded-full bg-primary shrink-0" />
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNotificationsOpen(false);
-                      navigate("/settings", {
-                        state: { activeTab: "notifications" },
-                      });
-                    }}
-                    className="w-full py-3 text-sm font-bold text-zinc-600 hover:text-primary hover:bg-zinc-50 transition-all border-t border-zinc-100"
-                  >
-                    View All Notifications
-                  </button>
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={markAllRead}
+                      className="w-full py-3 text-sm font-bold text-zinc-600 hover:text-primary hover:bg-zinc-50 transition-all border-t border-zinc-100"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
                 </div>
               )}
             </div>
