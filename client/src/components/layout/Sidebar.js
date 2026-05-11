@@ -75,6 +75,7 @@ const menuItems = [
     defaultOpen: false,
     children: [
       { label: 'Push', path: '/push', icon: ICONS.push, module: 'PUSH', action: 'VIEW' },
+      { label: 'Quick Links', path: '/quick-links', icon: ICONS.categories, module: 'ADMIN', action: 'MANAGE_EMPLOYEES' },
       { label: 'Analytics', path: '/analytics', icon: ICONS.analytics, module: 'ADMIN', action: 'VIEW_ANALYTICS' },
     ],
   },

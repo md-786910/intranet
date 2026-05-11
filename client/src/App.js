@@ -42,6 +42,7 @@ import PushDetailPage from './pages/push/PushDetailPage';
 import AnalyticsPage from './pages/analytics/AnalyticsPage';
 import MediaGalleryPage from './pages/media/MediaGalleryPage';
 import CategoriesPage from './pages/categories/CategoriesPage';
+import QuickLinksPage from './pages/quick-links/QuickLinksPage';
 
 function HomeRedirect() {
   const { hasPermission } = useContext(PermissionContext);
@@ -124,6 +125,9 @@ function App() {
 
                 {/* Categories */}
                 <Route path="/categories" element={<CategoriesPage />} />
+
+                {/* Quick Links */}
+                <Route path="/quick-links" element={<QuickLinksPage />} />
 
                 {/* Analytics */}
                 <Route path="/analytics" element={<AnalyticsPage />} />

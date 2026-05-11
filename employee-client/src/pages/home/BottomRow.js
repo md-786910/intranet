@@ -1,12 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import MaterialIcon from '../../components/common/MaterialIcon';
-
-const QUICK_LINKS = [
-  { label: 'Employee Directory', icon: 'badge' },
-  { label: 'Company Calendar', icon: 'calendar_month' },
-  { label: 'IT Support Portal', icon: 'help_center' },
-  { label: 'Payroll & Benefits', icon: 'request_quote' },
-];
+import Skeleton from '../../components/common/Skeleton';
+import { quickLinksService } from '../../services/quickLinksService';
+import { iconForQuickLink } from './quickLinkIcon';
 
 export default function BottomRow() {
   return (
@@ -53,23 +50,90 @@ export default function BottomRow() {
       </div>
 
       {/* Quick Links */}
-      <div className="lg:col-span-4 bg-white border border-zinc-100 rounded-3xl p-unit-lg shadow-sm flex flex-col">
-        <h3 className="font-h3 text-h3 mb-6">Quick Links</h3>
+      <QuickLinksCard />
+    </section>
+  );
+}
+
+function QuickLinksCard() {
+  const [links, setLinks] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    quickLinksService
+      .list()
+      .then((res) => {
+        if (cancelled) return;
+        const data = res.data?.data || [];
+        setLinks(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setLinks([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="lg:col-span-4 bg-white border border-zinc-100 rounded-3xl p-unit-lg shadow-sm flex flex-col">
+      <h3 className="font-h3 text-h3 mb-6">Quick Links</h3>
+
+      {loading ? (
         <ul className="space-y-3 flex-grow">
-          {QUICK_LINKS.map((link) => (
-            <li key={link.label}>
-              <a
-                className="flex items-center gap-3 p-3 hover:bg-zinc-50 rounded-xl transition-colors border border-zinc-50"
-                href="#"
-              >
-                <MaterialIcon name={link.icon} className="text-primary text-sm" />
-                <span className="font-medium text-body-sm">{link.label}</span>
-              </a>
+          {[0, 1, 2, 3].map((i) => (
+            <li key={i}>
+              <Skeleton className="h-11 rounded-xl" />
             </li>
           ))}
         </ul>
-      </div>
-    </section>
+      ) : links.length === 0 ? (
+        <p className="text-body-sm text-on-surface-variant py-4">
+          No quick links yet.
+        </p>
+      ) : (
+        <ul className="space-y-3 flex-grow">
+          {links.map((link) => (
+            <li key={link.quick_link_id}>
+              <QuickLinkAnchor link={link} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function QuickLinkAnchor({ link }) {
+  const icon = iconForQuickLink(link.label);
+  const isExternal = /^https?:\/\//i.test(link.url);
+  const className =
+    'flex items-center gap-3 p-3 hover:bg-zinc-50 rounded-xl transition-colors border border-zinc-50';
+
+  // Internal paths (starting with "/") use React Router's <Link>; external URLs
+  // open in a new tab.
+  if (isExternal) {
+    return (
+      <a
+        href={link.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={className}
+      >
+        <MaterialIcon name={icon} className="text-primary text-sm" />
+        <span className="font-medium text-body-sm">{link.label}</span>
+      </a>
+    );
+  }
+  return (
+    <Link to={link.url} className={className}>
+      <MaterialIcon name={icon} className="text-primary text-sm" />
+      <span className="font-medium text-body-sm">{link.label}</span>
+    </Link>
   );
 }
 

@@ -31,6 +31,7 @@ const mediaRoutes = require("./modules/media/media.routes");
 const categoriesRoutes = require("./modules/categories/categories.routes");
 const analyticsRoutes = require("./modules/analytics/analytics.routes");
 const chatRoutes = require("./modules/chat/chat.routes");
+const quickLinksRoutes = require("./modules/quick-links/quick-links.routes");
 
 const app = express();
 
@@ -85,6 +86,7 @@ app.use("/api/v1/media", mediaRoutes);
 app.use("/api/v1/categories", categoriesRoutes);
 app.use("/api/v1/analytics", analyticsRoutes);
 app.use("/api/v1/chat", chatRoutes);
+app.use("/api/v1/quick-links", quickLinksRoutes);
 
 // Serve uploaded files. Strip frame-blocking headers so the client (running on a
 // different dev origin) can preview PDFs / CSVs / text in an iframe. Helmet's
