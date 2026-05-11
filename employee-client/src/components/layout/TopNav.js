@@ -1,22 +1,22 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import MaterialIcon from '../common/MaterialIcon';
-import Avatar from '../common/Avatar';
-import { useAuth } from '../../hooks/useAuth';
+import React, { useEffect, useRef, useState } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
+import MaterialIcon from "../common/MaterialIcon";
+import Avatar from "../common/Avatar";
+import { useAuth } from "../../hooks/useAuth";
 
 const NAV_ITEMS = [
-  { to: '/home', label: 'Home' },
-  { to: '/people', label: 'People' },
-  { to: '/news', label: 'News' },
-  { to: '/documents', label: 'Documents' },
-  { to: '/policies', label: 'Policies' },
-  { to: '/org-chart', label: 'Org Chart' },
+  { to: "/home", label: "Home" },
+  { to: "/people", label: "People" },
+  { to: "/news", label: "News" },
+  { to: "/documents", label: "Documents" },
+  // { to: '/policies', label: 'Policies' },
+  { to: "/org-chart", label: "Org Chart" },
 ];
 
 const ACTIVE =
-  'text-zinc-900 font-semibold border-b-2 border-primary-container pb-1 h-full flex items-center mt-0.5';
+  "text-zinc-900 font-semibold border-b-2 border-primary-container pb-1 h-full flex items-center mt-0.5";
 const INACTIVE =
-  'text-zinc-500 font-medium hover:text-zinc-800 transition-all duration-200';
+  "text-zinc-500 font-medium hover:text-zinc-800 transition-all duration-200";
 
 export default function TopNav() {
   const { user, logout } = useAuth();
@@ -29,20 +29,21 @@ export default function TopNav() {
   useEffect(() => {
     if (!open && !notificationsOpen) return;
     const onClick = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setOpen(false);
+      if (menuRef.current && !menuRef.current.contains(e.target))
+        setOpen(false);
       if (
         notificationsRef.current &&
         !notificationsRef.current.contains(e.target)
       )
         setNotificationsOpen(false);
     };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
   }, [open, notificationsOpen]);
 
   const fullName = user
-    ? [user.first_name, user.last_name].filter(Boolean).join(' ') || user.email
-    : '';
+    ? [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email
+    : "";
 
   return (
     <header className="bg-white border-b border-zinc-100 shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
@@ -59,7 +60,7 @@ export default function TopNav() {
               <NavLink
                 key={item.to}
                 to={item.to}
-                end={item.to === '/home'}
+                end={item.to === "/home"}
                 className={({ isActive }) => (isActive ? ACTIVE : INACTIVE)}
               >
                 {item.label}
@@ -102,14 +103,18 @@ export default function TopNav() {
                     <div className="p-4 border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors cursor-pointer group">
                       <div className="flex gap-3">
                         <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
-                          <MaterialIcon name="article" className="text-blue-600 text-[20px]" />
+                          <MaterialIcon
+                            name="article"
+                            className="text-blue-600 text-[20px]"
+                          />
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-zinc-900 leading-snug">
                             New Policy Update
                           </p>
                           <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">
-                            The Hybrid Work Policy has been updated for Q3. Please review the changes.
+                            The Hybrid Work Policy has been updated for Q3.
+                            Please review the changes.
                           </p>
                           <span className="text-[10px] text-zinc-400 font-medium mt-1 block">
                             2 hours ago
@@ -120,14 +125,18 @@ export default function TopNav() {
                     <div className="p-4 border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors cursor-pointer group">
                       <div className="flex gap-3">
                         <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-green-100 transition-colors">
-                          <MaterialIcon name="celebration" className="text-green-600 text-[20px]" />
+                          <MaterialIcon
+                            name="celebration"
+                            className="text-green-600 text-[20px]"
+                          />
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-zinc-900 leading-snug">
                             Happy Birthday!
                           </p>
                           <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">
-                            Join us in wishing Sarah a very happy birthday today!
+                            Join us in wishing Sarah a very happy birthday
+                            today!
                           </p>
                           <span className="text-[10px] text-zinc-400 font-medium mt-1 block">
                             5 hours ago
@@ -140,7 +149,9 @@ export default function TopNav() {
                     type="button"
                     onClick={() => {
                       setNotificationsOpen(false);
-                      navigate('/settings', { state: { activeTab: 'notifications' } });
+                      navigate("/settings", {
+                        state: { activeTab: "notifications" },
+                      });
                     }}
                     className="w-full py-3 text-sm font-bold text-zinc-600 hover:text-primary hover:bg-zinc-50 transition-all border-t border-zinc-100"
                   >
@@ -158,44 +169,50 @@ export default function TopNav() {
               >
                 <Avatar name={fullName} src={user?.avatar_url} size="sm" />
               </button>
-            {open && (
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl border border-zinc-100 shadow-lg overflow-hidden z-50">
-                <div className="px-4 py-3 border-b border-zinc-100">
-                  <p className="text-sm font-semibold text-on-surface truncate">
-                    {fullName}
-                  </p>
-                  <p className="text-xs text-on-surface-variant truncate">
-                    {user?.email}
-                  </p>
+              {open && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl border border-zinc-100 shadow-lg overflow-hidden z-50">
+                  <div className="px-4 py-3 border-b border-zinc-100">
+                    <p className="text-sm font-semibold text-on-surface truncate">
+                      {fullName}
+                    </p>
+                    <p className="text-xs text-on-surface-variant truncate">
+                      {user?.email}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      navigate("/settings");
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-zinc-50 transition-colors flex items-center gap-2"
+                  >
+                    <MaterialIcon
+                      name="settings"
+                      className="text-[18px] text-zinc-500"
+                    />
+                    Settings
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      logout();
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-zinc-50 transition-colors flex items-center gap-2 border-t border-zinc-100"
+                  >
+                    <MaterialIcon
+                      name="logout"
+                      className="text-[18px] text-zinc-500"
+                    />
+                    Sign out
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    navigate('/settings');
-                  }}
-                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-zinc-50 transition-colors flex items-center gap-2"
-                >
-                  <MaterialIcon name="settings" className="text-[18px] text-zinc-500" />
-                  Settings
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    logout();
-                  }}
-                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-zinc-50 transition-colors flex items-center gap-2 border-t border-zinc-100"
-                >
-                  <MaterialIcon name="logout" className="text-[18px] text-zinc-500" />
-                  Sign out
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </header>
+    </header>
   );
 }

@@ -9,7 +9,6 @@ import ArticleHero from './detail/ArticleHero';
 import ArticleBody from './detail/ArticleBody';
 import EngagementBar from './detail/EngagementBar';
 import CommentsSection from './detail/CommentsSection';
-import TakeActionCard from './detail/TakeActionCard';
 import RelatedArticles from './detail/RelatedArticles';
 import { getErrorMessage } from '../../utils/errorUtils';
 import { formatRelative } from '../../theme/dateFormat';
@@ -84,41 +83,35 @@ export default function NewsDetailPage() {
           {/* Hero Image — full width of the 1280px container */}
           <ArticleHero article={article} />
 
-          {/* Article Content — narrower reading column with sidebar */}
-          <div className="max-w-4xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-unit-xl">
-              <article className="md:col-span-12 lg:col-span-8">
-                <ArticleBody body={article.body} />
-                {(article.published_at || article.created_at) && (
-                  <p className="text-[11px] text-zinc-400 mt-unit-lg">
-                    Posted {formatRelative(article.published_at || article.created_at)}
-                  </p>
-                )}
-                <EngagementBar
-                  articleId={article.news_item_id}
-                  title={article.title}
-                  initialLiked={!!article.my_like}
-                  initialSaved={!!article.my_save}
-                  initialLikeCount={article.like_count || 0}
-                  initialCommentCount={commentCount}
-                  initialShareCount={article.share_count || 0}
-                  onCommentClick={() => commentsRef.current?.focusComposer()}
-                />
+          {/* Article + Comments — single centered reading column */}
+          <div className="max-w-3xl mx-auto">
+            <article>
+              <ArticleBody body={article.body} />
+              {(article.published_at || article.created_at) && (
+                <p className="text-[11px] text-zinc-400 mt-unit-lg">
+                  Posted {formatRelative(article.published_at || article.created_at)}
+                </p>
+              )}
+              <EngagementBar
+                articleId={article.news_item_id}
+                title={article.title}
+                initialLiked={!!article.my_like}
+                initialSaved={!!article.my_save}
+                initialLikeCount={article.like_count || 0}
+                initialCommentCount={commentCount}
+                initialShareCount={article.share_count || 0}
+                onCommentClick={() => commentsRef.current?.focusComposer()}
+              />
+            </article>
 
-                <CommentsSection
-                  ref={commentsRef}
-                  articleId={article.news_item_id}
-                  currentUserId={user?.user_id}
-                  onCountChange={setCommentCount}
-                />
-              </article>
-
-              <aside className="md:col-span-12 lg:col-span-4">
-                <div className="lg:sticky lg:top-24 space-y-unit-xl">
-                  <TakeActionCard />
-                </div>
-              </aside>
-            </div>
+            <section className="mt-unit-xl pt-unit-xl border-t border-outline-variant/40">
+              <CommentsSection
+                ref={commentsRef}
+                articleId={article.news_item_id}
+                currentUserId={user?.user_id}
+                onCountChange={setCommentCount}
+              />
+            </section>
           </div>
 
           {/* Related Articles — full width */}

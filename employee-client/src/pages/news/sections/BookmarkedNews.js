@@ -5,59 +5,54 @@ import CategoryPill from '../../../components/news/CategoryPill';
 import { formatRelative, readingTime } from '../../../theme/dateFormat';
 import { resolveMediaUrl } from '../../../utils/mediaUtils';
 
-export default function PinnedUpdates({ articles }) {
+// Renders the caller's saved articles in a dedicated top-of-page section,
+// styled to match `PinnedUpdates` so the two read as sibling concepts.
+// Source: articles flagged `my_save = true` by the list endpoint.
+export default function BookmarkedNews({ articles }) {
   if (!articles || articles.length === 0) return null;
 
   return (
     <section className="space-y-unit-lg">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-unit-sm">
-          <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-primary-container">
+          <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-secondary-container">
             <MaterialIcon
-              name="push_pin"
-              className="text-primary text-[18px]"
+              name="bookmark"
+              className="text-secondary text-[18px]"
               style={{ fontVariationSettings: '"FILL" 1' }}
             />
           </span>
-          <h2 className="font-h2 text-h2 text-on-surface">Pinned</h2>
+          <h2 className="font-h2 text-h2 text-on-surface">Bookmarks</h2>
         </div>
-        <Link
-          to="/news/pinned"
-          className="text-primary font-body-sm font-medium cursor-pointer hover:underline"
-        >
-          View All
-        </Link>
+        <span className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+          {articles.length} saved
+        </span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-unit-lg">
         {articles.map((a) => (
-          <PinnedCard key={a.news_item_id} article={a} />
+          <BookmarkCard key={a.news_item_id} article={a} />
         ))}
       </div>
     </section>
   );
 }
 
-function PinnedCard({ article }) {
+function BookmarkCard({ article }) {
   const [imgFailed, setImgFailed] = useState(false);
   const id = article.news_item_id;
   const categoryName = article.category?.name;
   const showImage = article.cover_image_url && !imgFailed;
-  const urgent = article.priority === 'URGENT';
 
   return (
     <Link
       to={`/news/${id}`}
-      className="relative group bg-white border border-outline-variant rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-primary-container/60 transition-all flex"
+      className="relative group bg-white border border-outline-variant rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-secondary-container/60 transition-all flex"
     >
-      {/* Accent strip on the left */}
-      <div
-        className={`w-1 flex-shrink-0 ${urgent ? 'bg-error' : 'bg-primary'}`}
-        aria-hidden
-      />
+      <div className="w-1 flex-shrink-0 bg-secondary" aria-hidden />
 
       <div className="flex gap-unit-md p-unit-md flex-1 min-w-0">
-        <div className="w-28 h-28 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-primary-container to-secondary-container flex items-center justify-center">
+        <div className="w-28 h-28 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-secondary-container to-tertiary-container flex items-center justify-center">
           {showImage ? (
             <img
               src={resolveMediaUrl(article.cover_image_url)}
@@ -66,7 +61,11 @@ function PinnedCard({ article }) {
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
           ) : (
-            <MaterialIcon name="article" className="text-primary text-4xl opacity-60" />
+            <MaterialIcon
+              name="bookmark"
+              className="text-secondary text-4xl opacity-60"
+              style={{ fontVariationSettings: '"FILL" 1' }}
+            />
           )}
         </div>
 
@@ -74,14 +73,8 @@ function PinnedCard({ article }) {
           <div className="space-y-unit-xs">
             <div className="flex items-center gap-unit-xs flex-wrap">
               {categoryName && <CategoryPill category={categoryName} variant="tag" />}
-              {urgent && (
-                <span className="inline-flex items-center gap-1 font-label-caps text-label-caps text-error uppercase">
-                  <MaterialIcon name="priority_high" className="text-[14px]" />
-                  Urgent
-                </span>
-              )}
             </div>
-            <h3 className="font-h3 text-base text-on-surface group-hover:text-primary leading-snug line-clamp-2 transition-colors">
+            <h3 className="font-h3 text-base text-on-surface group-hover:text-secondary leading-snug line-clamp-2 transition-colors">
               {article.title}
             </h3>
             {article.summary && (
@@ -97,15 +90,14 @@ function PinnedCard({ article }) {
         </div>
       </div>
 
-      {/* Bookmark / pin badge in the top-right corner */}
-      <div className="absolute top-3 right-3 flex items-center gap-1 bg-primary-container/90 backdrop-blur-sm text-on-primary-container px-2 py-1 rounded-full shadow-sm">
+      <div className="absolute top-3 right-3 flex items-center gap-1 bg-secondary-container/90 backdrop-blur-sm text-on-secondary-container px-2 py-1 rounded-full shadow-sm">
         <MaterialIcon
-          name="push_pin"
+          name="bookmark"
           className="text-[12px]"
           style={{ fontVariationSettings: '"FILL" 1' }}
         />
         <span className="font-label-caps text-[10px] uppercase tracking-wide font-bold">
-          Pinned
+          Saved
         </span>
       </div>
     </Link>

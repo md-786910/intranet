@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import MaterialIcon from '../common/MaterialIcon';
 import CategoryPill from './CategoryPill';
@@ -13,9 +13,12 @@ import { resolveMediaUrl } from '../../utils/mediaUtils';
 //   { news_item_id, title, summary, cover_image_url, published_at, body,
 //     category: { name } | null }
 export default function NewsCard({ article, size = 'sm' }) {
+  const [imgFailed, setImgFailed] = useState(false);
+
   if (!article) return null;
   const id = article.news_item_id;
   const categoryName = article.category?.name;
+  const showImage = article.cover_image_url && !imgFailed;
 
   const thumb = size === 'md' ? 'w-24 h-24' : 'w-24 h-24';
   const padding = size === 'md' ? 'p-unit-lg' : 'p-unit-md';
@@ -25,16 +28,16 @@ export default function NewsCard({ article, size = 'sm' }) {
       to={`/news/${id}`}
       className={`bg-white border border-outline-variant ${padding} rounded-xl shadow-sm hover:border-primary-container transition-colors cursor-pointer group flex gap-unit-md`}
     >
-      <div className={`${thumb} rounded-lg overflow-hidden flex-shrink-0 bg-surface-container flex items-center justify-center`}>
-        {article.cover_image_url ? (
+      <div className={`${thumb} rounded-lg overflow-hidden flex-shrink-0 bg-gradient-to-br from-primary-container to-secondary-container flex items-center justify-center`}>
+        {showImage ? (
           <img
             className="w-full h-full object-cover"
             src={resolveMediaUrl(article.cover_image_url)}
             alt={article.title}
-
+            onError={() => setImgFailed(true)}
           />
         ) : (
-          <MaterialIcon name="article" className="text-primary text-3xl" />
+          <MaterialIcon name="article" className="text-primary text-3xl opacity-60" />
         )}
       </div>
       <div className="space-y-1 min-w-0">

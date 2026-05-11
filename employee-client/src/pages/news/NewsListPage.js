@@ -3,10 +3,9 @@ import { newsService } from '../../services/newsService';
 import EmptyState from '../../components/common/EmptyState';
 import Skeleton from '../../components/common/Skeleton';
 import PinnedUpdates from './sections/PinnedUpdates';
+import BookmarkedNews from './sections/BookmarkedNews';
 import FeaturedStory from './sections/FeaturedStory';
 import LatestNews from './sections/LatestNews';
-import NewsletterCard from './sections/NewsletterCard';
-import NewsResourcesCard from './sections/NewsResourcesCard';
 import { getErrorMessage } from '../../utils/errorUtils';
 
 const PAGE_SIZE = 20;
@@ -64,7 +63,7 @@ export default function NewsListPage() {
     }
   };
 
-  const { pinned, featured, rest } = useMemo(() => splitSections(articles), [articles]);
+  const { pinned, bookmarks, featured, rest } = useMemo(() => splitSections(articles), [articles]);
   const canLoadMore = pagination ? page < pagination.totalPages : false;
 
   return (
@@ -87,20 +86,13 @@ export default function NewsListPage() {
         ) : (
           <>
             <PinnedUpdates articles={pinned} />
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-unit-xl items-start">
-              <div className="lg:col-span-8 space-y-unit-xl">
-                {featured && <FeaturedStory article={featured} />}
-                <LatestNews
-                  articles={rest}
-                  onLoadMore={loadMore}
-                  canLoadMore={canLoadMore}
-                />
-              </div>
-              <aside className="lg:col-span-4 space-y-unit-xl">
-                <NewsletterCard />
-                <NewsResourcesCard />
-              </aside>
-            </div>
+            <BookmarkedNews articles={bookmarks} />
+            {featured && <FeaturedStory article={featured} />}
+            <LatestNews
+              articles={rest}
+              onLoadMore={loadMore}
+              canLoadMore={canLoadMore}
+            />
           </>
         )}
       </div>
@@ -113,10 +105,19 @@ function splitSections(articles) {
     .filter((a) => a.priority === 'HIGH' || a.priority === 'URGENT')
     .slice(0, 2);
   const pinnedIds = new Set(pinned.map((a) => a.news_item_id));
+
+  // User-bookmarked articles get their own section right after Pinned.
+  // They are NOT removed from Featured/Latest — saving an article shouldn't
+  // hide it from the main feed, just surface it as a shortcut up top.
+  // We still dedupe against Pinned (admin-pinned items are already prominent).
+  const bookmarks = articles
+    .filter((a) => a.my_save && !pinnedIds.has(a.news_item_id))
+    .slice(0, 4);
+
   const remaining = articles.filter((a) => !pinnedIds.has(a.news_item_id));
   const featured = remaining[0] || null;
   const rest = remaining.slice(1);
-  return { pinned, featured, rest };
+  return { pinned, bookmarks, featured, rest };
 }
 
 function NewsLoadingSkeleton() {
@@ -126,7 +127,7 @@ function NewsLoadingSkeleton() {
         <Skeleton className="h-32 rounded-xl" />
         <Skeleton className="h-32 rounded-xl" />
       </div>
-      <Skeleton className="aspect-[21/9] rounded-xl" />
+      <Skeleton className="h-80 rounded-2xl" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-unit-md">
         <Skeleton className="h-28 rounded-xl" />
         <Skeleton className="h-28 rounded-xl" />

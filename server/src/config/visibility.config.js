@@ -63,7 +63,7 @@ module.exports = {
 
   // "Key Contacts" card on the home page (employee-client/src/pages/home/MainContentGrid.js)
   keyContacts: {
-    level: "VERTICAL",
+    level: "ORGANISATION",
   },
 
   // "Organisation Chart" card on the home page (departments shown to the user)
