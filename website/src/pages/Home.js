@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowRight, Users, Shield, Zap } from 'lucide-react';
+import { EMPLOYEE_PORTAL_URL, ADMIN_PORTAL_URL } from '../config/portals';
 
 const Home = () => {
   return (
@@ -16,14 +17,14 @@ const Home = () => {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <a
-                href="http://localhost:3001"
+                href={EMPLOYEE_PORTAL_URL}
                 className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-body-lg font-medium rounded-lg text-on-primary bg-primary hover:bg-on-primary-fixed transition-colors"
               >
                 Employee Portal
                 <ArrowRight className="ml-2 -mr-1 h-5 w-5" aria-hidden="true" />
               </a>
               <a
-                href="http://localhost:3000"
+                href={ADMIN_PORTAL_URL}
                 className="inline-flex items-center justify-center px-6 py-3 border-2 border-primary text-body-lg font-medium rounded-lg text-primary bg-transparent hover:bg-primary-container transition-colors"
               >
                 Admin Dashboard

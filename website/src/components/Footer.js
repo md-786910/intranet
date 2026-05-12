@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import Logo from './Logo';
+import { EMPLOYEE_PORTAL_URL, ADMIN_PORTAL_URL } from '../config/portals';
 
 const Footer = () => {
   return (
@@ -27,8 +28,8 @@ const Footer = () => {
           <div>
             <h3 className="text-h3 text-on-surface font-semibold mb-4">Portals</h3>
             <ul className="space-y-2">
-              <li><a href="http://localhost:3001" className="text-body-sm text-on-surface-variant hover:text-primary transition-colors">Employee Login</a></li>
-              <li><a href="http://localhost:3000" className="text-body-sm text-on-surface-variant hover:text-primary transition-colors">Admin Portal</a></li>
+              <li><a href={EMPLOYEE_PORTAL_URL} className="text-body-sm text-on-surface-variant hover:text-primary transition-colors">Employee Login</a></li>
+              <li><a href={ADMIN_PORTAL_URL} className="text-body-sm text-on-surface-variant hover:text-primary transition-colors">Admin Portal</a></li>
             </ul>
           </div>
         </div>

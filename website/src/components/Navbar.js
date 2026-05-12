@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import Logo from './Logo';
+import { EMPLOYEE_PORTAL_URL, ADMIN_PORTAL_URL } from '../config/portals';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -44,13 +45,13 @@ const Navbar = () => {
 
           <div className="hidden sm:flex sm:items-center sm:space-x-4">
             <a
-              href="http://localhost:3001"
+              href={EMPLOYEE_PORTAL_URL}
               className="inline-flex items-center px-4 py-2 border border-transparent text-body-sm font-medium rounded-md text-on-primary-container bg-primary-container hover:bg-primary-fixed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
             >
               Employee Login
             </a>
             <a
-              href="http://localhost:3000"
+              href={ADMIN_PORTAL_URL}
               className="inline-flex items-center px-4 py-2 border border-transparent text-body-sm font-medium rounded-md text-on-primary bg-primary hover:bg-on-primary-fixed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
             >
               Admin Portal
@@ -87,13 +88,13 @@ const Navbar = () => {
             ))}
             <div className="mt-4 pt-4 border-t border-outline-variant px-4 space-y-2">
               <a
-                href="http://localhost:3001"
+                href={EMPLOYEE_PORTAL_URL}
                 className="block w-full text-center px-4 py-2 border border-transparent text-body-md font-medium rounded-md text-on-primary-container bg-primary-container hover:bg-primary-fixed"
               >
                 Employee Login
               </a>
               <a
-                href="http://localhost:3000"
+                href={ADMIN_PORTAL_URL}
                 className="block w-full text-center px-4 py-2 border border-transparent text-body-md font-medium rounded-md text-on-primary bg-primary hover:bg-on-primary-fixed"
               >
                 Admin Portal
