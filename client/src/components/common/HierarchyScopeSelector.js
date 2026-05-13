@@ -117,27 +117,51 @@ export default function HierarchyScopeSelector({
     });
   }, [departmentOptions]);
 
+  // Resolve "narrowest wins" PER BRANCH, not globally — so selecting two
+  // verticals where one has a department picked and the other doesn't yields
+  // [Department: …, Vertical: …] instead of collapsing to a single Department.
+  // The rule for each office is:
+  //   - No verticals selected → emit the OFFICE
+  //   - Vertical selected, no departments under it → emit the VERTICAL
+  //   - Vertical selected with departments under it → emit each DEPARTMENT
   const resolvedScopes = useMemo(() => {
     if (!orgNode) return [];
 
-    if (selectedDepartmentIds.length > 0) {
-      return selectedVerticals.flatMap((vertical) =>
-        (vertical.children || [])
-          .filter((department) => selectedDepartmentIds.includes(String(department.id)))
-          .map((department) => buildScope('DEPARTMENT', department, `${department.name} · ${vertical.name} · ${vertical.officeName}`)),
+    if (selectedOfficeIds.length === 0) {
+      return [buildScope('ORGANISATION', orgNode, orgNode.name)];
+    }
+
+    const scopes = [];
+
+    selectedOffices.forEach((office) => {
+      const verticalsInOffice = (office.children || []).filter(
+        (vertical) => selectedVerticalIds.includes(String(vertical.id)),
       );
-    }
 
-    if (selectedVerticalIds.length > 0) {
-      return selectedVerticals.map((vertical) => buildScope('VERTICAL', vertical, `${vertical.name} · ${vertical.officeName}`));
-    }
+      if (verticalsInOffice.length === 0) {
+        scopes.push(buildScope('OFFICE_LOCATION', office, office.name));
+        return;
+      }
 
-    if (selectedOfficeIds.length > 0) {
-      return selectedOffices.map((office) => buildScope('OFFICE_LOCATION', office, office.name));
-    }
+      verticalsInOffice.forEach((vertical) => {
+        const departmentsInVertical = (vertical.children || []).filter(
+          (department) => selectedDepartmentIds.includes(String(department.id)),
+        );
 
-    return [buildScope('ORGANISATION', orgNode, orgNode.name)];
-  }, [orgNode, selectedDepartmentIds, selectedOfficeIds, selectedOffices, selectedVerticalIds, selectedVerticals]);
+        if (departmentsInVertical.length === 0) {
+          scopes.push(buildScope('VERTICAL', vertical, `${vertical.name} · ${office.name}`));
+        } else {
+          departmentsInVertical.forEach((department) => {
+            scopes.push(
+              buildScope('DEPARTMENT', department, `${department.name} · ${vertical.name} · ${office.name}`),
+            );
+          });
+        }
+      });
+    });
+
+    return scopes;
+  }, [orgNode, selectedDepartmentIds, selectedOfficeIds, selectedOffices, selectedVerticalIds]);
 
   useEffect(() => {
     if (!onChange || loading || !orgNode) return;

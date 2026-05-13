@@ -13,39 +13,33 @@ import { getPermLabel } from '../../components/roles/PermissionMatrix';
 import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
 import { useToast } from '../../hooks/useToast';
-import { formatDate } from '../../utils/formatters';
+import { formatDate, formatDateTime, formatRelativeTime } from '../../utils/formatters';
+import { findScopeLabel } from '../../utils/scopeLabel';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { useOrgTree } from '../../hooks/useOrgTree';
 
 const DEFAULT_ORGANISATION_ID = 1;
 
-function findScopeLabel(tree, scopeType, scopeId) {
-  const orgNode = tree[0];
-  if (!orgNode || !scopeType || !scopeId) return null;
+// Em-dash placeholders read as "missing data" — replace with "Not set" in
+// italic gray to signal a known-empty optional field that can be filled
+// via Edit.
+function Field({ label, value, hint }) {
+  const empty = value === null || value === undefined || value === '';
+  return (
+    <div className="py-2.5">
+      <dt className="text-xs uppercase tracking-wide text-gray-500">{label}</dt>
+      <dd className={`mt-1 text-sm ${empty ? 'text-gray-400 italic font-normal' : 'text-gray-900 font-medium'}`}>
+        {empty ? (hint || 'Not set') : value}
+      </dd>
+    </div>
+  );
+}
 
-  if (scopeType === 'ORGANISATION' && orgNode.id === Number(scopeId)) {
-    return `Organisation: ${orgNode.name}`;
-  }
-
-  for (const office of orgNode.children || []) {
-    if (scopeType === 'OFFICE_LOCATION' && office.id === Number(scopeId)) {
-      return `Office Location: ${office.name} · ${orgNode.name}`;
-    }
-
-    for (const vertical of office.children || []) {
-      if (scopeType === 'VERTICAL' && vertical.id === Number(scopeId)) {
-        return `Vertical: ${vertical.name} · ${office.name} · ${orgNode.name}`;
-      }
-
-      for (const department of vertical.children || []) {
-        if (scopeType === 'DEPARTMENT' && department.id === Number(scopeId)) {
-          return `Department: ${department.name} · ${vertical.name} · ${office.name}`;
-        }
-      }
-    }
-  }
-
-  return null;
+function initialsOf(firstName, lastName, email) {
+  const a = (firstName || '').charAt(0);
+  const b = (lastName || '').charAt(0);
+  if (a || b) return `${a}${b}`.toUpperCase();
+  return (email || '?').slice(0, 2).toUpperCase();
 }
 
 function extractPermissionIds(role) {
@@ -336,13 +330,78 @@ export default function UserDetailPage() {
         <div className="p-6">
           {/* ═══ PROFILE ═══ */}
           {tab === 'profile' && (
-            <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div><dt className="text-gray-500">Status</dt><dd className="mt-1"><StatusBadge status={user.status} /></dd></div>
-              <div><dt className="text-gray-500">Phone</dt><dd className="mt-1 font-medium">{user.phone || '—'}</dd></div>
-              <div><dt className="text-gray-500">Job Title</dt><dd className="mt-1 font-medium">{user.profile?.job_title || '—'}</dd></div>
-              <div><dt className="text-gray-500">Employee ID</dt><dd className="mt-1 font-medium">{user.profile?.employee_id || '—'}</dd></div>
-              <div><dt className="text-gray-500">Created</dt><dd className="mt-1 font-medium">{formatDate(user.created_at)}</dd></div>
-            </dl>
+            <div className="space-y-6">
+              {/* Identity strip */}
+              <div className="flex items-center gap-4 pb-5 border-b border-gray-100">
+                <div className="inline-flex w-14 h-14 rounded-full bg-primary-100 text-primary-700 items-center justify-center text-lg font-semibold flex-shrink-0">
+                  {initialsOf(user.first_name, user.last_name, user.email)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-lg font-semibold text-gray-900 truncate">
+                    {user.first_name} {user.last_name}
+                  </div>
+                  <div className="text-sm text-gray-500 truncate flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zm0 0c0 1.657 1.007 3 2.25 3S21 13.657 21 12a9 9 0 10-2.636 6.364M16.5 12V8.25" />
+                    </svg>
+                    {user.email}
+                  </div>
+                </div>
+                <StatusBadge status={user.status} />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Personal info card */}
+                <section className="rounded-lg border border-gray-200 bg-gray-50/40 px-5 py-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Personal info</h3>
+                  <dl className="divide-y divide-gray-100">
+                    <Field label="Job title" value={user.profile?.job_title} />
+                    <Field label="Employee ID" value={user.profile?.employee_id} />
+                    <Field label="Phone" value={user.phone} />
+                  </dl>
+                </section>
+
+                {/* Account card */}
+                <section className="rounded-lg border border-gray-200 bg-gray-50/40 px-5 py-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Account</h3>
+                  <dl className="divide-y divide-gray-100">
+                    <Field
+                      label="Email"
+                      value={
+                        <span className="inline-flex items-center gap-1.5">
+                          <span>{user.email}</span>
+                          <svg className="w-3 h-3 text-gray-400" title="Email is the login identity and can't be changed" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                          </svg>
+                        </span>
+                      }
+                    />
+                    <Field
+                      label="Email verified"
+                      value={
+                        user.email_verified
+                          ? <span className="inline-flex items-center gap-1 text-emerald-600">✓ Verified</span>
+                          : <span className="inline-flex items-center gap-1 text-amber-600">Pending</span>
+                      }
+                    />
+                    <Field
+                      label="Member since"
+                      value={formatDate(user.created_at || user.createdAt)}
+                    />
+                    <Field
+                      label="Last login"
+                      value={(user.last_login_at || user.lastLoginAt) ? formatDateTime(user.last_login_at || user.lastLoginAt) : null}
+                      hint="Never signed in"
+                    />
+                    <Field
+                      label="Last seen"
+                      value={(user.last_seen_at || user.lastSeenAt) ? formatRelativeTime(user.last_seen_at || user.lastSeenAt) : null}
+                      hint="—"
+                    />
+                  </dl>
+                </section>
+              </div>
+            </div>
           )}
 
           {/* ═══ ROLES ═══ */}

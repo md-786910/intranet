@@ -34,6 +34,7 @@ const chatRoutes = require("./modules/chat/chat.routes");
 const quickLinksRoutes = require("./modules/quick-links/quick-links.routes");
 const notificationsRoutes = require("./modules/notifications/notifications.routes");
 const activityRoutes = require("./modules/activity/activity.routes");
+const homeActivityRoutes = require("./modules/home-activity/home-activity.routes");
 
 const app = express();
 
@@ -52,8 +53,8 @@ app.use(cors(corsOptions));
 app.use(compression());
 
 // 5. Body parsing with size limits
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // 6. Input sanitization (XSS prevention)
 app.use(sanitize);
@@ -91,6 +92,7 @@ app.use("/api/v1/chat", chatRoutes);
 app.use("/api/v1/quick-links", quickLinksRoutes);
 app.use("/api/v1/notifications", notificationsRoutes);
 app.use("/api/v1/activity", activityRoutes);
+app.use("/api/v1/home", homeActivityRoutes);
 
 // Serve uploaded files. Strip frame-blocking headers so the client (running on a
 // different dev origin) can preview PDFs / CSVs / text in an iframe. Helmet's

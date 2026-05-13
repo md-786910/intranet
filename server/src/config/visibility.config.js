@@ -70,4 +70,30 @@ module.exports = {
   homeOrgChart: {
     level: "ORGANISATION",
   },
+
+  // "Recent Activity" card on the home page (employee-client BottomRow.js).
+  // Surfaces events that genuinely matter to employees — published content
+  // they can read, and new colleagues joining their scope. Admin-only
+  // churn (drafts / unpublishes / archives / category renames / media
+  // uploads) is excluded by design.
+  //
+  //   level       — which slice of the hierarchy a "new colleague" is drawn
+  //                 from. Same semantics as keyContacts above.
+  //                   DEPARTMENT      → only the viewer's own department(s)
+  //                   VERTICAL        → all departments under their vertical
+  //                   OFFICE_LOCATION → all verticals under their office
+  //                   ORGANISATION    → everyone who joined the platform
+  //   kinds       — which event types to include. Any of:
+  //                   'NEWS_PUBLISHED'
+  //                   'DOCUMENT_PUBLISHED'
+  //                   'MEMBER_JOINED'
+  //                 Removing one hides that row family without code changes.
+  //   limit       — max rows shown at once.
+  //   windowDays  — ignore events older than this many days.
+  recentActivity: {
+    level: "DEPARTMENT",
+    kinds: ["NEWS_PUBLISHED", "DOCUMENT_PUBLISHED", "MEMBER_JOINED"],
+    limit: 8,
+    windowDays: 30,
+  },
 };

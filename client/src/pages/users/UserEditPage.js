@@ -4,14 +4,16 @@ import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
-import ScopePicker from '../../components/common/ScopePicker';
 import Badge from '../../components/common/Badge';
+import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
 import PermissionMatrix from '../../components/roles/PermissionMatrix';
 import { getPermLabel } from '../../components/roles/PermissionMatrix';
 import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
 import { useToast } from '../../hooks/useToast';
+import { useOrgTree } from '../../hooks/useOrgTree';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
+import { findScopeLabel } from '../../utils/scopeLabel';
 
 const DEFAULT_ORGANISATION_ID = 1;
 
@@ -30,7 +32,7 @@ function extractPermissionIds(role) {
 }
 
 // ── Role Card (reused from detail page pattern) ──
-function RoleCard({ assignment, allRoles, modules, onRemove, removing }) {
+function RoleCard({ assignment, allRoles, modules, scopeLabel, onRemove, removing }) {
   const [showPerms, setShowPerms] = useState(false);
   const role = allRoles.find((r) => r.role_id === assignment.role_id || r.role_id === assignment.role?.role_id);
   const permissionIds = useMemo(() => extractPermissionIds(role), [role]);
@@ -45,7 +47,7 @@ function RoleCard({ assignment, allRoles, modules, onRemove, removing }) {
             {(assignment.role?.is_system || role?.is_system) && <Badge variant="info" size="sm">System</Badge>}
           </div>
           <div className="text-xs text-gray-500 mt-0.5">
-            {assignment.scope_type.replace(/_/g, ' ')} #{assignment.scope_id}
+            {scopeLabel || `${assignment.scope_type.replace(/_/g, ' ')} #${assignment.scope_id}`}
             {permCount > 0 && ` · ${permCount} permission${permCount !== 1 ? 's' : ''}`}
           </div>
         </div>
@@ -80,6 +82,7 @@ export default function UserEditPage() {
   const [tab, setTab] = useState('profile');
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const { tree: orgTree } = useOrgTree();
 
   // Profile form
   const [form, setForm] = useState({
@@ -94,19 +97,26 @@ export default function UserEditPage() {
   const [modules, setModules] = useState([]);
   const [removing, setRemoving] = useState(null);
 
-  // Assign role
+  // Assign role — supports multi-scope assignment to mirror the Create flow.
+  // `assignScopes` is an array of { scope_type, scope_id, scope_label }.
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [assignRoleId, setAssignRoleId] = useState('');
-  const [assignScopeType, setAssignScopeType] = useState('ORGANISATION');
-  const [assignScopeId, setAssignScopeId] = useState(DEFAULT_ORGANISATION_ID);
+  const [assignScopes, setAssignScopes] = useState([]);
   const [assigning, setAssigning] = useState(false);
 
-  // Direct permissions
+  // Inline scope-edit on the Profile summary. Group role_assignments by
+  // role_id and edit all of one role's scopes together — picking N scopes
+  // in the editor replaces ALL existing assignments for that role with
+  // those N new ones.
+  const [editingRoleId, setEditingRoleId] = useState(null);
+  const [editScopes, setEditScopes] = useState([]);
+  const [savingScope, setSavingScope] = useState(false);
+
+  // Direct permissions — same multi-scope shape as roles.
   const [showPermForm, setShowPermForm] = useState(false);
   const [permModuleId, setPermModuleId] = useState('');
   const [permActionId, setPermActionId] = useState('');
-  const [permScopeType, setPermScopeType] = useState('ORGANISATION');
-  const [permScopeId, setPermScopeId] = useState(DEFAULT_ORGANISATION_ID);
+  const [permScopes, setPermScopes] = useState([]);
   const [addingPerm, setAddingPerm] = useState(false);
   const [removingPerm, setRemovingPerm] = useState(null);
 
@@ -165,14 +175,26 @@ export default function UserEditPage() {
   // ── Role handlers ──
   const handleAssignRole = async () => {
     if (!assignRoleId) return;
+    // No scopes selected → default to Organisation (mirrors Create's behaviour).
+    const scopes = assignScopes.length > 0
+      ? assignScopes
+      : [{ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID }];
+
     setAssigning(true);
     try {
-      await userService.assignRole(id, {
-        role_id: Number(assignRoleId), scope_type: assignScopeType,
-        scope_id: assignScopeId || DEFAULT_ORGANISATION_ID,
-      });
-      addToast('Role assigned', 'success');
-      setAssignRoleId(''); setShowAssignForm(false); fetchUser();
+      for (const scope of scopes) {
+        // eslint-disable-next-line no-await-in-loop
+        await userService.assignRole(id, {
+          role_id: Number(assignRoleId),
+          scope_type: scope.scope_type,
+          scope_id: scope.scope_id || DEFAULT_ORGANISATION_ID,
+        });
+      }
+      addToast(scopes.length === 1 ? 'Role assigned' : `Role assigned at ${scopes.length} scopes`, 'success');
+      setAssignRoleId('');
+      setAssignScopes([]);
+      setShowAssignForm(false);
+      fetchUser();
     } catch (err) { addToast(err.response?.data?.message || 'Failed', 'error'); }
     finally { setAssigning(false); }
   };
@@ -186,17 +208,91 @@ export default function UserEditPage() {
     finally { setRemoving(null); }
   };
 
+  // Inline-edit all scopes for a single role at once. Pre-fills the
+  // selector with every current scope assigned for that role, then on save
+  // diffs against the new picks: remove old assignments that aren't in the
+  // new set, add new assignments that aren't in the old set, leave matching
+  // ones alone (cheaper + avoids a momentary "no access" window).
+  const beginEditScopesForRole = (group) => {
+    setEditingRoleId(group.roleId);
+    setEditScopes(group.assignments.map((a) => ({
+      scope_type: a.scope_type,
+      scope_id: a.scope_id,
+      scope_label: findScopeLabel(orgTree, a.scope_type, a.scope_id) || `${a.scope_type}: #${a.scope_id}`,
+    })));
+  };
+
+  const cancelEditScope = () => {
+    setEditingRoleId(null);
+    setEditScopes([]);
+  };
+
+  const handleSaveScope = async (group) => {
+    if (editScopes.length === 0) {
+      addToast('Pick at least one scope', 'error');
+      return;
+    }
+    const roleId = group.roleId;
+    setSavingScope(true);
+    try {
+      // Diff existing vs new. Use a "TYPE:ID" key to compare.
+      const keyOf = (s) => `${s.scope_type}:${s.scope_id}`;
+      const existingKeys = new Set(group.assignments.map(keyOf));
+      const newKeys = new Set(editScopes.map(keyOf));
+
+      const toRemove = group.assignments.filter((a) => !newKeys.has(keyOf(a)));
+      const toAdd = editScopes.filter((s) => !existingKeys.has(keyOf(s)));
+
+      for (const a of toRemove) {
+        // eslint-disable-next-line no-await-in-loop
+        await userService.removeRole(id, a.assignment_id);
+      }
+      for (const scope of toAdd) {
+        // eslint-disable-next-line no-await-in-loop
+        await userService.assignRole(id, {
+          role_id: Number(roleId),
+          scope_type: scope.scope_type,
+          scope_id: scope.scope_id || DEFAULT_ORGANISATION_ID,
+        });
+      }
+
+      if (toRemove.length === 0 && toAdd.length === 0) {
+        addToast('No changes to save', 'info');
+      } else {
+        addToast(`Saved — ${editScopes.length} scope${editScopes.length === 1 ? '' : 's'} assigned`, 'success');
+      }
+      cancelEditScope();
+      fetchUser();
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to update scopes', 'error');
+    } finally {
+      setSavingScope(false);
+    }
+  };
+
   // ── Permission handlers ──
   const handleAssignPerm = async () => {
     if (!permActionId) return;
+    const scopes = permScopes.length > 0
+      ? permScopes
+      : [{ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID }];
+
     setAddingPerm(true);
     try {
-      await userService.assignPermission(id, {
-        module_action_id: Number(permActionId), scope_type: permScopeType,
-        scope_id: permScopeId || DEFAULT_ORGANISATION_ID,
-      });
-      addToast('Permission granted', 'success');
-      setPermActionId(''); setPermModuleId(''); setShowPermForm(false); fetchUser();
+      for (const scope of scopes) {
+        // eslint-disable-next-line no-await-in-loop
+        await userService.assignPermission(id, {
+          module_action_id: Number(permActionId),
+          scope_type: scope.scope_type,
+          scope_id: scope.scope_id || DEFAULT_ORGANISATION_ID,
+        });
+      }
+      addToast(scopes.length === 1 ? 'Permission granted' : `Permission granted at ${scopes.length} scopes`, 'success');
+      setPermActionId('');
+      setPermModuleId('');
+      setPermScopes([]);
+      setShowPermForm(false);
+      fetchUser();
     } catch (err) { addToast(err.response?.data?.message || 'Failed', 'error'); }
     finally { setAddingPerm(false); }
   };
@@ -239,6 +335,7 @@ export default function UserEditPage() {
     { key: 'profile', label: 'Profile' },
     { key: 'roles', label: `Roles (${user.roleAssignments?.length || 0})` },
     { key: 'permissions', label: `Extra Permissions (${directPermCount})` },
+    { key: 'departments', label: `Departments (${user.departmentMemberships?.length || 0})` },
   ];
 
   return (
@@ -260,7 +357,14 @@ export default function UserEditPage() {
         <div className="p-6">
           {/* ═══ PROFILE TAB ═══ */}
           {tab === 'profile' && (
-            <div className="max-w-lg space-y-5">
+            <div className="space-y-5">
+              <Input
+                label="Email"
+                name="email"
+                value={user.email}
+                disabled
+                helpText="Email is the login identity and can't be changed. To assign a different email, deactivate this account and create a new one."
+              />
               <div className="grid grid-cols-2 gap-4">
                 <Input label="First Name" name="first_name" required value={form.first_name}
                   error={errors.first_name} onChange={handleChange} />
@@ -268,17 +372,113 @@ export default function UserEditPage() {
                   error={errors.last_name} onChange={handleChange} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Phone" name="phone" value={form.phone} onChange={handleChange} />
+                <Input label="Phone" name="phone" value={form.phone} onChange={handleChange}
+                  placeholder="e.g. +91 98765 43210" />
                 <Select label="Status" name="status" value={form.status}
                   onChange={handleChange} options={STATUS_OPTIONS} />
               </div>
               <div className="border-t border-gray-100 pt-5">
                 <h3 className="text-sm font-medium text-gray-700 mb-3">Profile</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <Input label="Job Title" name="job_title" value={form.job_title} onChange={handleChange} />
-                  <Input label="Employee ID" name="employee_id" value={form.employee_id} onChange={handleChange} />
+                  <Input label="Job Title" name="job_title" value={form.job_title} onChange={handleChange}
+                    placeholder="e.g. Senior Engineer" />
+                  <Input label="Employee ID" name="employee_id" value={form.employee_id} onChange={handleChange}
+                    placeholder="e.g. EMP-00123" />
                 </div>
               </div>
+
+              {/* Roles & org hierarchy — full width tree picker. */}
+              <div className="border-t border-gray-100 pt-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium text-gray-700">Roles &amp; org hierarchy</h3>
+                  <button
+                    type="button"
+                    onClick={() => setTab('roles')}
+                    className="text-xs font-medium text-primary-600 hover:text-primary-700"
+                  >
+                    Manage roles &rarr;
+                  </button>
+                </div>
+                {(user.roleAssignments || []).length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">No roles assigned yet — go to the Roles tab to assign one.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {(() => {
+                      // Group assignments by role so the user sees one row per
+                      // role with all its scopes listed (and edited) together.
+                      const groups = new Map();
+                      (user.roleAssignments || []).forEach((a) => {
+                        const roleId = a.role_id || a.role?.role_id;
+                        if (!roleId) return;
+                        if (!groups.has(roleId)) {
+                          groups.set(roleId, {
+                            roleId,
+                            role: a.role || null,
+                            isSystem: a.role?.is_system || false,
+                            assignments: [],
+                          });
+                        }
+                        groups.get(roleId).assignments.push(a);
+                      });
+
+                      return Array.from(groups.values()).map((group) => {
+                        const isEditing = editingRoleId === group.roleId;
+                        return (
+                          <li key={group.roleId} className="rounded-lg bg-gray-50 border border-gray-200">
+                            <div className="flex items-start gap-3 px-3 py-2">
+                              <Badge variant={group.isSystem ? 'info' : 'default'} size="sm">
+                                {group.role?.name || 'Role'}
+                              </Badge>
+                              <ul className="flex-1 min-w-0 space-y-0.5">
+                                {group.assignments.map((a) => {
+                                  const label = findScopeLabel(orgTree, a.scope_type, a.scope_id)
+                                    || `${a.scope_type.replace(/_/g, ' ')} #${a.scope_id}`;
+                                  return (
+                                    <li key={a.assignment_id} className="text-gray-700 text-xs truncate">
+                                      {label}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                              {!isEditing && (
+                                <button
+                                  type="button"
+                                  onClick={() => beginEditScopesForRole(group)}
+                                  className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 flex-shrink-0"
+                                  title="Edit office / vertical / department for this role"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zM19.5 7.125L16.875 4.5" />
+                                  </svg>
+                                  Change scope
+                                </button>
+                              )}
+                            </div>
+                            {isEditing && (
+                              <div className="border-t border-gray-200 bg-white px-3 py-3 space-y-3">
+                                <p className="text-xs text-gray-500">
+                                  Pick the office, vertical, or department scopes this role should apply at.
+                                  Removed scopes will be unassigned and new ones added.
+                                </p>
+                                <HierarchyScopeSelector value={editScopes} onChange={setEditScopes} />
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button variant="secondary" size="sm" onClick={cancelEditScope} disabled={savingScope}>
+                                    Cancel
+                                  </Button>
+                                  <Button size="sm" onClick={() => handleSaveScope(group)} loading={savingScope}>
+                                    {editScopes.length > 1 ? `Save (${editScopes.length} scopes)` : 'Save scope'}
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </li>
+                        );
+                      });
+                    })()}
+                  </ul>
+                )}
+              </div>
+
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
                 <Button variant="secondary" onClick={() => navigate(`/users/${id}`)}>Cancel</Button>
                 <Button onClick={handleSaveProfile} loading={saving}>Save Changes</Button>
@@ -306,12 +506,13 @@ export default function UserEditPage() {
                   {assignRoleId && (
                     <>
                       <div className="p-3 bg-white rounded-lg border border-gray-200">
-                        <p className="text-xs text-gray-500 mb-2">Assign at scope:</p>
-                        <ScopePicker scopeType={assignScopeType} scopeId={assignScopeId}
-                          onScopeTypeChange={setAssignScopeType} onScopeIdChange={setAssignScopeId} />
+                        <p className="text-xs text-gray-500 mb-2">Assign at one or more scopes:</p>
+                        <HierarchyScopeSelector value={assignScopes} onChange={setAssignScopes} />
                       </div>
                       <div className="flex justify-end">
-                        <Button onClick={handleAssignRole} loading={assigning} size="md">Assign Role</Button>
+                        <Button onClick={handleAssignRole} loading={assigning} size="md">
+                          {assignScopes.length > 1 ? `Assign Role at ${assignScopes.length} scopes` : 'Assign Role'}
+                        </Button>
                       </div>
                     </>
                   )}
@@ -332,7 +533,9 @@ export default function UserEditPage() {
                 <div className="space-y-3">
                   {user.roleAssignments.map((a) => (
                     <RoleCard key={a.assignment_id} assignment={a} allRoles={allRoles}
-                      modules={modules} onRemove={handleRemoveRole} removing={removing} />
+                      modules={modules}
+                      scopeLabel={findScopeLabel(orgTree, a.scope_type, a.scope_id)}
+                      onRemove={handleRemoveRole} removing={removing} />
                   ))}
                 </div>
               )}
@@ -366,14 +569,15 @@ export default function UserEditPage() {
                   </div>
                   {permActionId && (
                     <div className="p-3 bg-white rounded-lg border border-gray-200">
-                      <p className="text-xs text-gray-500 mb-2">Apply at scope:</p>
-                      <ScopePicker scopeType={permScopeType} scopeId={permScopeId}
-                        onScopeTypeChange={setPermScopeType} onScopeIdChange={setPermScopeId} />
+                      <p className="text-xs text-gray-500 mb-2">Apply at one or more scopes:</p>
+                      <HierarchyScopeSelector value={permScopes} onChange={setPermScopes} />
                     </div>
                   )}
                   {permActionId && (
                     <div className="flex justify-end">
-                      <Button onClick={handleAssignPerm} loading={addingPerm} size="md">Grant Permission</Button>
+                      <Button onClick={handleAssignPerm} loading={addingPerm} size="md">
+                        {permScopes.length > 1 ? `Grant at ${permScopes.length} scopes` : 'Grant Permission'}
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -388,11 +592,14 @@ export default function UserEditPage() {
                     const actionCode = perm.moduleAction?.action_code || '';
                     const moduleName = perm.moduleAction?.module?.name || moduleCode;
                     const { label } = getPermLabel(moduleCode, actionCode);
+                    const scopeLabel = findScopeLabel(orgTree, perm.scope_type, perm.scope_id);
                     return (
                       <div key={perm.user_permission_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
                           <div className="text-sm font-medium text-gray-900">{label}</div>
-                          <div className="text-xs text-gray-500">{moduleName} · {perm.scope_type.replace(/_/g, ' ')} #{perm.scope_id}</div>
+                          <div className="text-xs text-gray-500">
+                            {moduleName} · {scopeLabel || `${perm.scope_type.replace(/_/g, ' ')} #${perm.scope_id}`}
+                          </div>
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => handleRemovePerm(perm.user_permission_id)}
                           loading={removingPerm === perm.user_permission_id}
@@ -400,6 +607,38 @@ export default function UserEditPage() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ═══ DEPARTMENTS TAB ═══ */}
+          {tab === 'departments' && (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500">
+                Departments are derived from role assignments at the Department scope.
+                To add or remove a department, go to the <button
+                  type="button"
+                  onClick={() => setTab('roles')}
+                  className="text-primary-600 hover:text-primary-700 underline font-medium"
+                >Roles tab</button> and assign a role at the desired department.
+              </p>
+              {(user.departmentMemberships || []).length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">No department memberships.</p>
+              ) : (
+                <div className="space-y-2">
+                  {user.departmentMemberships.map((m) => (
+                    <div key={m.membership_id || m.department_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="min-w-0">
+                        <div className="font-medium text-gray-900">{m.department?.name || 'Department'}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {m.path || m.department?.path || 'Department scope'}
+                        </div>
+                        {m.source && <div className="text-xs text-gray-400 mt-1">{m.source}</div>}
+                      </div>
+                      {m.is_primary && <Badge variant="success" size="sm">Primary</Badge>}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
