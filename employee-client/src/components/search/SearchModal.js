@@ -233,7 +233,7 @@ export default function SearchModal({ isOpen, onClose }) {
   const handleOpen = useCallback((row) => {
     if (!row) return;
     if (row.kind === 'news')     navigate(`/news/${row.item.id}`);
-    if (row.kind === 'document') navigate(`/documents/${row.item.id}`);
+    if (row.kind === 'document') navigate(`/documents?preview=${row.item.id}`);
     // Contact navigation deferred — no people detail page yet.
     onClose();
   }, [navigate, onClose]);
