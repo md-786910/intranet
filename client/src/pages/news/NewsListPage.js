@@ -15,6 +15,7 @@ import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import { usePermission } from '../../hooks/usePermission';
+import { useAuth } from '../../hooks/useAuth';
 import { formatDate, formatDateTime, truncate } from '../../utils/formatters';
 
 const STATUS_TABS = ['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED'];
@@ -24,6 +25,7 @@ export default function NewsListPage() {
   const { addToast } = useToast();
   const { hasPermission: canCreateNews } = usePermission('NEWS', 'CREATE');
   const { hasPermission: canDeleteNews } = usePermission('NEWS', 'DELETE');
+  const { isOwner } = useAuth();
   const { page, limit, setPage } = usePagination();
   const [viewMode, setViewMode] = useState('active');
   const [search, setSearch] = useState('');
@@ -166,7 +168,13 @@ export default function NewsListPage() {
     <div>
       <PageHeader
         title={isTrash ? 'News — Archive' : 'News'}
-        subtitle={isTrash ? 'Archived articles can be restored or permanently deleted' : 'Manage news articles'}
+        subtitle={
+          isTrash
+            ? 'Archived articles can be restored or permanently deleted'
+            : isOwner
+              ? 'Manage news articles'
+              : 'Showing your own articles. Platform Owner can see all.'
+        }
         actions={
           <div className="flex gap-2">
             {!isTrash && canCreateNews && (

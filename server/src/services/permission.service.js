@@ -321,6 +321,54 @@ const permissionService = {
   },
 
   /**
+   * Returns true if the user effectively manages a module organisation-wide:
+   * they hold the OWNER role, OR they have an ORGANISATION-scope role
+   * assignment whose role grants any of the module's manage-tier actions
+   * (CREATE / EDIT / PUBLISH / DELETE).
+   *
+   * Used by list endpoints to decide between "show everything" (global) and
+   * "show only your own" (scoped) admin views.
+   */
+  async isGlobalManager(userId, moduleCode) {
+    const cacheKey = `perm:${userId}:${moduleCode}:GLOBAL_MANAGER`;
+    const cached = await cacheService.get(cacheKey);
+    if (cached !== null) return cached === 'true';
+
+    try {
+      const { sequelize } = require('../database/models');
+
+      const [row] = await sequelize.query(`
+        SELECT EXISTS (
+          SELECT 1
+          FROM user_role_assignment ura
+          JOIN role r ON r.role_id = ura.role_id
+          LEFT JOIN role_permission rp ON rp.role_id = ura.role_id AND rp.effect = 'ALLOW'
+          LEFT JOIN module_action ma ON ma.module_action_id = rp.module_action_id
+            AND ma.action_code IN ('CREATE','EDIT','PUBLISH','DELETE')
+          LEFT JOIN module m ON m.module_id = ma.module_id AND m.code = :moduleCode
+          WHERE ura.user_id = :userId
+            AND (ura.starts_at IS NULL OR ura.starts_at <= NOW())
+            AND (ura.ends_at IS NULL OR ura.ends_at > NOW())
+            AND (
+              r.code = 'OWNER'
+              OR (ura.scope_type = 'ORGANISATION' AND m.module_id IS NOT NULL)
+            )
+        ) AS is_global
+      `, {
+        replacements: { userId, moduleCode },
+        type: QueryTypes.SELECT,
+      });
+
+      const allowed = Boolean(row?.is_global);
+      await cacheService.set(cacheKey, String(allowed), CACHE_TTL);
+      return allowed;
+    } catch (err) {
+      logger.error('isGlobalManager check error:', err.message);
+      return false;
+    }
+  },
+
+  /**
    * Invalidate all permission caches for a user.
    */
   async invalidateUserCache(userId) {

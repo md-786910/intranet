@@ -385,10 +385,23 @@ const authService = {
   },
 
   /**
-   * Get current user profile with permissions.
+   * Get current user profile with permissions and scoped role assignments.
+   *
+   * `role_assignments` carries the user's `user_role_assignment` rows resolved
+   * to human labels so the frontend can lock the audience selector for scoped
+   * publishers without re-fetching. `is_owner` is true if any assignment is
+   * the system OWNER role.
    */
   async getMe(userId) {
-    const { UserAccount } = require("../../database/models");
+    const {
+      UserAccount,
+      UserRoleAssignment,
+      Role,
+      Organisation,
+      OfficeLocation,
+      Vertical,
+      Department,
+    } = require("../../database/models");
 
     const user = await UserAccount.findByPk(userId, {
       include: [{ association: "profile" }],
@@ -400,9 +413,110 @@ const authService = {
 
     const permissions = await permissionService.getAllGrantedPermissions(userId);
 
+    const assignments = await UserRoleAssignment.findAll({
+      where: {
+        user_id: userId,
+        [Op.and]: [
+          { [Op.or]: [{ starts_at: null }, { starts_at: { [Op.lte]: new Date() } }] },
+          { [Op.or]: [{ ends_at: null }, { ends_at: { [Op.gt]: new Date() } }] },
+        ],
+      },
+      include: [{ model: Role, as: 'role', attributes: ['role_id', 'code', 'name', 'is_system'] }],
+      attributes: ['assignment_id', 'scope_type', 'scope_id'],
+    });
+
+    const groupedIds = { ORGANISATION: [], OFFICE_LOCATION: [], VERTICAL: [], DEPARTMENT: [] };
+    assignments.forEach((a) => {
+      if (groupedIds[a.scope_type]) groupedIds[a.scope_type].push(a.scope_id);
+    });
+
+    const [orgs, offices, verticals, departments] = await Promise.all([
+      groupedIds.ORGANISATION.length
+        ? Organisation.findAll({ where: { id: groupedIds.ORGANISATION }, attributes: ['id', 'name'] })
+        : [],
+      groupedIds.OFFICE_LOCATION.length
+        ? OfficeLocation.findAll({
+            where: { id: groupedIds.OFFICE_LOCATION },
+            attributes: ['id', 'name'],
+            include: [{ model: Organisation, as: 'organisation', attributes: ['id', 'name'] }],
+          })
+        : [],
+      groupedIds.VERTICAL.length
+        ? Vertical.findAll({
+            where: { id: groupedIds.VERTICAL },
+            attributes: ['id', 'name'],
+            include: [{
+              model: OfficeLocation, as: 'officeLocation', attributes: ['id', 'name'],
+              include: [{ model: Organisation, as: 'organisation', attributes: ['id', 'name'] }],
+            }],
+          })
+        : [],
+      groupedIds.DEPARTMENT.length
+        ? Department.findAll({
+            where: { id: groupedIds.DEPARTMENT },
+            attributes: ['id', 'name'],
+            include: [{
+              model: Vertical, as: 'vertical', attributes: ['id', 'name'],
+              include: [{
+                model: OfficeLocation, as: 'officeLocation', attributes: ['id', 'name'],
+                include: [{ model: Organisation, as: 'organisation', attributes: ['id', 'name'] }],
+              }],
+            }],
+          })
+        : [],
+    ]);
+
+    const indexBy = (rows) => Object.fromEntries(rows.map((r) => [r.id, r]));
+    const orgIdx = indexBy(orgs);
+    const officeIdx = indexBy(offices);
+    const verticalIdx = indexBy(verticals);
+    const departmentIdx = indexBy(departments);
+
+    const buildLabel = (assignment) => {
+      switch (assignment.scope_type) {
+        case 'ORGANISATION': {
+          const o = orgIdx[assignment.scope_id];
+          return o ? o.name : null;
+        }
+        case 'OFFICE_LOCATION': {
+          const o = officeIdx[assignment.scope_id];
+          return o ? o.name : null;
+        }
+        case 'VERTICAL': {
+          const v = verticalIdx[assignment.scope_id];
+          if (!v) return null;
+          return [v.name, v.officeLocation?.name].filter(Boolean).join(' · ');
+        }
+        case 'DEPARTMENT': {
+          const d = departmentIdx[assignment.scope_id];
+          if (!d) return null;
+          return [d.name, d.vertical?.name, d.vertical?.officeLocation?.name].filter(Boolean).join(' · ');
+        }
+        default:
+          return null;
+      }
+    };
+
+    const role_assignments = assignments.map((a) => ({
+      assignment_id: a.assignment_id,
+      scope_type: a.scope_type,
+      scope_id: a.scope_id,
+      scope_label: buildLabel(a),
+      role: a.role ? {
+        role_id: a.role.role_id,
+        code: a.role.code,
+        name: a.role.name,
+        is_system: a.role.is_system,
+      } : null,
+    }));
+
+    const is_owner = role_assignments.some((a) => a.role?.code === 'OWNER');
+
     return {
       user: user.toSafeJSON(),
       permissions,
+      role_assignments,
+      is_owner,
     };
   },
 

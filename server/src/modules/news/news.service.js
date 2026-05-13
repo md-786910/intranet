@@ -4,6 +4,7 @@ const { DEFAULT_TENANT_ID } = require('../../utils/constants');
 const { parsePagination, buildPagination } = require('../../utils/pagination');
 const permissionService = require('../../services/permission.service');
 const audienceService = require('../../services/audience.service');
+const { assertAudienceWithinUserScope } = require('../../services/publishing-scope.service');
 const { sanitiseRichText } = require('../../utils/sanitiseRichText');
 
 // Normalise client-supplied related-news ids: dedupe, drop self, cap at 10.
@@ -102,7 +103,10 @@ const newsService = {
     const { NewsItem, UserAccount, ContentAudienceRule, Category } = require('../../database/models');
     const { Op } = require('sequelize');
     const { page, limit, offset } = parsePagination(query);
-    const managing = await canManageNews(userId);
+    const [managing, isGlobal] = await Promise.all([
+      canManageNews(userId),
+      permissionService.isGlobalManager(userId, 'NEWS'),
+    ]);
     const trash = managing && (query.trash === true || query.trash === 'true');
 
     const where = trash
@@ -110,6 +114,10 @@ const newsService = {
       : { deleted_at: null };
     if (managing) {
       if (query.status) where.status = query.status;
+      // Scoped manager (e.g. Content Editor at DEPARTMENT) sees only what
+      // they themselves authored. Global managers (Owner / ORG-scope role)
+      // see everything.
+      if (!isGlobal) where.author_id = userId;
     } else {
       if (query.status && query.status !== 'PUBLISHED') {
         return {
@@ -266,6 +274,9 @@ const newsService = {
 
   async create(data, authorId) {
     const { NewsItem, ContentAudienceRule, sequelize } = require('../../database/models');
+
+    await assertAudienceWithinUserScope(authorId, data.audience_targets || []);
+
     const transaction = await sequelize.transaction();
 
     try {
@@ -317,6 +328,11 @@ const newsService = {
 
   async update(id, data, userId) {
     const { NewsItem, ContentAudienceRule, sequelize } = require('../../database/models');
+
+    if (Array.isArray(data.audience_targets)) {
+      await assertAudienceWithinUserScope(userId, data.audience_targets);
+    }
+
     const transaction = await sequelize.transaction();
 
     try {
@@ -570,6 +586,9 @@ const newsService = {
 
   async setAudience(id, orgUnitIds, userId) {
     const { ContentAudienceRule, sequelize } = require('../../database/models');
+
+    await assertAudienceWithinUserScope(userId, orgUnitIds || []);
+
     const transaction = await sequelize.transaction();
 
     try {

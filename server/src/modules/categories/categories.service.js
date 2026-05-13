@@ -83,8 +83,9 @@ async function ensureNotDescendant(parentId, candidateAncestorId) {
 }
 
 const categoriesService = {
-  async list(query) {
+  async list(query, userId) {
     const { Category } = require('../../database/models');
+    const permissionService = require('../../services/permission.service');
     const { page, limit, offset } = parsePagination(query);
 
     const trash = query.trash === true || query.trash === 'true';
@@ -94,6 +95,14 @@ const categoriesService = {
     where.deleted_at = trash ? { [Op.ne]: null } : null;
     if (query.search) {
       where.name = { [Op.iLike]: `%${query.search}%` };
+    }
+
+    // Non-global managers only see categories they themselves created.
+    // Global = Owner or ORG-scope manager in the matching module.
+    if (userId) {
+      const moduleCode = query.entity_type === 'NEWS' ? 'NEWS' : 'DOCUMENTS';
+      const isGlobal = await permissionService.isGlobalManager(userId, moduleCode);
+      if (!isGlobal) where.creator_id = userId;
     }
 
     const order = trash
@@ -137,7 +146,7 @@ const categoriesService = {
     return cat;
   },
 
-  async create(data) {
+  async create(data, userId) {
     const { Category } = require('../../database/models');
     const slug = slugify(data.slug || data.name);
     if (!slug) throw ApiError.badRequest('Slug cannot be empty');
@@ -159,6 +168,7 @@ const categoriesService = {
       description: data.description || null,
       parent_category_id: data.parent_category_id || null,
       sort_order: data.sort_order || 0,
+      creator_id: userId || null,
     });
 
     return serialize(cat, 0);

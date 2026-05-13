@@ -10,6 +10,7 @@ import { categoryService } from '../../services/categoryService';
 import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { usePermission } from '../../hooks/usePermission';
+import { useAuth } from '../../hooks/useAuth';
 import { formatDateTime } from '../../utils/formatters';
 
 const TABS = [
@@ -23,6 +24,7 @@ export default function CategoriesPage() {
   const { hasPermission: canEditDocs } = usePermission('DOCUMENTS', 'EDIT');
   const { hasPermission: canDeleteNews } = usePermission('NEWS', 'DELETE');
   const { hasPermission: canDeleteDocs } = usePermission('DOCUMENTS', 'DELETE');
+  const { isOwner } = useAuth();
 
   const allowedTabs = useMemo(() => {
     return TABS.filter((t) => (t.value === 'NEWS' ? canEditNews : canEditDocs));
@@ -146,7 +148,9 @@ export default function CategoriesPage() {
         subtitle={
           isTrash
             ? 'Deleted categories can be restored from here'
-            : 'Manage categories used by News and Documents'
+            : isOwner
+              ? 'Manage categories used by News and Documents'
+              : 'Showing your own categories. Platform Owner can see all.'
         }
         actions={
           <div className="flex gap-2">

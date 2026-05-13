@@ -7,6 +7,8 @@ let authBootstrapPromise = null;
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [permissions, setPermissions] = useState({});
+  const [roleAssignments, setRoleAssignments] = useState([]);
+  const [isOwner, setIsOwner] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -18,6 +20,16 @@ export function AuthProvider({ children }) {
     setUser(userData);
     setPermissions(perms || {});
     setIsAuthenticated(true);
+
+    try {
+      const meResponse = await api.get('/auth/me');
+      const { role_assignments, is_owner } = meResponse.data.data;
+      setRoleAssignments(role_assignments || []);
+      setIsOwner(Boolean(is_owner));
+    } catch {
+      setRoleAssignments([]);
+      setIsOwner(false);
+    }
 
     return userData;
   }, []);
@@ -32,6 +44,8 @@ export function AuthProvider({ children }) {
       clearTokens();
       setUser(null);
       setPermissions({});
+      setRoleAssignments([]);
+      setIsOwner(false);
       setIsAuthenticated(false);
     }
   }, []);
@@ -55,10 +69,17 @@ export function AuthProvider({ children }) {
 
         // Fetch user profile
         const meResponse = await api.get('/auth/me');
-        const { user: userData, permissions: perms } = meResponse.data.data;
+        const {
+          user: userData,
+          permissions: perms,
+          role_assignments,
+          is_owner,
+        } = meResponse.data.data;
         return {
           user: userData,
           permissions: perms || {},
+          roleAssignments: role_assignments || [],
+          isOwner: Boolean(is_owner),
           isAuthenticated: true,
         };
       } catch {
@@ -66,6 +87,8 @@ export function AuthProvider({ children }) {
         return {
           user: null,
           permissions: {},
+          roleAssignments: [],
+          isOwner: false,
           isAuthenticated: false,
         };
       }
@@ -82,6 +105,8 @@ export function AuthProvider({ children }) {
         if (!isMounted) return;
         setUser(result.user);
         setPermissions(result.permissions);
+        setRoleAssignments(result.roleAssignments || []);
+        setIsOwner(Boolean(result.isOwner));
         setIsAuthenticated(result.isAuthenticated);
       })
       .finally(() => {
@@ -97,6 +122,8 @@ export function AuthProvider({ children }) {
   const value = {
     user,
     permissions,
+    roleAssignments,
+    isOwner,
     isLoading,
     isAuthenticated,
     login,

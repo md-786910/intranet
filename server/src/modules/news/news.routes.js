@@ -3,10 +3,13 @@ const controller = require('./news.controller');
 const engagement = require('./news-engagement.controller');
 const authenticate = require('../../middleware/authenticate');
 const authorize = require('../../middleware/authorize');
+const loadEntityScope = require('../../middleware/loadEntityScope');
 const validate = require('../../middleware/validate');
 const auditLogger = require('../../middleware/auditLogger');
 const schemas = require('./news.validation');
 const engagementSchemas = require('./news-engagement.validation');
+
+const loadNewsScope = loadEntityScope('NewsItem');
 
 router.use(authenticate);
 
@@ -16,14 +19,14 @@ router.post('/', authorize('NEWS', 'CREATE'), validate(schemas.createNewsSchema)
 // "Publish Now" — create and immediately publish in one shot. Requires the
 // same payload as create plus the PUBLISH permission. Fires notifications.
 router.post('/publish-now', authorize('NEWS', 'PUBLISH'), validate(schemas.createNewsSchema), auditLogger('NEWS_PUBLISHED'), controller.createAndPublish);
-router.put('/:id', authorize('NEWS', 'EDIT'), validate(schemas.updateNewsSchema), auditLogger('NEWS_UPDATED'), controller.update);
-router.delete('/:id', authorize('NEWS', 'DELETE'), auditLogger('NEWS_DELETED'), controller.remove);
-router.post('/:id/publish', authorize('NEWS', 'PUBLISH'), auditLogger('NEWS_PUBLISHED'), controller.publish);
+router.put('/:id', loadNewsScope, authorize('NEWS', 'EDIT'), validate(schemas.updateNewsSchema), auditLogger('NEWS_UPDATED'), controller.update);
+router.delete('/:id', loadNewsScope, authorize('NEWS', 'DELETE'), auditLogger('NEWS_DELETED'), controller.remove);
+router.post('/:id/publish', loadNewsScope, authorize('NEWS', 'PUBLISH'), auditLogger('NEWS_PUBLISHED'), controller.publish);
 // Re-send the publish notification for an already-published article.
-router.post('/:id/notify', authorize('NEWS', 'PUBLISH'), validate(schemas.idParam), controller.resendNotification);
-router.post('/:id/unpublish', authorize('NEWS', 'PUBLISH'), auditLogger('NEWS_UNPUBLISHED'), controller.unpublish);
-router.post('/:id/archive', authorize('NEWS', 'EDIT'), auditLogger('NEWS_ARCHIVED'), controller.archive);
-router.post('/:id/audience', authorize('NEWS', 'EDIT'), validate(schemas.setAudienceSchema), controller.setAudience);
+router.post('/:id/notify', loadNewsScope, authorize('NEWS', 'PUBLISH'), validate(schemas.idParam), controller.resendNotification);
+router.post('/:id/unpublish', loadNewsScope, authorize('NEWS', 'PUBLISH'), auditLogger('NEWS_UNPUBLISHED'), controller.unpublish);
+router.post('/:id/archive', loadNewsScope, authorize('NEWS', 'EDIT'), auditLogger('NEWS_ARCHIVED'), controller.archive);
+router.post('/:id/audience', loadNewsScope, authorize('NEWS', 'EDIT'), validate(schemas.setAudienceSchema), controller.setAudience);
 router.post('/bulk-restore', authorize('NEWS', 'DELETE'), validate(schemas.bulkIdsSchema), auditLogger('NEWS_RESTORED'), controller.bulkRestore);
 router.post('/bulk-purge', authorize('NEWS', 'DELETE'), validate(schemas.bulkIdsSchema), auditLogger('NEWS_PURGED'), controller.bulkPurge);
 

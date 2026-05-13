@@ -1,6 +1,7 @@
 import React, { useContext, useMemo, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { PermissionContext } from '../../contexts/PermissionContext';
+import { useAuth } from '../../hooks/useAuth';
 
 const ICONS = {
   dashboard: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
@@ -103,7 +104,8 @@ function MenuLink({ item, indented = false }) {
   );
 }
 
-function isItemVisible(item, hasPermission) {
+function isItemVisible(item, hasPermission, isOwner) {
+  if (item.ownerOnly) return Boolean(isOwner);
   if (Array.isArray(item.anyOf) && item.anyOf.length > 0) {
     return item.anyOf.some((p) => hasPermission(p.module, p.action));
   }
@@ -112,17 +114,19 @@ function isItemVisible(item, hasPermission) {
 
 function TopLevelLink({ item }) {
   const { hasPermission } = useContext(PermissionContext);
-  if (!isItemVisible(item, hasPermission)) return null;
+  const { isOwner } = useAuth();
+  if (!isItemVisible(item, hasPermission, isOwner)) return null;
   return <MenuLink item={item} />;
 }
 
 function MenuGroup({ group }) {
   const { hasPermission } = useContext(PermissionContext);
+  const { isOwner } = useAuth();
   const location = useLocation();
 
   const visibleChildren = useMemo(
-    () => group.children.filter((child) => isItemVisible(child, hasPermission)),
-    [group.children, hasPermission],
+    () => group.children.filter((child) => isItemVisible(child, hasPermission, isOwner)),
+    [group.children, hasPermission, isOwner],
   );
 
   // Expand at mount if the current route is inside this group, so a page refresh

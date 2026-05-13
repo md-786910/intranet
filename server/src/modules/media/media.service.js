@@ -105,8 +105,9 @@ const mediaService = {
     };
   },
 
-  async list(query) {
+  async list(query, userId) {
     const { MediaAsset, UserAccount } = require('../../database/models');
+    const permissionService = require('../../services/permission.service');
     const { page, limit, offset } = parsePagination(query);
 
     const trash = query.trash === true || query.trash === 'true';
@@ -118,6 +119,19 @@ const mediaService = {
     }
     if (query.mime_prefix) {
       where.mime_type = { [Op.like]: `${query.mime_prefix}%` };
+    }
+
+    // Non-global managers only see their own uploads. Global = Owner or
+    // ORG-scope manager in either NEWS or DOCUMENTS (the two modules that
+    // consume media).
+    if (userId) {
+      const [isGlobalNews, isGlobalDocs] = await Promise.all([
+        permissionService.isGlobalManager(userId, 'NEWS'),
+        permissionService.isGlobalManager(userId, 'DOCUMENTS'),
+      ]);
+      if (!isGlobalNews && !isGlobalDocs) {
+        where.uploaded_by = userId;
+      }
     }
 
     const order = trash ? [['deleted_at', 'DESC']] : [['created_at', 'DESC']];

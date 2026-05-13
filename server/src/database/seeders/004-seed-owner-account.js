@@ -24,7 +24,7 @@ module.exports = {
     ]);
 
     // 2. Create owner user account
-    const email = process.env.OWNER_EMAIL || "owner@brightnow.local";
+    const email = process.env.OWNER_EMAIL || "owner@brightnow.online";
     const password = process.env.OWNER_PASSWORD || "ChangeMe123!";
     const passwordHash = await bcrypt.hash(password, rounds);
 

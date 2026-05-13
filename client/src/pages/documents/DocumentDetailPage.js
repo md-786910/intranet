@@ -45,7 +45,10 @@ export default function DocumentDetailPage() {
     confirmLabel: 'Publish',
     confirmVariant: 'primary',
     run: async () => {
-      await documentService.publishDocument(id, { scope_type: 'ORGANISATION', scope_id: currentOrganisationId });
+      // Send no scope — backend `loadEntityScope` middleware reads the doc's
+      // owning scope and authorizes against that. Hardcoded ORGANISATION here
+      // would override and 403 for scope-locked editors.
+      await documentService.publishDocument(id);
       addToast('Document published', 'success');
       fetchDoc();
     },

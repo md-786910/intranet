@@ -12,15 +12,15 @@ import { PRIORITY_OPTIONS } from '../../components/common/PriorityBadge';
 import { newsService } from '../../services/newsService';
 import { categoryService } from '../../services/categoryService';
 import { useToast } from '../../hooks/useToast';
-import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { usePermission } from '../../hooks/usePermission';
+import { usePublishingScope } from '../../hooks/usePublishingScope';
 
 export default function NewsEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToast } = useToast();
-  const { currentOrganisationId } = useCurrentOrganisation();
   const { hasPermission: canEditNews } = usePermission('NEWS', 'EDIT');
+  const { lockAudience, lockedTargets, owningScope } = usePublishingScope();
   const [form, setForm] = useState({ title: '', summary: '', body: '', category_id: '', priority: 'NORMAL' });
   const [cover, setCover] = useState(null);
   const [relatedIds, setRelatedIds] = useState([]);
@@ -65,6 +65,10 @@ export default function NewsEditPage() {
   }, [id, addToast]);
 
   useEffect(() => {
+    if (lockAudience && !loading) setAudienceTargets(lockedTargets);
+  }, [lockAudience, lockedTargets, loading]);
+
+  useEffect(() => {
     let cancelled = false;
     categoryService.list({ entity_type: 'NEWS', limit: 200 })
       .then((res) => {
@@ -101,8 +105,8 @@ export default function NewsEditPage() {
         cover_image_url: cover?.url || null,
         cover_image_id: cover?.media_asset_id || null,
         related_news_ids: relatedIds.map((v) => Number(v)).filter(Boolean),
-        scope_type: 'ORGANISATION',
-        scope_id: currentOrganisationId,
+        scope_type: owningScope.scope_type,
+        scope_id: owningScope.scope_id,
         audience_targets: audienceTargets.map((target) => ({
           scope_type: target.scope_type,
           scope_id: target.scope_id,
@@ -188,11 +192,17 @@ export default function NewsEditPage() {
           <div className="mb-3">
             <h3 className="text-sm font-medium text-gray-700">Audience</h3>
             <p className="text-xs text-gray-500 mt-1">
-              Update the organisation scopes that should receive this article when it is published.
+              {lockAudience
+                ? 'Audience is locked to your assigned scope. Contact a Platform Owner to publish elsewhere.'
+                : 'Update the organisation scopes that should receive this article when it is published.'}
             </p>
           </div>
           <div className="rounded-lg border border-gray-200 bg-gray-50/40 p-4">
-            <HierarchyScopeSelector value={audienceTargets} onChange={setAudienceTargets} />
+            <HierarchyScopeSelector
+              value={audienceTargets}
+              onChange={setAudienceTargets}
+              disabled={lockAudience}
+            />
           </div>
         </div>
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">

@@ -23,21 +23,35 @@ async function requireDelete(userId, entityType) {
   }
 }
 
+// Non-Owner users can only mutate categories they created themselves.
+// Global managers (Owner / ORG-scope) can touch any category.
+async function assertCanMutateCategory(userId, category) {
+  const isGlobal = await permissionService.isGlobalManager(
+    userId,
+    moduleForEntity(category.entity_type),
+  );
+  if (isGlobal) return;
+  if (category.creator_id !== userId) {
+    throw ApiError.forbidden('You can only modify categories you created');
+  }
+}
+
 const list = catchAsync(async (req, res) => {
   await requireManage(req.user.user_id, req.query.entity_type);
-  const result = await categoriesService.list(req.query);
+  const result = await categoriesService.list(req.query, req.user.user_id);
   res.status(200).json({ status: 'success', data: result });
 });
 
 const create = catchAsync(async (req, res) => {
   await requireManage(req.user.user_id, req.body.entity_type);
-  const result = await categoriesService.create(req.body);
+  const result = await categoriesService.create(req.body, req.user.user_id);
   res.status(201).json({ status: 'success', data: result });
 });
 
 const update = catchAsync(async (req, res) => {
   const existing = await categoriesService.getById(req.params.id);
   await requireManage(req.user.user_id, existing.entity_type);
+  await assertCanMutateCategory(req.user.user_id, existing);
   const result = await categoriesService.update(req.params.id, req.body);
   res.status(200).json({ status: 'success', data: result });
 });
@@ -45,6 +59,7 @@ const update = catchAsync(async (req, res) => {
 const remove = catchAsync(async (req, res) => {
   const existing = await categoriesService.getById(req.params.id);
   await requireDelete(req.user.user_id, existing.entity_type);
+  await assertCanMutateCategory(req.user.user_id, existing);
   const result = await categoriesService.softDelete(req.params.id);
   res.status(200).json({ status: 'success', data: result });
 });
@@ -56,6 +71,12 @@ const bulkRestore = catchAsync(async (req, res) => {
   // All ids must share an entity_type and the user must have its DELETE permission.
   const first = await categoriesService.getById(req.body.ids[0]);
   await requireDelete(req.user.user_id, first.entity_type);
+  // Non-Owners can only restore their own categories — fail-fast on the first
+  // mismatch rather than partially restoring.
+  for (const cid of req.body.ids) {
+    const cat = await categoriesService.getById(cid); // eslint-disable-line no-await-in-loop
+    await assertCanMutateCategory(req.user.user_id, cat); // eslint-disable-line no-await-in-loop
+  }
   const result = await categoriesService.bulkRestore(req.body.ids, first.entity_type);
   res.status(200).json({ status: 'success', data: result });
 });

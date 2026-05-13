@@ -4,6 +4,7 @@ const { DEFAULT_TENANT_ID } = require('../../utils/constants');
 const { parsePagination, buildPagination } = require('../../utils/pagination');
 const permissionService = require('../../services/permission.service');
 const audienceService = require('../../services/audience.service');
+const { assertAudienceWithinUserScope } = require('../../services/publishing-scope.service');
 
 function generateSlug(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -82,7 +83,10 @@ const documentsService = {
     const { DocumentItem, UserAccount, Category, ContentAudienceRule } = require('../../database/models');
     const { Op } = require('sequelize');
     const { page, limit, offset } = parsePagination(query);
-    const managing = await canManageDocuments(userId);
+    const [managing, isGlobal] = await Promise.all([
+      canManageDocuments(userId),
+      permissionService.isGlobalManager(userId, 'DOCUMENTS'),
+    ]);
     const trash = managing && (query.trash === true || query.trash === 'true');
 
     const where = trash
@@ -90,6 +94,9 @@ const documentsService = {
       : { deleted_at: null };
     if (managing) {
       if (query.status) where.status = query.status;
+      // Scoped manager sees only what they themselves authored. Global
+      // managers (Owner / ORG-scope role) see everything.
+      if (!isGlobal) where.author_id = userId;
     } else {
       if (query.status && query.status !== 'PUBLISHED') {
         return {
@@ -262,6 +269,9 @@ const documentsService = {
 
   async create(data, authorId) {
     const { DocumentItem, DocumentVersion, ContentAudienceRule, sequelize } = require('../../database/models');
+
+    await assertAudienceWithinUserScope(authorId, data.audience_targets || []);
+
     const transaction = await sequelize.transaction();
 
     try {
@@ -323,6 +333,11 @@ const documentsService = {
 
   async update(id, data, userId) {
     const { DocumentItem, ContentAudienceRule, sequelize } = require('../../database/models');
+
+    if (Array.isArray(data.audience_targets)) {
+      await assertAudienceWithinUserScope(userId, data.audience_targets);
+    }
+
     const transaction = await sequelize.transaction();
 
     try {

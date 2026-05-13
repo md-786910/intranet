@@ -14,6 +14,7 @@ import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import { usePermission } from '../../hooks/usePermission';
+import { useAuth } from '../../hooks/useAuth';
 import { formatDate, formatDateTime } from '../../utils/formatters';
 
 const STATUS_TABS = ['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED'];
@@ -23,6 +24,7 @@ export default function DocumentsListPage() {
   const { addToast } = useToast();
   const { hasPermission: canCreateDocuments } = usePermission('DOCUMENTS', 'CREATE');
   const { hasPermission: canDeleteDocuments } = usePermission('DOCUMENTS', 'DELETE');
+  const { isOwner } = useAuth();
   const { page, limit, setPage } = usePagination();
   const [viewMode, setViewMode] = useState('active');
   const [search, setSearch] = useState('');
@@ -165,7 +167,13 @@ export default function DocumentsListPage() {
     <div>
       <PageHeader
         title={isTrash ? 'Documents — Archive' : 'Documents'}
-        subtitle={isTrash ? 'Archived documents can be restored or permanently deleted' : 'Manage documents and files'}
+        subtitle={
+          isTrash
+            ? 'Archived documents can be restored or permanently deleted'
+            : isOwner
+              ? 'Manage documents and files'
+              : 'Showing your own documents. Platform Owner can see all.'
+        }
         actions={
           <div className="flex gap-2">
             {!isTrash && canCreateDocuments && (

@@ -34,6 +34,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       defaultValue: 0,
     },
+    creator_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     deleted_at: {
       type: DataTypes.DATE,
       allowNull: true,
@@ -68,6 +72,10 @@ module.exports = (sequelize, DataTypes) => {
     Category.hasMany(models.NewsItem, {
       foreignKey: 'category_id',
       as: 'newsItems',
+    });
+    Category.belongsTo(models.UserAccount, {
+      as: 'creator',
+      foreignKey: 'creator_id',
     });
   };
 

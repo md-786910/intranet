@@ -13,6 +13,7 @@ import { mediaService } from '../../services/mediaService';
 import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { usePermission } from '../../hooks/usePermission';
+import { useAuth } from '../../hooks/useAuth';
 import { useMultiUpload } from '../../hooks/useMultiUpload';
 import { formatFileSize } from '../../utils/formatters';
 
@@ -31,6 +32,7 @@ export default function MediaGalleryPage() {
   const { hasPermission: canCreateNews } = usePermission('NEWS', 'CREATE');
   const { hasPermission: canDeleteDocs } = usePermission('DOCUMENTS', 'DELETE');
   const { hasPermission: canDeleteNews } = usePermission('NEWS', 'DELETE');
+  const { isOwner } = useAuth();
   const canAccess = canCreateDocs || canCreateNews;
   const canDelete = canDeleteDocs || canDeleteNews;
 
@@ -201,7 +203,13 @@ export default function MediaGalleryPage() {
     <div>
       <PageHeader
         title={isTrash ? 'Media — Trash' : 'Media'}
-        subtitle={isTrash ? 'Deleted items can be restored from here' : 'All uploaded files and images'}
+        subtitle={
+          isTrash
+            ? 'Deleted items can be restored from here'
+            : isOwner
+              ? 'All uploaded files and images'
+              : 'Showing your own uploads. Platform Owner can see all.'
+        }
         actions={
           <div className="flex gap-2">
             <input

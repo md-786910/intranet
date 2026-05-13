@@ -3,8 +3,138 @@ const ApiError = require('../../utils/ApiError');
 const auditService = require('../../services/audit.service');
 const cacheService = require('../../services/cache.service');
 const tokenService = require('../../services/token.service');
+const emailService = require('../../services/email.service');
+const organisationContextService = require('../../services/organisation-context.service');
+const logger = require('../../config/logger');
 const { DEFAULT_TENANT_ID } = require('../../utils/constants');
 const { parsePagination, buildPagination } = require('../../utils/pagination');
+
+const SCOPE_LABEL_FALLBACK = 'Organisation-wide';
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Resolves role + scope labels for the new user's role assignments and
+// renders them as an HTML <ul> block consumed by the welcome email template.
+async function buildRolesBlockForWelcome(rolesToAssign) {
+  if (!Array.isArray(rolesToAssign) || rolesToAssign.length === 0) return '';
+
+  const {
+    Role,
+    Organisation,
+    OfficeLocation,
+    Vertical,
+    Department,
+  } = require('../../database/models');
+
+  const roleIds = [...new Set(rolesToAssign.map((r) => r.role_id).filter(Boolean))];
+
+  const grouped = { ORGANISATION: [], OFFICE_LOCATION: [], VERTICAL: [], DEPARTMENT: [] };
+  rolesToAssign.forEach((r) => {
+    if (r.scope_type && r.scope_id && grouped[r.scope_type]) {
+      grouped[r.scope_type].push(r.scope_id);
+    }
+  });
+
+  const [roles, orgs, offices, verticals, departments] = await Promise.all([
+    roleIds.length
+      ? Role.findAll({ where: { role_id: roleIds }, attributes: ['role_id', 'name'] })
+      : [],
+    grouped.ORGANISATION.length
+      ? Organisation.findAll({ where: { id: grouped.ORGANISATION }, attributes: ['id', 'name'] })
+      : [],
+    grouped.OFFICE_LOCATION.length
+      ? OfficeLocation.findAll({
+          where: { id: grouped.OFFICE_LOCATION },
+          attributes: ['id', 'name'],
+        })
+      : [],
+    grouped.VERTICAL.length
+      ? Vertical.findAll({
+          where: { id: grouped.VERTICAL },
+          attributes: ['id', 'name'],
+          include: [{ model: OfficeLocation, as: 'officeLocation', attributes: ['id', 'name'] }],
+        })
+      : [],
+    grouped.DEPARTMENT.length
+      ? Department.findAll({
+          where: { id: grouped.DEPARTMENT },
+          attributes: ['id', 'name'],
+          include: [{
+            model: Vertical, as: 'vertical', attributes: ['id', 'name'],
+            include: [{ model: OfficeLocation, as: 'officeLocation', attributes: ['id', 'name'] }],
+          }],
+        })
+      : [],
+  ]);
+
+  const indexBy = (rows, key) => Object.fromEntries(rows.map((r) => [r[key], r]));
+  const roleIdx = indexBy(roles, 'role_id');
+  const orgIdx = indexBy(orgs, 'id');
+  const officeIdx = indexBy(offices, 'id');
+  const verticalIdx = indexBy(verticals, 'id');
+  const departmentIdx = indexBy(departments, 'id');
+
+  const labelForScope = (scopeType, scopeId) => {
+    switch (scopeType) {
+      case 'ORGANISATION': return orgIdx[scopeId]?.name || SCOPE_LABEL_FALLBACK;
+      case 'OFFICE_LOCATION': return officeIdx[scopeId]?.name || SCOPE_LABEL_FALLBACK;
+      case 'VERTICAL': {
+        const v = verticalIdx[scopeId];
+        if (!v) return SCOPE_LABEL_FALLBACK;
+        return [v.name, v.officeLocation?.name].filter(Boolean).join(' · ');
+      }
+      case 'DEPARTMENT': {
+        const d = departmentIdx[scopeId];
+        if (!d) return SCOPE_LABEL_FALLBACK;
+        return [d.name, d.vertical?.name, d.vertical?.officeLocation?.name].filter(Boolean).join(' · ');
+      }
+      default: return SCOPE_LABEL_FALLBACK;
+    }
+  };
+
+  const items = rolesToAssign.map((r) => {
+    const roleName = roleIdx[r.role_id]?.name || 'Member';
+    const scopeLabel = labelForScope(r.scope_type, r.scope_id);
+    return `<li style="margin:0 0 4px 0;"><strong>${escapeHtml(roleName)}</strong> &mdash; ${escapeHtml(scopeLabel)}</li>`;
+  });
+
+  return `<ul style="margin:0;padding-left:18px;">${items.join('')}</ul>`;
+}
+
+// Fires the welcome email after user-create commits. Designed as fire-and-forget:
+// any failure is logged but never propagated, so a flaky SMTP doesn't roll back
+// a successful account creation.
+async function sendWelcomeEmailForNewUser({ newUser, plainPassword, rolesToAssign, actorUserId }) {
+  const { UserAccount } = require('../../database/models');
+
+  const [actor, organisation, rolesBlock] = await Promise.all([
+    actorUserId ? UserAccount.findByPk(actorUserId, { attributes: ['first_name', 'last_name'] }) : null,
+    organisationContextService.getCurrentOrganisation().catch(() => null),
+    buildRolesBlockForWelcome(rolesToAssign),
+  ]);
+
+  const inviterName = actor
+    ? [actor.first_name, actor.last_name].filter(Boolean).join(' ').trim() || 'Your administrator'
+    : 'Your administrator';
+  const companyName = organisation?.name || null;
+
+  return emailService.sendWelcomeUser({
+    to: newUser.email,
+    firstName: newUser.first_name,
+    email: newUser.email,
+    password: plainPassword,
+    rolesBlock,
+    companyName,
+    inviterName,
+  });
+}
 
 function buildDepartmentPath(department) {
   if (!department) return null;
@@ -239,6 +369,10 @@ const usersService = {
     } = require('../../database/models');
     const transaction = await sequelize.transaction();
 
+    // Capture the plaintext password BEFORE bcrypt so we can include it in
+    // the welcome email after commit. It never leaves this local variable.
+    const plainPassword = data.password;
+
     try {
       // Check email uniqueness
       const existing = await UserAccount.findOne({
@@ -248,7 +382,7 @@ const usersService = {
       if (existing) throw ApiError.conflict('Email already in use');
 
       const rounds = parseInt(process.env.BCRYPT_ROUNDS, 10) || 12;
-      const passwordHash = await bcrypt.hash(data.password, rounds);
+      const passwordHash = await bcrypt.hash(plainPassword, rounds);
 
       const user = await UserAccount.create({
         email: data.email.toLowerCase(),
@@ -327,6 +461,18 @@ const usersService = {
       });
 
       await transaction.commit();
+
+      // Fire-and-forget welcome email. Runs outside the transaction so a
+      // flaky SMTP can't roll back a successfully created user.
+      sendWelcomeEmailForNewUser({
+        newUser: user,
+        plainPassword,
+        rolesToAssign,
+        actorUserId,
+      }).catch((err) => {
+        logger.warn(`welcome email failed for ${user.email}: ${err.message}`);
+      });
+
       return this.getById(user.user_id);
     } catch (error) {
       await transaction.rollback();

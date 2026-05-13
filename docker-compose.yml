@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "127.0.0.1:${DB_PORT:-5432}:5432"   # ← localhost only
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -31,7 +31,7 @@ services:
       --maxmemory-policy allkeys-lru
       --appendonly yes
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"   # ← localhost only
     volumes:
       - redis_data:/data
     healthcheck:
@@ -58,7 +58,7 @@ services:
       DB_HOST: postgres
       REDIS_HOST: redis
     ports:
-      - "${PORT:-8000}:${PORT:-8000}"
+      - "127.0.0.1:${PORT:-8000}:${PORT:-8000}"   # ← nginx proxies to this
     volumes:
       - ./server/src:/app/src
       - ./server/package.json:/app/package.json
@@ -69,6 +69,7 @@ services:
       - server_node_modules:/app/node_modules
     networks:
       - bh_network
+
 volumes:
   pg_data:
     driver: local

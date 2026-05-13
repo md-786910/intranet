@@ -32,7 +32,7 @@ const upload = catchAsync(async (req, res) => {
 
 const list = catchAsync(async (req, res) => {
   await requireMediaAccess(req.user.user_id);
-  const result = await mediaService.list(req.query);
+  const result = await mediaService.list(req.query, req.user.user_id);
   res.status(200).json({ status: 'success', data: result });
 });
 

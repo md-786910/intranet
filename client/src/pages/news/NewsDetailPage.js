@@ -44,7 +44,11 @@ export default function NewsDetailPage() {
     confirmLabel: 'Publish',
     confirmVariant: 'primary',
     run: async () => {
-      await newsService.publishArticle(id, { scope_type: 'ORGANISATION', scope_id: currentOrganisationId });
+      // Send no scope — the backend `loadEntityScope` middleware reads the
+      // article's `owning_scope_type/id` and authorizes against that. Sending
+      // a hardcoded ORGANISATION here would override the middleware and 403
+      // for scope-locked editors.
+      await newsService.publishArticle(id);
       addToast('Article published', 'success');
       fetchArticle();
     },

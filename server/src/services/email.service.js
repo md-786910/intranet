@@ -99,6 +99,52 @@ async function sendEmployeeInvitation({
   return { delivered: true, acceptUrl };
 }
 
+async function sendWelcomeUser({
+  to,
+  firstName,
+  email,
+  password,
+  rolesBlock,
+  companyName,
+  inviterName,
+}) {
+  const loginUrl = EMPLOYEE_APP_BASE_URL.replace(/\/$/, "");
+  const safeCompanyName = companyName || APP_NAME;
+  const safeInviterName = inviterName || "Your administrator";
+
+  const html = renderTemplate(loadTemplate("welcome-user"), {
+    appName: APP_NAME,
+    companyName: safeCompanyName,
+    firstName: firstName || "there",
+    email,
+    password,
+    rolesBlock: rolesBlock || "No role assigned yet — your administrator will assign one soon.",
+    inviterName: safeInviterName,
+    loginUrl,
+  });
+
+  const transport = getTransport();
+  if (!transport) {
+    logger.warn(
+      `[email] SMTP not configured — welcome email for ${to} (login: ${loginUrl})`,
+    );
+    return { delivered: false, loginUrl };
+  }
+
+  const from =
+    process.env.SMTP_FROM ||
+    `"${safeCompanyName}" <no-reply@${APP_NAME.toLowerCase()}.local>`;
+  await transport.sendMail({
+    from,
+    to,
+    subject: `Welcome to ${safeCompanyName} on ${APP_NAME}`,
+    html,
+  });
+
+  logger.info(`[email] Welcome email sent to ${to}`);
+  return { delivered: true, loginUrl };
+}
+
 async function sendPasswordReset({ to, firstName, token, expiresAt }) {
   const resetUrl = buildResetUrl(token);
   const html = renderTemplate(loadTemplate("password-reset"), {
@@ -133,6 +179,7 @@ async function sendPasswordReset({ to, firstName, token, expiresAt }) {
 module.exports = {
   sendEmployeeInvitation,
   sendPasswordReset,
+  sendWelcomeUser,
   buildAcceptUrl,
   buildResetUrl,
 };
