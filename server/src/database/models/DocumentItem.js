@@ -40,6 +40,22 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+    updated_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    published_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    unpublished_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    deleted_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     owning_scope_type: {
       type: DataTypes.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
       allowNull: false,
@@ -78,6 +94,22 @@ module.exports = (sequelize, DataTypes) => {
     DocumentItem.belongsTo(models.UserAccount, {
       foreignKey: 'author_id',
       as: 'author',
+    });
+    DocumentItem.belongsTo(models.UserAccount, {
+      foreignKey: 'updated_by',
+      as: 'updater',
+    });
+    DocumentItem.belongsTo(models.UserAccount, {
+      foreignKey: 'published_by',
+      as: 'publisher',
+    });
+    DocumentItem.belongsTo(models.UserAccount, {
+      foreignKey: 'unpublished_by',
+      as: 'unpublisher',
+    });
+    DocumentItem.belongsTo(models.UserAccount, {
+      foreignKey: 'deleted_by',
+      as: 'deleter',
     });
     // Polymorphic scope — use scope.service.js to resolve owning_scope_type + owning_scope_id
     DocumentItem.belongsTo(models.Category, {

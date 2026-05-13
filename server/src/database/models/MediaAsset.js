@@ -37,6 +37,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+    deleted_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     deleted_at: {
       type: DataTypes.DATE,
       allowNull: true,
@@ -55,6 +59,10 @@ module.exports = (sequelize, DataTypes) => {
     MediaAsset.belongsTo(models.UserAccount, {
       foreignKey: 'uploaded_by',
       as: 'uploader',
+    });
+    MediaAsset.belongsTo(models.UserAccount, {
+      foreignKey: 'deleted_by',
+      as: 'deleter',
     });
   };
 

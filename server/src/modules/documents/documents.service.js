@@ -4,6 +4,7 @@ const { DEFAULT_TENANT_ID } = require('../../utils/constants');
 const { parsePagination, buildPagination } = require('../../utils/pagination');
 const permissionService = require('../../services/permission.service');
 const audienceService = require('../../services/audience.service');
+const scopeVisibilityService = require('../../services/scope-visibility.service');
 const { assertAudienceWithinUserScope } = require('../../services/publishing-scope.service');
 
 function generateSlug(title) {
@@ -94,9 +95,24 @@ const documentsService = {
       : { deleted_at: null };
     if (managing) {
       if (query.status) where.status = query.status;
-      // Scoped manager sees only what they themselves authored. Global
-      // managers (Owner / ORG-scope role) see everything.
-      if (!isGlobal) where.author_id = userId;
+      // Scoped manager sees documents whose owning_scope matches one of
+      // their role-assignment scopes OR is a descendant. Two editors at
+      // the same scope see each other's docs.
+      if (!isGlobal) {
+        const readableKeys = await scopeVisibilityService.getReadableScopeKeys(userId, 'DOCUMENTS');
+        const orCondition = scopeVisibilityService.buildOwningScopeOrCondition(readableKeys);
+        if (orCondition === null) {
+          // global passthrough
+        } else if (orCondition.length === 0) {
+          return {
+            documents: [],
+            pagination: buildPagination(page, limit, 0),
+            status_counts: { ALL: 0, DRAFT: 0, PUBLISHED: 0, ARCHIVED: 0 },
+          };
+        } else {
+          where[Op.and] = [...(where[Op.and] || []), { [Op.or]: orCondition }];
+        }
+      }
     } else {
       if (query.status && query.status !== 'PUBLISHED') {
         return {
@@ -132,10 +148,19 @@ const documentsService = {
     })();
 
     const { DocumentVersion } = require('../../database/models');
+    const userAttrs = ['user_id', 'first_name', 'last_name', 'email'];
     const include = [
-      { model: UserAccount, as: 'author', attributes: ['user_id', 'first_name', 'last_name', 'email'] },
+      { model: UserAccount, as: 'author', attributes: userAttrs },
       { model: Category, as: 'category', attributes: ['category_id', 'name', 'slug'], required: false },
     ];
+
+    if (managing) {
+      include.push(
+        { model: UserAccount, as: 'updater', attributes: userAttrs, required: false },
+        { model: UserAccount, as: 'publisher', attributes: userAttrs, required: false },
+        { model: UserAccount, as: 'unpublisher', attributes: userAttrs, required: false },
+      );
+    }
 
     if (!managing) {
       include.push({
@@ -228,9 +253,13 @@ const documentsService = {
   async getById(id, userId = null) {
     const { DocumentItem, UserAccount, Category, DocumentVersion, ContentAudienceRule, MediaAsset } = require('../../database/models');
 
+    const userAttrs = ['user_id', 'first_name', 'last_name', 'email'];
     const doc = await DocumentItem.findByPk(id, {
       include: [
-        { model: UserAccount, as: 'author', attributes: ['user_id', 'first_name', 'last_name', 'email'] },
+        { model: UserAccount, as: 'author', attributes: userAttrs },
+        { model: UserAccount, as: 'updater', attributes: userAttrs, required: false },
+        { model: UserAccount, as: 'publisher', attributes: userAttrs, required: false },
+        { model: UserAccount, as: 'unpublisher', attributes: userAttrs, required: false },
         { model: Category, as: 'category', required: false },
         {
           model: DocumentVersion,
@@ -350,6 +379,7 @@ const documentsService = {
       });
       if (data.title) doc.slug = generateSlug(data.title) + '-' + Date.now();
 
+      doc.updated_by = userId;
       await doc.save({ transaction });
 
       if (Array.isArray(data.audience_targets)) {
@@ -392,7 +422,7 @@ const documentsService = {
       throw ApiError.badRequest('Unpublish this document before moving it to the archive');
     }
 
-    await doc.update({ deleted_at: new Date() });
+    await doc.update({ deleted_at: new Date(), deleted_by: userId });
 
     await auditService.log({
       user_id: userId,
@@ -473,7 +503,13 @@ const documentsService = {
 
     // published_at gets a fresh timestamp on every publish; unpublished_at is
     // cleared because the most recent unpublish is now stale.
-    await doc.update({ status: 'PUBLISHED', published_at: new Date(), unpublished_at: null });
+    await doc.update({
+      status: 'PUBLISHED',
+      published_at: new Date(),
+      published_by: userId,
+      unpublished_at: null,
+      unpublished_by: null,
+    });
 
     await auditService.log({
       user_id: userId,
@@ -548,7 +584,7 @@ const documentsService = {
 
     // Keep published_at as the historical "last published on" stamp, and add
     // unpublished_at so the detail page can show "Unpublished on X".
-    await doc.update({ status: 'DRAFT', unpublished_at: new Date() });
+    await doc.update({ status: 'DRAFT', unpublished_at: new Date(), unpublished_by: userId });
 
     await auditService.log({
       user_id: userId,

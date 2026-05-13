@@ -38,6 +38,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: true,
     },
+    updated_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    deleted_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     deleted_at: {
       type: DataTypes.DATE,
       allowNull: true,
@@ -76,6 +84,14 @@ module.exports = (sequelize, DataTypes) => {
     Category.belongsTo(models.UserAccount, {
       as: 'creator',
       foreignKey: 'creator_id',
+    });
+    Category.belongsTo(models.UserAccount, {
+      as: 'updater',
+      foreignKey: 'updated_by',
+    });
+    Category.belongsTo(models.UserAccount, {
+      as: 'deleter',
+      foreignKey: 'deleted_by',
     });
   };
 

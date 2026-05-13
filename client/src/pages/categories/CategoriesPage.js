@@ -6,12 +6,33 @@ import SearchBar from '../../components/common/SearchBar';
 import Pagination from '../../components/common/Pagination';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import CategoryFormModal from '../../components/categories/CategoryFormModal';
+import ActivityModal from '../../components/common/ActivityModal';
 import { categoryService } from '../../services/categoryService';
 import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { usePermission } from '../../hooks/usePermission';
 import { useAuth } from '../../hooks/useAuth';
-import { formatDateTime } from '../../utils/formatters';
+import { formatDateTime, formatRelativeTime } from '../../utils/formatters';
+import { categoryEvents } from '../../utils/activityEvents';
+
+function nameOf(user) {
+  if (!user) return null;
+  const parts = [user.first_name, user.last_name].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : (user.email || null);
+}
+
+// Pick the most recent action to surface as a secondary line under the
+// creator name. Categories have no publish state, so we show updates and
+// deletions only.
+function latestAction(cat) {
+  if (cat.deleted_at && cat.deleter) {
+    return { label: 'Deleted', actor: cat.deleter, at: cat.deleted_at };
+  }
+  if (cat.updater && cat.updated_at && cat.updated_at !== cat.created_at) {
+    return { label: 'Updated', actor: cat.updater, at: cat.updated_at };
+  }
+  return null;
+}
 
 const TABS = [
   { value: 'NEWS', label: 'News' },
@@ -38,6 +59,7 @@ export default function CategoriesPage() {
   const [confirmCategory, setConfirmCategory] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [editing, setEditing] = useState(null); // { mode: 'create' | 'edit', initial }
+  const [activityCategory, setActivityCategory] = useState(null);
   const [allCategories, setAllCategories] = useState([]); // for parent dropdown
   const { page, limit, setPage } = usePagination();
   const skipFetchRef = useRef(false);
@@ -150,7 +172,7 @@ export default function CategoriesPage() {
             ? 'Deleted categories can be restored from here'
             : isOwner
               ? 'Manage categories used by News and Documents'
-              : 'Showing your own categories. Platform Owner can see all.'
+              : 'Showing categories at your scope. Platform Owner can see all.'
         }
         actions={
           <div className="flex gap-2">
@@ -212,6 +234,7 @@ export default function CategoriesPage() {
                 <th className="px-4 py-3 font-medium text-gray-600">Name</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Slug</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Parent</th>
+                <th className="px-4 py-3 font-medium text-gray-600">Author</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Items</th>
                 <th className="px-4 py-3 font-medium text-gray-600">{isTrash ? 'Deleted' : 'Updated'}</th>
                 <th className="w-32 px-4 py-3" />
@@ -220,7 +243,7 @@ export default function CategoriesPage() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12">
+                  <td colSpan={7} className="px-4 py-12">
                     <div className="animate-pulse space-y-2">
                       {[...Array(4)].map((_, i) => (
                         <div key={i} className="h-6 bg-gray-100 rounded" />
@@ -230,7 +253,7 @@ export default function CategoriesPage() {
                 </tr>
               ) : data.categories.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
                     {isTrash
                       ? (search ? 'No deleted categories match the filter' : 'Trash is empty')
                       : (search ? 'No categories match the filter' : 'No categories yet — create one to get started')}
@@ -253,42 +276,67 @@ export default function CategoriesPage() {
                     <td className="px-4 py-3 text-gray-600">
                       {cat.parent ? cat.parent.name : <span className="text-gray-400">—</span>}
                     </td>
+                    <td className="px-4 py-3 leading-tight">
+                      <div className="text-gray-700">{nameOf(cat.creator) || <span className="text-gray-400">—</span>}</div>
+                      {(() => {
+                        const action = latestAction(cat);
+                        if (!action) return null;
+                        return (
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            {action.label} by {nameOf(action.actor) || 'someone'} · {formatRelativeTime(action.at)}
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td className="px-4 py-3 text-gray-600">{cat.item_count}</td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                       {formatDateTime(isTrash ? cat.deleted_at : cat.updated_at)}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {isTrash ? (
-                        canDeleteCurrent && (
-                          <button
-                            type="button"
-                            onClick={() => handleRestore(cat)}
-                            disabled={actionLoading}
-                            className="text-primary-600 hover:text-primary-700 text-xs font-medium disabled:opacity-50"
-                          >
-                            Restore
-                          </button>
-                        )
-                      ) : (
-                        <div className="flex justify-end gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setEditing({ mode: 'edit', initial: cat })}
-                            className="text-gray-600 hover:text-gray-900 text-xs font-medium"
-                          >
-                            Edit
-                          </button>
-                          {canDeleteCurrent && (
+                      <div className="flex justify-end items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setActivityCategory(cat)}
+                          className="text-gray-400 hover:text-gray-700"
+                          title="Activity"
+                          aria-label="View activity"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+                        {isTrash ? (
+                          canDeleteCurrent && (
                             <button
                               type="button"
-                              onClick={() => setConfirmCategory(cat)}
-                              className="text-red-600 hover:text-red-700 text-xs font-medium"
+                              onClick={() => handleRestore(cat)}
+                              disabled={actionLoading}
+                              className="text-primary-600 hover:text-primary-700 text-xs font-medium disabled:opacity-50"
                             >
-                              Delete
+                              Restore
                             </button>
-                          )}
-                        </div>
-                      )}
+                          )
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setEditing({ mode: 'edit', initial: cat })}
+                              className="text-gray-600 hover:text-gray-900 text-xs font-medium"
+                            >
+                              Edit
+                            </button>
+                            {canDeleteCurrent && (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmCategory(cat)}
+                                className="text-red-600 hover:text-red-700 text-xs font-medium"
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -332,6 +380,13 @@ export default function CategoriesPage() {
             : ''
         }
         confirmLabel="Move to trash"
+      />
+
+      <ActivityModal
+        isOpen={Boolean(activityCategory)}
+        onClose={() => setActivityCategory(null)}
+        title={activityCategory ? `Activity · ${activityCategory.name}` : 'Activity'}
+        events={categoryEvents(activityCategory)}
       />
     </div>
   );

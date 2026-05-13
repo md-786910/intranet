@@ -121,33 +121,39 @@ const mediaService = {
       where.mime_type = { [Op.like]: `${query.mime_prefix}%` };
     }
 
-    // Non-global managers only see their own uploads. Global = Owner or
-    // ORG-scope manager in either NEWS or DOCUMENTS (the two modules that
-    // consume media).
+    // Non-global users see media uploaded by anyone whose role-assignment
+    // scope OVERLAPS theirs (i.e. same-scope-or-descendants collaboration).
+    // Global = Owner or ORG-scope manager in either NEWS or DOCUMENTS.
     if (userId) {
-      const [isGlobalNews, isGlobalDocs] = await Promise.all([
-        permissionService.isGlobalManager(userId, 'NEWS'),
-        permissionService.isGlobalManager(userId, 'DOCUMENTS'),
-      ]);
-      if (!isGlobalNews && !isGlobalDocs) {
-        where.uploaded_by = userId;
+      const scopeVisibilityService = require('../../services/scope-visibility.service');
+      const peerUserIds = await scopeVisibilityService.getCollaboratorUserIds(userId, ['NEWS', 'DOCUMENTS']);
+      if (peerUserIds !== null) {
+        // null = global; otherwise restrict to peers (always includes self)
+        where.uploaded_by = { [Op.in]: peerUserIds };
       }
     }
 
     const order = trash ? [['deleted_at', 'DESC']] : [['created_at', 'DESC']];
 
+    const userAttrs = ['user_id', 'first_name', 'last_name', 'email'];
     const Model = trash ? MediaAsset.unscoped() : MediaAsset;
     const { rows, count } = await Model.findAndCountAll({
       where,
       limit,
       offset,
       order,
-      include: [{
-        model: UserAccount,
-        as: 'uploader',
-        attributes: ['user_id', 'first_name', 'last_name', 'email'],
-      }],
+      include: [
+        { model: UserAccount, as: 'uploader', attributes: userAttrs },
+        { model: UserAccount, as: 'deleter', attributes: userAttrs, required: false },
+      ],
     });
+
+    const actorPayload = (u) => (u ? {
+      user_id: u.user_id,
+      first_name: u.first_name,
+      last_name: u.last_name,
+      email: u.email,
+    } : null);
 
     return {
       assets: rows.map((asset) => ({
@@ -161,12 +167,8 @@ const mediaService = {
         alt_text: asset.alt_text,
         created_at: asset.createdAt,
         deleted_at: asset.deleted_at,
-        uploader: asset.uploader ? {
-          user_id: asset.uploader.user_id,
-          first_name: asset.uploader.first_name,
-          last_name: asset.uploader.last_name,
-          email: asset.uploader.email,
-        } : null,
+        uploader: actorPayload(asset.uploader),
+        deleter: actorPayload(asset.deleter),
       })),
       pagination: buildPagination(page, limit, count),
     };
@@ -179,23 +181,23 @@ const mediaService = {
     return asset;
   },
 
-  async delete(id, userId) {  // eslint-disable-line no-unused-vars
+  async delete(id, userId) {
     const { MediaAsset } = require('../../database/models');
     const asset = await MediaAsset.findByPk(id);
     if (!asset) throw ApiError.notFound('Media asset not found');
 
     // Soft delete only — file stays on disk so the user can restore from Trash.
-    await asset.update({ deleted_at: new Date() });
+    await asset.update({ deleted_at: new Date(), deleted_by: userId || null });
     return { message: 'Media asset moved to trash' };
   },
 
-  async bulkDelete(ids, userId) {  // eslint-disable-line no-unused-vars
+  async bulkDelete(ids, userId) {
     const { MediaAsset } = require('../../database/models');
     const assets = await MediaAsset.findAll({ where: { media_asset_id: ids, deleted_at: null } });
 
     let deleted = 0;
     for (const asset of assets) {
-      await asset.update({ deleted_at: new Date() });
+      await asset.update({ deleted_at: new Date(), deleted_by: userId || null });
       deleted += 1;
     }
 

@@ -208,7 +208,7 @@ export default function MediaGalleryPage() {
             ? 'Deleted items can be restored from here'
             : isOwner
               ? 'All uploaded files and images'
-              : 'Showing your own uploads. Platform Owner can see all.'
+              : 'Showing uploads at your scope. Platform Owner can see all.'
         }
         actions={
           <div className="flex gap-2">

@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { formatDateTime, formatFileSize } from '../../utils/formatters';
+import { formatFileSize } from '../../utils/formatters';
 import { resolveAssetUrl } from '../../utils/mediaUrl';
 import MediaTypeIcon, { getMediaKind } from './MediaTypeIcon';
 import Button from './Button';
+import ActivityTimeline from './ActivityTimeline';
+import { mediaEvents } from '../../utils/activityEvents';
 
 export default function MediaPreviewDrawer({
   asset, open, onClose, onDelete, canDelete, onRestore, canRestore,
@@ -81,13 +83,12 @@ export default function MediaPreviewDrawer({
               <dd className="col-span-2 text-gray-900">{asset.mime_type || '—'}</dd>
               <dt className="text-gray-500">Size</dt>
               <dd className="col-span-2 text-gray-900">{formatFileSize(asset.size_bytes)}</dd>
-              <dt className="text-gray-500">Uploaded by</dt>
-              <dd className="col-span-2 text-gray-900">
-                {asset.uploader ? `${asset.uploader.first_name} ${asset.uploader.last_name}` : '—'}
-              </dd>
-              <dt className="text-gray-500">Uploaded</dt>
-              <dd className="col-span-2 text-gray-900">{formatDateTime(asset.created_at)}</dd>
             </dl>
+            <div className="px-5 pb-4">
+              <h4 className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-3">Activity</h4>
+              {/* Drawer body already scrolls; let the timeline grow naturally. */}
+              <ActivityTimeline events={mediaEvents(asset)} scrollable={false} />
+            </div>
             <div className="px-5 py-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
               <a
                 href={url}

@@ -42,6 +42,7 @@ import PushDetailPage from './pages/push/PushDetailPage';
 import AnalyticsPage from './pages/analytics/AnalyticsPage';
 import MediaGalleryPage from './pages/media/MediaGalleryPage';
 import CategoriesPage from './pages/categories/CategoriesPage';
+import ActivityLogPage from './pages/activity/ActivityLogPage';
 import QuickLinksPage from './pages/quick-links/QuickLinksPage';
 
 function HomeRedirect() {
@@ -125,6 +126,7 @@ function App() {
 
                 {/* Categories */}
                 <Route path="/categories" element={<CategoriesPage />} />
+                <Route path="/activity" element={<ActivityLogPage />} />
 
                 {/* Quick Links */}
                 <Route path="/quick-links" element={<QuickLinksPage />} />

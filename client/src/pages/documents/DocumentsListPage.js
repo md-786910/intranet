@@ -15,7 +15,26 @@ import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import { usePermission } from '../../hooks/usePermission';
 import { useAuth } from '../../hooks/useAuth';
-import { formatDate, formatDateTime } from '../../utils/formatters';
+import { formatDate, formatDateTime, formatRelativeTime } from '../../utils/formatters';
+
+function nameOf(user) {
+  if (!user) return null;
+  const parts = [user.first_name, user.last_name].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : (user.email || null);
+}
+
+function latestAction(row) {
+  if (row.status === 'PUBLISHED' && row.publisher && row.published_at) {
+    return { label: 'Published', actor: row.publisher, at: row.published_at };
+  }
+  if (row.status === 'DRAFT' && row.unpublisher && row.unpublished_at) {
+    return { label: 'Unpublished', actor: row.unpublisher, at: row.unpublished_at };
+  }
+  if (row.updater && row.updated_at && row.updated_at !== row.created_at) {
+    return { label: 'Updated', actor: row.updater, at: row.updated_at };
+  }
+  return null;
+}
 
 const STATUS_TABS = ['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED'];
 
@@ -117,9 +136,19 @@ export default function DocumentsListPage() {
     { key: 'category', label: 'Category', render: (row) => (
       <span className="text-gray-500">{row.category?.name || '—'}</span>
     )},
-    { key: 'author', label: 'Author', render: (row) => (
-      <span className="text-gray-500">{row.author?.first_name} {row.author?.last_name}</span>
-    )},
+    { key: 'author', label: 'Author', render: (row) => {
+      const action = latestAction(row);
+      return (
+        <div className="leading-tight">
+          <div className="text-gray-700">{nameOf(row.author) || <span className="text-gray-400">—</span>}</div>
+          {action && (
+            <div className="text-xs text-gray-500 mt-0.5">
+              {action.label} by {nameOf(action.actor) || 'someone'} · {formatRelativeTime(action.at)}
+            </div>
+          )}
+        </div>
+      );
+    }},
     { key: 'created_at', label: 'Created', render: (row) => (
       <span className="text-gray-500">{formatDateTime(row.created_at)}</span>
     )},
@@ -172,7 +201,7 @@ export default function DocumentsListPage() {
             ? 'Archived documents can be restored or permanently deleted'
             : isOwner
               ? 'Manage documents and files'
-              : 'Showing your own documents. Platform Owner can see all.'
+              : 'Showing documents at your scope. Platform Owner can see all.'
         }
         actions={
           <div className="flex gap-2">

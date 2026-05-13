@@ -5,8 +5,10 @@ import Button from '../../components/common/Button';
 import StatusBadge from '../../components/common/StatusBadge';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import AudienceTree from '../../components/common/AudienceTree';
+import ActivityTimeline from '../../components/common/ActivityTimeline';
 import RichTextView from '../../components/common/RichTextView';
 import PriorityBadge from '../../components/common/PriorityBadge';
+import { newsEvents } from '../../utils/activityEvents';
 import NewsEngagementPanel from './detail/NewsEngagementPanel';
 import { newsService } from '../../services/newsService';
 import { useToast } from '../../hooks/useToast';
@@ -196,6 +198,11 @@ export default function NewsDetailPage() {
         <div className="mt-6 pt-4 border-t border-gray-200">
           <h3 className="text-sm font-medium text-gray-700 mb-3">Audience</h3>
           <AudienceTree rules={article.audienceRules || []} />
+        </div>
+
+        <div className="mt-6 pt-4 border-t border-gray-200">
+          <h3 className="text-sm font-medium text-gray-700 mb-4">Activity</h3>
+          <ActivityTimeline events={newsEvents(article)} />
         </div>
       </div>
 

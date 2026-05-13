@@ -6,13 +6,15 @@ import StatusBadge from '../../components/common/StatusBadge';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { documentService } from '../../services/documentService';
 import { useToast } from '../../hooks/useToast';
-import { formatDate, formatDateTime, formatFileSize } from '../../utils/formatters';
+import { formatDate, formatFileSize } from '../../utils/formatters';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { usePermission } from '../../hooks/usePermission';
 import MediaTypeIcon, { getMediaKind } from '../../components/common/MediaTypeIcon';
 import MediaPreviewDrawer from '../../components/common/MediaPreviewDrawer';
 import AudienceTree from '../../components/common/AudienceTree';
+import ActivityTimeline from '../../components/common/ActivityTimeline';
 import PriorityBadge from '../../components/common/PriorityBadge';
+import { documentEvents } from '../../utils/activityEvents';
 import { resolveAssetUrl } from '../../utils/mediaUrl';
 
 export default function DocumentDetailPage() {
@@ -147,26 +149,10 @@ export default function DocumentDetailPage() {
           <span className="text-sm text-gray-500">By {doc.author?.first_name} {doc.author?.last_name}</span>
         </div>
 
-        <dl className="grid grid-cols-1 sm:grid-cols-3 gap-y-2 gap-x-6 text-sm">
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-gray-500">Created</dt>
-            <dd className="text-gray-900">{formatDateTime(doc.created_at)}</dd>
-          </div>
-          {doc.published_at && (
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-gray-500">
-                {doc.status === 'PUBLISHED' ? 'Published' : 'Last published'}
-              </dt>
-              <dd className="text-gray-900">{formatDateTime(doc.published_at)}</dd>
-            </div>
-          )}
-          {doc.unpublished_at && doc.status !== 'PUBLISHED' && (
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-gray-500">Unpublished</dt>
-              <dd className="text-gray-900">{formatDateTime(doc.unpublished_at)}</dd>
-            </div>
-          )}
-        </dl>
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 mb-4">Activity</h3>
+          <ActivityTimeline events={documentEvents(doc)} />
+        </div>
 
         {doc.summary && <p className="text-gray-600">{doc.summary}</p>}
 

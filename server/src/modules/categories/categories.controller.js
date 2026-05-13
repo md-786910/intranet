@@ -2,6 +2,7 @@ const catchAsync = require('../../utils/catchAsync');
 const ApiError = require('../../utils/ApiError');
 const categoriesService = require('./categories.service');
 const permissionService = require('../../services/permission.service');
+const scopeVisibilityService = require('../../services/scope-visibility.service');
 
 function moduleForEntity(entityType) {
   return entityType === 'NEWS' ? 'NEWS' : 'DOCUMENTS';
@@ -23,16 +24,20 @@ async function requireDelete(userId, entityType) {
   }
 }
 
-// Non-Owner users can only mutate categories they created themselves.
-// Global managers (Owner / ORG-scope) can touch any category.
+// Non-Owners can mutate any category created by a user in their
+// collaborator peer set (same scope-overlap rule used for visibility).
+// Owners / ORG-scope managers can touch any category. This mirrors the
+// read filter in categories.service.list so visibility and editability
+// stay symmetric — "if you see it, you can edit it".
 async function assertCanMutateCategory(userId, category) {
-  const isGlobal = await permissionService.isGlobalManager(
-    userId,
-    moduleForEntity(category.entity_type),
-  );
-  if (isGlobal) return;
-  if (category.creator_id !== userId) {
-    throw ApiError.forbidden('You can only modify categories you created');
+  const moduleCode = moduleForEntity(category.entity_type);
+  if (await permissionService.isGlobalManager(userId, moduleCode)) return;
+
+  const peerUserIds = await scopeVisibilityService.getCollaboratorUserIds(userId, [moduleCode]);
+  if (peerUserIds === null) return; // helper short-circuit: global access
+
+  if (!category.creator_id || !peerUserIds.includes(category.creator_id)) {
+    throw ApiError.forbidden('You can only modify categories in your scope');
   }
 }
 
@@ -52,7 +57,7 @@ const update = catchAsync(async (req, res) => {
   const existing = await categoriesService.getById(req.params.id);
   await requireManage(req.user.user_id, existing.entity_type);
   await assertCanMutateCategory(req.user.user_id, existing);
-  const result = await categoriesService.update(req.params.id, req.body);
+  const result = await categoriesService.update(req.params.id, req.body, req.user.user_id);
   res.status(200).json({ status: 'success', data: result });
 });
 
@@ -60,7 +65,7 @@ const remove = catchAsync(async (req, res) => {
   const existing = await categoriesService.getById(req.params.id);
   await requireDelete(req.user.user_id, existing.entity_type);
   await assertCanMutateCategory(req.user.user_id, existing);
-  const result = await categoriesService.softDelete(req.params.id);
+  const result = await categoriesService.softDelete(req.params.id, req.user.user_id);
   res.status(200).json({ status: 'success', data: result });
 });
 

@@ -57,6 +57,26 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+    updated_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    published_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    unpublished_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    archived_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    deleted_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     owning_scope_type: {
       type: DataTypes.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
       allowNull: false,
@@ -66,6 +86,10 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
     },
     published_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    unpublished_at: {
       type: DataTypes.DATE,
       allowNull: true,
     },
@@ -95,6 +119,26 @@ module.exports = (sequelize, DataTypes) => {
     NewsItem.belongsTo(models.UserAccount, {
       foreignKey: 'author_id',
       as: 'author',
+    });
+    NewsItem.belongsTo(models.UserAccount, {
+      foreignKey: 'updated_by',
+      as: 'updater',
+    });
+    NewsItem.belongsTo(models.UserAccount, {
+      foreignKey: 'published_by',
+      as: 'publisher',
+    });
+    NewsItem.belongsTo(models.UserAccount, {
+      foreignKey: 'unpublished_by',
+      as: 'unpublisher',
+    });
+    NewsItem.belongsTo(models.UserAccount, {
+      foreignKey: 'archived_by',
+      as: 'archiver',
+    });
+    NewsItem.belongsTo(models.UserAccount, {
+      foreignKey: 'deleted_by',
+      as: 'deleter',
     });
     // Polymorphic scope — use scope.service.js to resolve owning_scope_type + owning_scope_id
     NewsItem.belongsTo(models.MediaAsset, {

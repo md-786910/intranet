@@ -29,6 +29,16 @@ async function loadCategoryUsage(ids, entityType) {
   return map;
 }
 
+function actorPayload(user) {
+  if (!user) return null;
+  return {
+    user_id: user.user_id,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    email: user.email,
+  };
+}
+
 function serialize(cat, itemCount = 0) {
   return {
     category_id: cat.category_id,
@@ -45,6 +55,9 @@ function serialize(cat, itemCount = 0) {
     deleted_at: cat.deleted_at,
     created_at: cat.createdAt,
     updated_at: cat.updatedAt,
+    creator: actorPayload(cat.creator),
+    updater: actorPayload(cat.updater),
+    deleter: actorPayload(cat.deleter),
   };
 }
 
@@ -97,30 +110,44 @@ const categoriesService = {
       where.name = { [Op.iLike]: `%${query.search}%` };
     }
 
-    // Non-global managers only see categories they themselves created.
-    // Global = Owner or ORG-scope manager in the matching module.
+    // Non-global users see categories created by anyone in their scope
+    // overlap (same-scope-or-descendants collaboration). Global = Owner
+    // or ORG-scope manager in the matching module.
     if (userId) {
       const moduleCode = query.entity_type === 'NEWS' ? 'NEWS' : 'DOCUMENTS';
       const isGlobal = await permissionService.isGlobalManager(userId, moduleCode);
-      if (!isGlobal) where.creator_id = userId;
+      if (!isGlobal) {
+        const scopeVisibilityService = require('../../services/scope-visibility.service');
+        const peerUserIds = await scopeVisibilityService.getCollaboratorUserIds(userId, [moduleCode]);
+        if (peerUserIds !== null) {
+          where.creator_id = { [Op.in]: peerUserIds };
+        }
+      }
     }
 
     const order = trash
       ? [['deleted_at', 'DESC']]
       : [['sort_order', 'ASC'], ['name', 'ASC']];
 
+    const { UserAccount } = require('../../database/models');
+    const userAttrs = ['user_id', 'first_name', 'last_name', 'email'];
     const Model = trash ? Category.unscoped() : Category;
     const { rows, count } = await Model.findAndCountAll({
       where,
       limit,
       offset,
       order,
-      include: [{
-        model: Category.unscoped(),
-        as: 'parent',
-        attributes: ['category_id', 'name', 'slug'],
-        required: false,
-      }],
+      include: [
+        {
+          model: Category.unscoped(),
+          as: 'parent',
+          attributes: ['category_id', 'name', 'slug'],
+          required: false,
+        },
+        { model: UserAccount, as: 'creator', attributes: userAttrs, required: false },
+        { model: UserAccount, as: 'updater', attributes: userAttrs, required: false },
+        { model: UserAccount, as: 'deleter', attributes: userAttrs, required: false },
+      ],
     });
 
     const ids = rows.map((r) => r.category_id);
@@ -174,7 +201,7 @@ const categoriesService = {
     return serialize(cat, 0);
   },
 
-  async update(id, data) {
+  async update(id, data, userId) {
     const { Category } = require('../../database/models');
     const cat = await Category.findByPk(id);
     if (!cat) throw ApiError.notFound('Category not found');
@@ -211,16 +238,17 @@ const categoriesService = {
       }
     }
 
+    if (userId) cat.updated_by = userId;
     await cat.save();
     return serialize(cat);
   },
 
-  async softDelete(id) {
+  async softDelete(id, userId) {
     const { Category } = require('../../database/models');
     const cat = await Category.findByPk(id);
     if (!cat) throw ApiError.notFound('Category not found');
 
-    await cat.update({ deleted_at: new Date() });
+    await cat.update({ deleted_at: new Date(), deleted_by: userId || null });
     return { message: 'Category moved to trash' };
   },
 

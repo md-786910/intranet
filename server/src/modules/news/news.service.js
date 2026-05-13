@@ -4,6 +4,7 @@ const { DEFAULT_TENANT_ID } = require('../../utils/constants');
 const { parsePagination, buildPagination } = require('../../utils/pagination');
 const permissionService = require('../../services/permission.service');
 const audienceService = require('../../services/audience.service');
+const scopeVisibilityService = require('../../services/scope-visibility.service');
 const { assertAudienceWithinUserScope } = require('../../services/publishing-scope.service');
 const { sanitiseRichText } = require('../../utils/sanitiseRichText');
 
@@ -114,10 +115,28 @@ const newsService = {
       : { deleted_at: null };
     if (managing) {
       if (query.status) where.status = query.status;
-      // Scoped manager (e.g. Content Editor at DEPARTMENT) sees only what
-      // they themselves authored. Global managers (Owner / ORG-scope role)
-      // see everything.
-      if (!isGlobal) where.author_id = userId;
+      // Scoped manager (e.g. Content Editor at DEPARTMENT) sees articles
+      // whose owning_scope matches one of their role-assignment scopes OR
+      // is a descendant of one. Two editors at the same scope see each
+      // other's content. Global managers (Owner / ORG-scope role) skip
+      // this filter entirely.
+      if (!isGlobal) {
+        const readableKeys = await scopeVisibilityService.getReadableScopeKeys(userId, 'NEWS');
+        const orCondition = scopeVisibilityService.buildOwningScopeOrCondition(readableKeys);
+        if (orCondition === null) {
+          // null => global access; let through (shouldn't happen since !isGlobal, but defensive)
+        } else if (orCondition.length === 0) {
+          // No readable scope at all → empty result
+          return {
+            articles: [],
+            pagination: buildPagination(page, limit, 0),
+            status_counts: { ALL: 0, DRAFT: 0, PUBLISHED: 0, ARCHIVED: 0 },
+          };
+        } else {
+          // Use Op.and to avoid clobbering any other Op.or (e.g. search).
+          where[Op.and] = [...(where[Op.and] || []), { [Op.or]: orCondition }];
+        }
+      }
     } else {
       if (query.status && query.status !== 'PUBLISHED') {
         return {
@@ -135,19 +154,20 @@ const newsService = {
       ];
     }
 
+    const userAttrs = ['user_id', 'first_name', 'last_name', 'email'];
     const include = [
-      {
-        model: UserAccount,
-        as: 'author',
-        attributes: ['user_id', 'first_name', 'last_name', 'email'],
-      },
-      {
-        model: Category,
-        as: 'category',
-        attributes: ['category_id', 'name', 'slug'],
-        required: false,
-      },
+      { model: UserAccount, as: 'author', attributes: userAttrs },
+      { model: Category, as: 'category', attributes: ['category_id', 'name', 'slug'], required: false },
     ];
+
+    if (managing) {
+      include.push(
+        { model: UserAccount, as: 'updater', attributes: userAttrs, required: false },
+        { model: UserAccount, as: 'publisher', attributes: userAttrs, required: false },
+        { model: UserAccount, as: 'unpublisher', attributes: userAttrs, required: false },
+        { model: UserAccount, as: 'archiver', attributes: userAttrs, required: false },
+      );
+    }
 
     if (!managing) {
       include.push({
@@ -223,13 +243,14 @@ const newsService = {
   async getById(id, userId = null) {
     const { NewsItem, UserAccount, ContentAudienceRule, Category } = require('../../database/models');
 
+    const userAttrs = ['user_id', 'first_name', 'last_name', 'email'];
     const article = await NewsItem.findByPk(id, {
       include: [
-        {
-          model: UserAccount,
-          as: 'author',
-          attributes: ['user_id', 'first_name', 'last_name', 'email'],
-        },
+        { model: UserAccount, as: 'author', attributes: userAttrs },
+        { model: UserAccount, as: 'updater', attributes: userAttrs, required: false },
+        { model: UserAccount, as: 'publisher', attributes: userAttrs, required: false },
+        { model: UserAccount, as: 'unpublisher', attributes: userAttrs, required: false },
+        { model: UserAccount, as: 'archiver', attributes: userAttrs, required: false },
         {
           model: Category,
           as: 'category',
@@ -355,6 +376,7 @@ const newsService = {
 
       if (data.title) article.slug = generateSlug(data.title) + '-' + Date.now();
 
+      article.updated_by = userId;
       await article.save({ transaction });
 
       if (Array.isArray(data.audience_targets)) {
@@ -397,7 +419,7 @@ const newsService = {
       throw ApiError.badRequest('Archive this article before moving it to the trash');
     }
 
-    await article.update({ deleted_at: new Date() });
+    await article.update({ deleted_at: new Date(), deleted_by: userId });
 
     await auditService.log({
       user_id: userId,
@@ -473,7 +495,13 @@ const newsService = {
     if (!article) throw ApiError.notFound('News article not found');
     if (article.status === 'PUBLISHED') throw ApiError.badRequest('Article is already published');
 
-    await article.update({ status: 'PUBLISHED', published_at: new Date() });
+    await article.update({
+      status: 'PUBLISHED',
+      published_at: new Date(),
+      published_by: userId,
+      unpublished_at: null,
+      unpublished_by: null,
+    });
 
     await auditService.log({
       user_id: userId,
@@ -551,7 +579,7 @@ const newsService = {
     const article = await NewsItem.findByPk(id);
     if (!article) throw ApiError.notFound('News article not found');
 
-    await article.update({ status: 'ARCHIVED', archived_at: new Date() });
+    await article.update({ status: 'ARCHIVED', archived_at: new Date(), archived_by: userId });
 
     await auditService.log({
       user_id: userId,
@@ -572,7 +600,11 @@ const newsService = {
       throw ApiError.badRequest('Only published articles can be unpublished');
     }
 
-    await article.update({ status: 'DRAFT', published_at: null });
+    await article.update({
+      status: 'DRAFT',
+      unpublished_at: new Date(),
+      unpublished_by: userId,
+    });
 
     await auditService.log({
       user_id: userId,
