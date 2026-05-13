@@ -65,6 +65,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
+    azure_object_id: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+      unique: true,
+    },
   }, {
     tableName: 'user_account',
     defaultScope: {

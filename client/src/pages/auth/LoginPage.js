@@ -3,10 +3,13 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import Input from "../../components/common/Input";
 import Button from "../../components/common/Button";
+import MicrosoftSignInButton from "../../features/auth-azure/MicrosoftSignInButton";
 import {
   extractValidationErrors,
   getErrorMessage,
 } from "../../utils/errorUtils";
+
+const AZURE_SSO_ENABLED = process.env.REACT_APP_AZURE_SSO_ENABLED === "true";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -177,6 +180,20 @@ export default function LoginPage() {
           >
             Sign in
           </Button>
+
+          {AZURE_SSO_ENABLED && (
+            <>
+              <div className="relative my-2">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-gray-50 px-2 text-gray-500">or</span>
+                </div>
+              </div>
+              <MicrosoftSignInButton />
+            </>
+          )}
         </form>
       </div>
     </div>

@@ -12,10 +12,9 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const login = useCallback(async (email, password) => {
-    const response = await api.post('/auth/login', { email, password });
-    const { accessToken, refreshToken, user: userData, permissions: perms } = response.data.data;
-
+  // Hydrate React state + localStorage from a server-issued session payload.
+  // Shared by password login and Microsoft SSO so both paths produce identical state.
+  const setSession = useCallback(async ({ accessToken, refreshToken, user: userData, permissions: perms }) => {
     setTokens(accessToken, refreshToken);
     setUser(userData);
     setPermissions(perms || {});
@@ -33,6 +32,11 @@ export function AuthProvider({ children }) {
 
     return userData;
   }, []);
+
+  const login = useCallback(async (email, password) => {
+    const response = await api.post('/auth/login', { email, password, audience: 'admin' });
+    return setSession(response.data.data);
+  }, [setSession]);
 
   const logout = useCallback(async () => {
     try {
@@ -128,6 +132,7 @@ export function AuthProvider({ children }) {
     isAuthenticated,
     login,
     logout,
+    setSession,
   };
 
   return (

@@ -3,12 +3,13 @@ const authService = require('./auth.service');
 const employeesService = require('../employees/employees.service');
 
 const login = catchAsync(async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, audience } = req.body;
   const result = await authService.login(
     email,
     password,
     req.ip,
-    req.headers['user-agent']
+    req.headers['user-agent'],
+    audience,
   );
 
   res.status(200).json({

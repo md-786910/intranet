@@ -6,6 +6,9 @@ const auditLogger = require("../../middleware/auditLogger");
 const { authLimiter } = require("../../middleware/rateLimiter");
 const schemas = require("./auth.validation");
 
+// Azure AD (Microsoft Entra ID) SSO subroutes — invite-only gating in azure.service.js
+router.use("/azure", require("./azure/azure.routes"));
+
 // POST /api/v1/auth/login
 router.post(
   "/login",

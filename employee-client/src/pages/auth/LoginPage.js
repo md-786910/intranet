@@ -4,7 +4,10 @@ import { useAuth } from '../../hooks/useAuth';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import AuthShell from '../../components/layout/AuthShell';
+import MicrosoftSignInButton from '../../features/auth-azure/MicrosoftSignInButton';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
+
+const AZURE_SSO_ENABLED = process.env.REACT_APP_AZURE_SSO_ENABLED === 'true';
 
 const MailIcon = (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor">
@@ -142,6 +145,20 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
             </svg>
           </Button>
+
+          {AZURE_SSO_ENABLED && (
+            <>
+              <div className="relative my-2">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-gray-500">or</span>
+                </div>
+              </div>
+              <MicrosoftSignInButton />
+            </>
+          )}
 
           <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500">
             {ShieldIcon}

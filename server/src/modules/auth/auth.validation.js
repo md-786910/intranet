@@ -19,6 +19,7 @@ const loginSchema = {
         'string.min': 'Password must be at least 8 characters',
         'any.required': 'Password is required',
       }),
+    audience: Joi.string().valid('admin', 'employee').optional(),
   }),
 };
 

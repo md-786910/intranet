@@ -7,6 +7,7 @@ const tokenService = require("../../services/token.service");
 const auditService = require("../../services/audit.service");
 const permissionService = require("../../services/permission.service");
 const emailService = require("../../services/email.service");
+const { assertAudienceAllowed } = require("./audience");
 const logger = require("../../config/logger");
 
 const LOCK_DURATION_MS = 30 * 60 * 1000; // 30 minutes
@@ -23,7 +24,7 @@ const authService = {
    * - Account lockout after 5 failed attempts
    * - bcrypt for constant-time comparison
    */
-  async login(email, password, ipAddress, userAgent) {
+  async login(email, password, ipAddress, userAgent, audience) {
     const { UserAccount } = require("../../database/models");
 
     // Find user with password (default scope excludes password_hash)
@@ -83,6 +84,9 @@ const authService = {
 
       throw ApiError.unauthorized("Invalid credentials");
     }
+
+    // Enforce audience gate (e.g., reject EMPLOYEE-only users on the admin panel)
+    await assertAudienceAllowed(user.user_id, audience);
 
     // Success: reset failed attempts, update last login
     await user.update({

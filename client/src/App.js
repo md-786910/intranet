@@ -12,6 +12,7 @@ import AdminLayout from './components/layout/AdminLayout';
 import LoginPage from './pages/auth/LoginPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import InvitationAcceptPage from './pages/auth/InvitationAcceptPage';
+import AzureReturnPage from './features/auth-azure/AzureReturnPage';
 
 // Pages
 import DashboardPage from './pages/dashboard/DashboardPage';
@@ -72,6 +73,7 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/invitations/:token" element={<InvitationAcceptPage />} />
+              <Route path="/auth/azure/return" element={<AzureReturnPage />} />
 
               {/* Protected routes */}
               <Route

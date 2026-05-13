@@ -9,6 +9,7 @@ import LoginPage from './pages/auth/LoginPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import InvitationAcceptPage from './pages/auth/InvitationAcceptPage';
+import AzureReturnPage from './features/auth-azure/AzureReturnPage';
 import HomePage from './pages/home/HomePage';
 import NewsListPage from './pages/news/NewsListPage';
 import NewsDetailPage from './pages/news/NewsDetailPage';
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
             <Route path="/invitations/:token" element={<InvitationAcceptPage />} />
+            <Route path="/auth/azure/return" element={<AzureReturnPage />} />
             <Route path="/s/:token" element={<PublicNewsSharePage />} />
 
             <Route
