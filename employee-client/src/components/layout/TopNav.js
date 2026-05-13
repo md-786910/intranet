@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import MaterialIcon from "../common/MaterialIcon";
 import Avatar from "../common/Avatar";
+import SearchModal from "../search/SearchModal";
 import { useAuth } from "../../hooks/useAuth";
 import { useNotifications } from "../../hooks/useNotifications";
 import { deeplinkFor } from "../../utils/notificationDeeplink";
@@ -56,8 +57,21 @@ export default function TopNav() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const menuRef = useRef(null);
   const notificationsRef = useRef(null);
+
+  // Global ⌘K / Ctrl+K shortcut to summon the search modal from anywhere.
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const {
     items: notifications,
     unreadCount,
@@ -115,17 +129,15 @@ export default function TopNav() {
           </nav>
         </div>
         <div className="flex items-center gap-3 sm:gap-6 shrink-0">
-          <div className="relative hidden lg:block">
-            <MaterialIcon
-              name="search"
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]"
-            />
-            <input
-              className="pl-10 pr-4 py-2 bg-surface-container-low border-none rounded-lg text-sm w-48 xl:w-64 focus:ring-2 focus:ring-primary-container transition-all"
-              placeholder="Search resources..."
-              type="text"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className="hidden lg:flex items-center gap-2 pl-3 pr-2 py-2 bg-surface-container-low border-none rounded-lg text-sm w-48 xl:w-64 text-outline hover:bg-surface-container-low/80 focus:ring-2 focus:ring-primary-container transition-all"
+          >
+            <MaterialIcon name="search" className="text-outline text-[20px]" />
+            <span className="flex-1 text-left">Search resources...</span>
+            <kbd className="ml-auto text-[10px] font-semibold tracking-wide bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-zinc-500">⌘K</kbd>
+          </button>
           <div className="relative flex items-center gap-2 sm:gap-4">
             <div className="relative" ref={notificationsRef}>
               <button
@@ -302,6 +314,7 @@ export default function TopNav() {
           </div>
         </div>
       </div>
+      <SearchModal isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
   );
 }

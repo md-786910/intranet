@@ -35,6 +35,7 @@ const quickLinksRoutes = require("./modules/quick-links/quick-links.routes");
 const notificationsRoutes = require("./modules/notifications/notifications.routes");
 const activityRoutes = require("./modules/activity/activity.routes");
 const homeActivityRoutes = require("./modules/home-activity/home-activity.routes");
+const searchRoutes = require("./modules/search/search.routes");
 
 const app = express();
 
@@ -93,6 +94,7 @@ app.use("/api/v1/quick-links", quickLinksRoutes);
 app.use("/api/v1/notifications", notificationsRoutes);
 app.use("/api/v1/activity", activityRoutes);
 app.use("/api/v1/home", homeActivityRoutes);
+app.use("/api/v1/search", searchRoutes);
 
 // Serve uploaded files. Strip frame-blocking headers so the client (running on a
 // different dev origin) can preview PDFs / CSVs / text in an iframe. Helmet's
