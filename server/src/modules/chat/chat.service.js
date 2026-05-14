@@ -21,6 +21,22 @@ const chatService = {
     });
     if (!targetUser) throw ApiError.notFound('User not found');
 
+    // Enforce admin-configured chat reachability. Blocks are stored
+    // bidirectionally, so a single direction lookup is enough — but check both
+    // for defensive consistency in case the pair-write ever drifts. Return a
+    // generic message so we don't leak whether the target exists.
+    const { ChatBlock } = require('../../database/models');
+    const blocked = await ChatBlock.findOne({
+      where: {
+        [Op.or]: [
+          { user_id: userId1, blocked_user_id: userId2 },
+          { user_id: userId2, blocked_user_id: userId1 },
+        ],
+      },
+      attributes: ['chat_block_id'],
+    });
+    if (blocked) throw ApiError.forbidden('User not available');
+
     // Find existing conversation where both users are participants
     const existing = await sequelize.query(`
       SELECT cp1.conversation_id
@@ -274,52 +290,31 @@ const chatService = {
   },
 
   /**
-   * Get contacts from the user's vertical (reuses org.service pattern).
+   * Get chat contacts visible to `userId`.
+   *
+   * Pool: all ACTIVE users in the tenant minus anyone in the requester's
+   * admin-configured blocklist. The earlier same-vertical-only filter was
+   * replaced by per-user blocklists managed from the Employee create/edit
+   * pages — see `chat_block` table.
    */
   async getContacts(userId, { search, limit: rawLimit } = {}) {
     const {
-      UserAccount, PersonProfile, DepartmentMembership, Department, Vertical,
+      UserAccount, PersonProfile, DepartmentMembership, Department,
     } = require('../../database/models');
+    const chatBlockService = require('../../services/chat-block.service');
 
     const contactLimit = Math.min(parseInt(rawLimit, 10) || 50, 100);
 
-    // Find user's vertical
-    const membership = await DepartmentMembership.findOne({
-      where: { user_id: userId },
-      order: [['is_primary', 'DESC'], ['joined_at', 'ASC']],
-      include: [{
-        model: Department,
-        as: 'department',
-        where: { deleted_at: null },
-        required: true,
-        include: [{
-          model: Vertical,
-          as: 'vertical',
-          where: { deleted_at: null },
-          required: true,
-        }],
-      }],
-    });
+    // Exclusion list: anyone the requester has been blocked from. Stored
+    // bidirectionally so a single-direction query is enough.
+    const blockedIds = Array.from(await chatBlockService.getBlockedIdSet(userId));
 
-    if (!membership || !membership.department?.vertical) {
-      return [];
-    }
-
-    const verticalId = membership.department.vertical.id;
-
-    // Get all department IDs in this vertical
-    const departments = await Department.findAll({
-      where: { vertical_id: verticalId, deleted_at: null },
-      attributes: ['id'],
-    });
-    const deptIds = departments.map((d) => d.id);
-    if (deptIds.length === 0) return [];
-
-    // Build search conditions
     const userWhere = {
       deleted_at: null,
       status: 'ACTIVE',
-      user_id: { [Op.ne]: userId },
+      user_id: blockedIds.length
+        ? { [Op.and]: [{ [Op.ne]: userId }, { [Op.notIn]: blockedIds }] }
+        : { [Op.ne]: userId },
     };
 
     if (search) {
@@ -338,13 +333,12 @@ const chatService = {
         {
           model: DepartmentMembership,
           as: 'departmentMemberships',
-          required: true,
-          where: { department_id: deptIds },
+          required: false,
           include: [{
             model: Department,
             as: 'department',
             attributes: ['id', 'name'],
-            required: true,
+            required: false,
           }],
         },
       ],

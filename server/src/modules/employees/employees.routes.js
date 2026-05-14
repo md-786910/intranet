@@ -15,6 +15,14 @@ router.get(
   controller.list,
 );
 
+// Pool of active users for the "Chat access" selector on Create/Edit Employee.
+// Declared before `/:id` so the literal path wins over the param route.
+router.get(
+  '/chat-candidates',
+  authorize('ADMIN', 'MANAGE_EMPLOYEES'),
+  controller.listChatCandidates,
+);
+
 router.get(
   '/:id',
   authorize('ADMIN', 'MANAGE_EMPLOYEES'),

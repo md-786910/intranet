@@ -31,6 +31,11 @@ const resendInvite = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
+const listChatCandidates = catchAsync(async (req, res) => {
+  const result = await employeesService.listChatCandidates();
+  res.status(200).json({ status: 'success', data: result });
+});
+
 module.exports = {
   list,
   getById,
@@ -38,4 +43,5 @@ module.exports = {
   update,
   softDelete,
   resendInvite,
+  listChatCandidates,
 };

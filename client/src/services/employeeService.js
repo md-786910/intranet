@@ -7,6 +7,7 @@ export const employeeService = {
   updateEmployee: (id, data) => api.put(`/employees/${id}`, data),
   deleteEmployee: (id) => api.delete(`/employees/${id}`),
   resendInvite: (id) => api.post(`/employees/${id}/resend-invite`),
+  listChatCandidates: () => api.get('/employees/chat-candidates'),
 
   // Public (no auth header needed; the api client tolerates it)
   validateInvitation: (token) => api.get(`/auth/invitations/${token}/validate`),

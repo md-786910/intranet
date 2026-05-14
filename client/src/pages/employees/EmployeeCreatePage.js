@@ -5,6 +5,7 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
+import ChatAccessSelector from '../../components/common/ChatAccessSelector';
 import ReportsToPicker from './ReportsToPicker';
 import { employeeService } from '../../services/employeeService';
 import { roleCategoryService } from '../../services/roleCategoryService';
@@ -26,12 +27,22 @@ export default function EmployeeCreatePage() {
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [roleCategories, setRoleCategories] = useState([]);
+  const [chatCandidates, setChatCandidates] = useState([]);
+  const [chatCandidatesLoading, setChatCandidatesLoading] = useState(true);
+  const [chatBlockedIds, setChatBlockedIds] = useState([]);
 
   useEffect(() => {
     roleCategoryService.list()
       .then((res) => setRoleCategories(res.data?.data || []))
       .catch((err) => addToast(getErrorMessage(err, 'Failed to load role categories'), 'error'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    employeeService.listChatCandidates()
+      .then((res) => setChatCandidates(res.data?.data || []))
+      .catch(() => setChatCandidates([]))
+      .finally(() => setChatCandidatesLoading(false));
   }, []);
 
   const roleCategoryOptions = useMemo(
@@ -89,6 +100,7 @@ export default function EmployeeCreatePage() {
         reports_to_user_id: reportsTo?.user_id || undefined,
         department_ids,
         primary_department_id: primaryDeptId ? Number(primaryDeptId) : department_ids[0],
+        chat_blocked_user_ids: chatBlockedIds,
       };
       await employeeService.createEmployee(payload);
       addToast(`Invitation email sent to ${form.email}`, 'success');
@@ -166,6 +178,19 @@ export default function EmployeeCreatePage() {
                   placeholder="First selected (default)" />
               </div>
             )}
+          </div>
+
+          <div className="border-t border-gray-100 pt-5">
+            <h3 className="text-sm font-medium text-gray-700 mb-1">Chat access</h3>
+            <p className="text-xs text-gray-500 mb-3">
+              All active colleagues are reachable by default. Uncheck anyone this employee should NOT be able to find in chat — the block is bidirectional.
+            </p>
+            <ChatAccessSelector
+              candidates={chatCandidates}
+              value={chatBlockedIds}
+              onChange={setChatBlockedIds}
+              loading={chatCandidatesLoading}
+            />
           </div>
 
           <div className="border-t border-gray-100 pt-5">

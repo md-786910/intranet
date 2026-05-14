@@ -176,6 +176,49 @@ async function syncEmployeeRoleAssignments({ userId, roleId, departmentIds, acto
   }
 }
 
+// Reconciles the bidirectional chat blocklist for `userId` to match the
+// admin-provided list. Each block is stored as two rows so the chat search
+// can exclude with a single-direction subquery. Self-blocks are ignored.
+async function syncChatBlocks({ userId, blockedIds, actorUserId, transaction }) {
+  const { ChatBlock } = require('../../database/models');
+
+  const desired = Array.from(new Set((blockedIds || [])
+    .map(Number)
+    .filter((id) => Number.isInteger(id) && id > 0 && id !== Number(userId))));
+
+  const existing = await ChatBlock.findAll({
+    where: { user_id: userId },
+    attributes: ['blocked_user_id'],
+    transaction,
+  });
+  const existingIds = existing.map((row) => row.blocked_user_id);
+
+  const desiredSet = new Set(desired);
+  const existingSet = new Set(existingIds);
+
+  const toAdd = desired.filter((id) => !existingSet.has(id));
+  const toRemove = existingIds.filter((id) => !desiredSet.has(id));
+
+  for (const otherId of toAdd) {
+    await ChatBlock.bulkCreate([
+      { user_id: userId, blocked_user_id: otherId, created_by: actorUserId || null },
+      { user_id: otherId, blocked_user_id: userId, created_by: actorUserId || null },
+    ], { transaction, ignoreDuplicates: true });
+  }
+
+  if (toRemove.length > 0) {
+    await ChatBlock.destroy({
+      where: {
+        [Op.or]: [
+          { user_id: userId, blocked_user_id: toRemove },
+          { user_id: toRemove, blocked_user_id: userId },
+        ],
+      },
+      transaction,
+    });
+  }
+}
+
 const employeesService = {
   async list(query) {
     const { QueryTypes } = require('sequelize');
@@ -336,7 +379,52 @@ const employeesService = {
     }));
     userData.invitation_pending = Boolean(activeInvitation);
     userData.invitation_expires_at = activeInvitation?.expires_at || null;
+
+    // Hydrate the chat blocklist so the Employee Edit page can render the
+    // ChatAccessSelector with current state.
+    const { ChatBlock } = require('../../database/models');
+    const blocks = await ChatBlock.findAll({
+      where: { user_id: id },
+      attributes: ['blocked_user_id'],
+    });
+    userData.chat_blocked_user_ids = blocks.map((b) => b.blocked_user_id);
+
     return userData;
+  },
+
+  // Returns the pool used by the ChatAccessSelector on the admin Create/Edit
+  // employee pages — every ACTIVE user in the tenant with their primary
+  // department name for context.
+  async listChatCandidates() {
+    const { UserAccount, DepartmentMembership, Department } = require('../../database/models');
+    const users = await UserAccount.findAll({
+      where: { status: 'ACTIVE', deleted_at: null },
+      attributes: ['user_id', 'first_name', 'last_name', 'email'],
+      include: [{
+        model: DepartmentMembership,
+        as: 'departmentMemberships',
+        required: false,
+        include: [{
+          model: Department,
+          as: 'department',
+          attributes: ['id', 'name'],
+          required: false,
+        }],
+      }],
+      order: [['first_name', 'ASC'], ['last_name', 'ASC']],
+    });
+
+    return users.map((u) => {
+      const primary = (u.departmentMemberships || []).find((m) => m.is_primary)
+        || (u.departmentMemberships || [])[0];
+      return {
+        user_id: u.user_id,
+        first_name: u.first_name,
+        last_name: u.last_name,
+        email: u.email,
+        primary_department_name: primary?.department?.name || null,
+      };
+    });
   },
 
   async create(data, actorUserId) {
@@ -391,6 +479,15 @@ const employeesService = {
         actorUserId,
         transaction,
       });
+
+      if (Array.isArray(data.chat_blocked_user_ids)) {
+        await syncChatBlocks({
+          userId: user.user_id,
+          blockedIds: data.chat_blocked_user_ids,
+          actorUserId,
+          transaction,
+        });
+      }
 
       const { rawToken, expiresAt } = await createInvitationForUser({
         user,
@@ -478,6 +575,15 @@ const employeesService = {
           userId: id,
           roleId,
           departmentIds: data.department_ids,
+          actorUserId,
+          transaction,
+        });
+      }
+
+      if (Array.isArray(data.chat_blocked_user_ids)) {
+        await syncChatBlocks({
+          userId: id,
+          blockedIds: data.chat_blocked_user_ids,
           actorUserId,
           transaction,
         });

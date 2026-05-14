@@ -111,6 +111,10 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'user_id',
       as: 'invitations',
     });
+    UserAccount.hasMany(models.ChatBlock, {
+      foreignKey: 'user_id',
+      as: 'chatBlocks',
+    });
   };
 
   // Instance method: safe JSON (never expose password_hash)

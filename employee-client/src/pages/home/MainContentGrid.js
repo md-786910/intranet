@@ -61,7 +61,7 @@ export default function MainContentGrid() {
                   avatar={renderAvatar(p, idx)}
                   name={`${p.firstName} ${p.lastName}`.trim()}
                   role={p.jobTitle || p.departmentName || ''}
-                  onChat={() => handleChat(p.userId)}
+                  onChat={p.canChat === false ? null : () => handleChat(p.userId)}
                 />
               ))
             )}
@@ -145,13 +145,15 @@ function ContactRow({ avatar, name, role, onChat }) {
         <p className="font-semibold text-body-sm truncate">{name}</p>
         <p className="text-[11px] text-on-surface-variant truncate">{role}</p>
       </div>
-      <button
-        type="button"
-        onClick={onChat}
-        className="px-3 py-1 bg-white border border-zinc-200 rounded-lg text-xs font-bold text-primary hover:bg-primary-container/20 transition-colors"
-      >
-        Chat
-      </button>
+      {onChat && (
+        <button
+          type="button"
+          onClick={onChat}
+          className="px-3 py-1 bg-white border border-zinc-200 rounded-lg text-xs font-bold text-primary hover:bg-primary-container/20 transition-colors"
+        >
+          Chat
+        </button>
+      )}
     </div>
   );
 }

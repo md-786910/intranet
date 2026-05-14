@@ -34,6 +34,7 @@ const createEmployeeSchema = {
     department_ids: Joi.array().items(idPattern).min(1).required()
       .messages({ 'array.min': 'At least one department is required' }),
     primary_department_id: idPattern.optional(),
+    chat_blocked_user_ids: Joi.array().items(idPattern).optional(),
   }),
 };
 
@@ -50,6 +51,7 @@ const updateEmployeeSchema = {
     reports_to_user_id: idPattern.optional().allow(null),
     department_ids: Joi.array().items(idPattern).min(1).optional(),
     primary_department_id: idPattern.optional(),
+    chat_blocked_user_ids: Joi.array().items(idPattern).optional(),
   }),
 };
 

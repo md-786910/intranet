@@ -2,6 +2,7 @@ const hierarchyService = require('../../services/hierarchy.service');
 const organisationContextService = require('../../services/organisation-context.service');
 const auditService = require('../../services/audit.service');
 const cacheService = require('../../services/cache.service');
+const chatBlockService = require('../../services/chat-block.service');
 const ApiError = require('../../utils/ApiError');
 
 const orgService = {
@@ -450,6 +451,12 @@ const orgService = {
       peopleDeptIds = allDepts.map((d) => Number(d.id));
     }
 
+    // Resolve the viewer's admin-configured chat blocklist. Used below to
+    // surface a `canChat` flag per person — the row still renders (so the
+    // employee sees who's in their org), but the Chat button is suppressed
+    // client-side when they aren't allowed to message that person.
+    const blockedIdSet = await chatBlockService.getBlockedIdSet(userId);
+
     const peopleRows = peopleDeptIds.length === 0 ? [] : await UserAccount.findAll({
       where: {
         deleted_at: null,
@@ -486,6 +493,7 @@ const orgService = {
         jobTitle: u.profile?.job_title || null,
         avatarUrl: u.avatar_url || null,
         departmentName: primary?.department?.name || null,
+        canChat: !blockedIdSet.has(Number(u.user_id)),
       };
     });
 
