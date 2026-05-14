@@ -12,6 +12,8 @@ import InvitationAcceptPage from './pages/auth/InvitationAcceptPage';
 import HomePage from './pages/home/HomePage';
 import NewsListPage from './pages/news/NewsListPage';
 import NewsDetailPage from './pages/news/NewsDetailPage';
+import AnnouncementsListPage from './pages/announcements/AnnouncementsListPage';
+import AnnouncementDetailPage from './pages/announcements/AnnouncementDetailPage';
 import PublicNewsSharePage from './pages/news/PublicNewsSharePage';
 import PeoplePage from './pages/people/PeoplePage';
 import DocumentsPage from './pages/documents/DocumentsPage';
@@ -44,6 +46,8 @@ export default function App() {
               <Route path="/home" element={<HomePage />} />
               <Route path="/news" element={<NewsListPage />} />
               <Route path="/news/:id" element={<NewsDetailPage />} />
+              <Route path="/announcements" element={<AnnouncementsListPage />} />
+              <Route path="/announcements/:id" element={<AnnouncementDetailPage />} />
               <Route path="/people" element={<PeoplePage />} />
               <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/documents/categories/:id" element={<CategoryDetailPage />} />

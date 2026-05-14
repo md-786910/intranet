@@ -39,6 +39,7 @@ const menuItems = [
     defaultOpen: false,
     children: [
       { label: 'News', path: '/news', icon: ICONS.news, module: 'NEWS', action: 'VIEW' },
+      { label: 'Announcements', path: '/announcements', icon: ICONS.news, module: 'NEWS', action: 'VIEW' },
       { label: 'Documents', path: '/documents', icon: ICONS.documents, module: 'DOCUMENTS', action: 'VIEW' },
       {
         label: 'Categories',

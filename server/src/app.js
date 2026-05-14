@@ -26,6 +26,7 @@ const roleCategoriesRoutes = require("./modules/role-categories/role-categories.
 const newsRoutes = require("./modules/news/news.routes");
 const newsPublicRoutes = require("./modules/news/news-public.routes");
 const documentsRoutes = require("./modules/documents/documents.routes");
+const announcementsRoutes = require("./modules/announcements/announcements.routes");
 const pushRoutes = require("./modules/push/push.routes");
 const mediaRoutes = require("./modules/media/media.routes");
 const categoriesRoutes = require("./modules/categories/categories.routes");
@@ -85,6 +86,7 @@ app.use("/api/v1/role-categories", roleCategoriesRoutes);
 app.use("/api/v1/news", newsRoutes);
 app.use("/api/v1/public/news", newsPublicRoutes);
 app.use("/api/v1/documents", documentsRoutes);
+app.use("/api/v1/announcements", announcementsRoutes);
 app.use("/api/v1/push", pushRoutes);
 app.use("/api/v1/media", mediaRoutes);
 app.use("/api/v1/categories", categoriesRoutes);

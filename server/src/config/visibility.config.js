@@ -50,6 +50,11 @@ module.exports = {
     minLevel: "DEPARTMENT", // ORG + OFFICE + VERTICAL + DEPT
   },
 
+  // Announcements (employee-client/src/pages/announcements, server/src/modules/announcements)
+  announcements: {
+    minLevel: "DEPARTMENT", // ORG + OFFICE + VERTICAL + DEPT
+  },
+
   // ── Home page widgets ──────────────────────────────────────────────────
   // These don't use `audienceLevels` / `minLevel` (they aren't matching against
   // content audience rules). They use `level` to pick which slice of the
@@ -92,7 +97,7 @@ module.exports = {
   //   windowDays  — ignore events older than this many days.
   recentActivity: {
     level: "DEPARTMENT",
-    kinds: ["NEWS_PUBLISHED", "DOCUMENT_PUBLISHED", "MEMBER_JOINED"],
+    kinds: ["NEWS_PUBLISHED", "DOCUMENT_PUBLISHED", "ANNOUNCEMENT_PUBLISHED", "MEMBER_JOINED"],
     limit: 8,
     windowDays: 30,
   },

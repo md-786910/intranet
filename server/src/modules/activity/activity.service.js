@@ -41,6 +41,26 @@ function buildNewsEvents(article) {
   return out;
 }
 
+function buildAnnouncementEvents(ann) {
+  const out = [];
+  const base = {
+    entity_type: 'ANNOUNCEMENT',
+    entity_id: ann.announcement_item_id,
+    entity_title: ann.title,
+    entity_link: `/announcements/${ann.announcement_item_id}`,
+  };
+  const fallback = actor(ann.author);
+  if (ann.created_at) out.push({ ...base, kind: 'created', actor: fallback, at: ann.created_at });
+  if (ann.updater && ann.updated_at && +ann.updated_at !== +ann.created_at) {
+    out.push({ ...base, kind: 'updated', actor: actor(ann.updater) || fallback, at: ann.updated_at });
+  }
+  if (ann.published_at) out.push({ ...base, kind: 'published', actor: actor(ann.publisher) || fallback, at: ann.published_at });
+  if (ann.unpublished_at) out.push({ ...base, kind: 'unpublished', actor: actor(ann.unpublisher) || fallback, at: ann.unpublished_at });
+  if (ann.archived_at) out.push({ ...base, kind: 'archived', actor: actor(ann.archiver) || fallback, at: ann.archived_at });
+  if (ann.deleted_at) out.push({ ...base, kind: 'deleted', actor: actor(ann.deleter) || fallback, at: ann.deleted_at });
+  return out;
+}
+
 function buildDocumentEvents(doc) {
   const out = [];
   const base = {
@@ -123,6 +143,41 @@ async function fetchNewsEvents(userId) {
   });
 
   return rows.flatMap(buildNewsEvents);
+}
+
+async function fetchAnnouncementEvents(userId) {
+  const { AnnouncementItem, UserAccount } = require('../../database/models');
+  // Announcements piggy-back on NEWS permissions/scope visibility.
+  const isGlobal = await permissionService.isGlobalManager(userId, 'NEWS');
+
+  const where = {};
+  if (!isGlobal) {
+    const keys = await scopeVisibilityService.getReadableScopeKeys(userId, 'NEWS');
+    const orCondition = scopeVisibilityService.buildOwningScopeOrCondition(keys);
+    if (orCondition === null) {
+      // global passthrough
+    } else if (orCondition.length === 0) {
+      return [];
+    } else {
+      where[Op.or] = orCondition;
+    }
+  }
+
+  const rows = await AnnouncementItem.unscoped().findAll({
+    where,
+    limit: FETCH_PER_ENTITY,
+    order: [['updated_at', 'DESC']],
+    include: [
+      { model: UserAccount, as: 'author', attributes: USER_ATTRS },
+      { model: UserAccount, as: 'updater', attributes: USER_ATTRS, required: false },
+      { model: UserAccount, as: 'publisher', attributes: USER_ATTRS, required: false },
+      { model: UserAccount, as: 'unpublisher', attributes: USER_ATTRS, required: false },
+      { model: UserAccount, as: 'archiver', attributes: USER_ATTRS, required: false },
+      { model: UserAccount, as: 'deleter', attributes: USER_ATTRS, required: false },
+    ],
+  });
+
+  return rows.flatMap(buildAnnouncementEvents);
 }
 
 async function fetchDocumentEvents(userId) {
@@ -223,11 +278,12 @@ const activityService = {
 
     const wanted = query.entity_type
       ? [String(query.entity_type).toUpperCase()]
-      : ['NEWS', 'DOCUMENT', 'CATEGORY', 'MEDIA'];
+      : ['NEWS', 'DOCUMENT', 'ANNOUNCEMENT', 'CATEGORY', 'MEDIA'];
 
     const fetchers = [];
     if (wanted.includes('NEWS')) fetchers.push(fetchNewsEvents(userId));
     if (wanted.includes('DOCUMENT')) fetchers.push(fetchDocumentEvents(userId));
+    if (wanted.includes('ANNOUNCEMENT')) fetchers.push(fetchAnnouncementEvents(userId));
     if (wanted.includes('CATEGORY')) fetchers.push(fetchCategoryEvents(userId));
     if (wanted.includes('MEDIA')) fetchers.push(fetchMediaEvents(userId));
 

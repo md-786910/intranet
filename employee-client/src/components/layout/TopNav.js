@@ -284,6 +284,20 @@ export default function TopNav() {
                     type="button"
                     onClick={() => {
                       setOpen(false);
+                      navigate("/announcements");
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-zinc-50 transition-colors flex items-center gap-2"
+                  >
+                    <MaterialIcon
+                      name="campaign"
+                      className="text-[18px] text-zinc-500"
+                    />
+                    Announcements
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
                       navigate("/settings");
                     }}
                     className="w-full text-left px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-zinc-50 transition-colors flex items-center gap-2"

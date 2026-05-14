@@ -32,6 +32,10 @@ import NewsListPage from './pages/news/NewsListPage';
 import NewsCreatePage from './pages/news/NewsCreatePage';
 import NewsDetailPage from './pages/news/NewsDetailPage';
 import NewsEditPage from './pages/news/NewsEditPage';
+import AnnouncementsListPage from './pages/announcements/AnnouncementsListPage';
+import AnnouncementCreatePage from './pages/announcements/AnnouncementCreatePage';
+import AnnouncementDetailPage from './pages/announcements/AnnouncementDetailPage';
+import AnnouncementEditPage from './pages/announcements/AnnouncementEditPage';
 import DocumentsListPage from './pages/documents/DocumentsListPage';
 import DocumentCreatePage from './pages/documents/DocumentCreatePage';
 import DocumentDetailPage from './pages/documents/DocumentDetailPage';
@@ -109,6 +113,12 @@ function App() {
                 <Route path="/news/create" element={<NewsCreatePage />} />
                 <Route path="/news/:id" element={<NewsDetailPage />} />
                 <Route path="/news/:id/edit" element={<NewsEditPage />} />
+
+                {/* Announcements */}
+                <Route path="/announcements" element={<AnnouncementsListPage />} />
+                <Route path="/announcements/create" element={<AnnouncementCreatePage />} />
+                <Route path="/announcements/:id" element={<AnnouncementDetailPage />} />
+                <Route path="/announcements/:id/edit" element={<AnnouncementEditPage />} />
 
                 {/* Documents */}
                 <Route path="/documents" element={<DocumentsListPage />} />

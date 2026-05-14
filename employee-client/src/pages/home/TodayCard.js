@@ -4,6 +4,7 @@ import MaterialIcon from '../../components/common/MaterialIcon';
 import Skeleton from '../../components/common/Skeleton';
 import { newsService } from '../../services/newsService';
 import { documentsService } from '../../services/documentsService';
+import { announcementService } from '../../services/announcementService';
 import { formatRelative } from '../../theme/dateFormat';
 import { categoryPalette } from '../../theme/categoryColors';
 import {
@@ -63,14 +64,17 @@ function TodayCardInner() {
     Promise.allSettled([
       newsService.getArticles({ status: 'PUBLISHED', page: 1, limit: FETCH_LIMIT }),
       documentsService.listDocuments({ status: 'PUBLISHED', page: 1, limit: FETCH_LIMIT }),
+      announcementService.getAnnouncements({ status: 'PUBLISHED', page: 1, limit: FETCH_LIMIT }),
     ]).then((results) => {
       if (cancelled) return;
 
       const newsRes = results[0].status === 'fulfilled' ? results[0].value : null;
       const docsRes = results[1].status === 'fulfilled' ? results[1].value : null;
+      const annRes = results[2].status === 'fulfilled' ? results[2].value : null;
 
       const articles = newsRes?.data?.data?.articles || [];
       const docs = docsRes?.data?.data?.documents || [];
+      const announcements = annRes?.data?.data?.announcements || [];
 
       const newsToday = articles
         .filter((a) => isToday(a.published_at || a.created_at))
@@ -90,7 +94,16 @@ function TodayCardInner() {
           data: d,
         }));
 
-      const merged = [...newsToday, ...docsToday].sort(
+      const annToday = announcements
+        .filter((a) => isToday(a.published_at || a.created_at))
+        .map((a) => ({
+          kind: 'announcement',
+          id: `ann-${a.announcement_item_id}`,
+          ts: a.published_at || a.created_at,
+          data: a,
+        }));
+
+      const merged = [...newsToday, ...docsToday, ...annToday].sort(
         (a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime(),
       );
 
@@ -120,17 +133,21 @@ function TodayCardInner() {
           className="space-y-6 overflow-y-auto pr-1"
           style={{ maxHeight: 320 }}
         >
-          {items.map((item) =>
-            item.kind === 'news' ? (
-              <NewsRow key={item.id} article={item.data} />
-            ) : (
+          {items.map((item) => {
+            if (item.kind === 'news') {
+              return <NewsRow key={item.id} article={item.data} />;
+            }
+            if (item.kind === 'announcement') {
+              return <AnnouncementRow key={item.id} announcement={item.data} />;
+            }
+            return (
               <DocumentRow
                 key={item.id}
                 doc={item.data}
                 onOpen={openDocument}
               />
-            ),
-          )}
+            );
+          })}
         </ul>
       )}
     </div>
@@ -157,6 +174,34 @@ function NewsRow({ article }) {
         <div className="min-w-0">
           <p className="font-body-md font-semibold text-on-surface line-clamp-1 group-hover:text-primary transition-colors">
             {article.title}
+          </p>
+          <p className="text-body-sm text-on-surface-variant line-clamp-1">
+            {subtitleLabel} · {formatRelative(time)}
+          </p>
+        </div>
+      </Link>
+    </li>
+  );
+}
+
+function AnnouncementRow({ announcement }) {
+  const time = announcement.published_at || announcement.created_at;
+  const priority = announcement.priority || 'NORMAL';
+  const subtitleLabel =
+    priority === 'URGENT' || priority === 'HIGH' ? `${priority} announcement` : 'Announcement';
+
+  return (
+    <li>
+      <Link
+        to={`/announcements/${announcement.announcement_item_id}`}
+        className="flex items-start gap-4 group"
+      >
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-amber-50 text-amber-600">
+          <MaterialIcon name="campaign" />
+        </div>
+        <div className="min-w-0">
+          <p className="font-body-md font-semibold text-on-surface line-clamp-1 group-hover:text-primary transition-colors">
+            {announcement.title}
           </p>
           <p className="text-body-sm text-on-surface-variant line-clamp-1">
             {subtitleLabel} · {formatRelative(time)}

@@ -3,7 +3,7 @@ const audienceService = require('../../services/audience.service');
 const logger = require('../../config/logger');
 
 const ALLOWED_LEVELS = new Set(['ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT']);
-const DEFAULT_KINDS = ['NEWS_PUBLISHED', 'DOCUMENT_PUBLISHED', 'MEMBER_JOINED'];
+const DEFAULT_KINDS = ['NEWS_PUBLISHED', 'DOCUMENT_PUBLISHED', 'ANNOUNCEMENT_PUBLISHED', 'MEMBER_JOINED'];
 const DEFAULT_LIMIT = 8;
 const DEFAULT_WINDOW_DAYS = 30;
 
@@ -42,6 +42,40 @@ async function fetchPublishedNewsEvents(userId, since) {
       icon: 'edit_document',
       iconBg: 'bg-blue-50',
       iconColor: 'text-blue-600',
+    }));
+}
+
+// Announcements published within the window, filtered by audience.
+async function fetchPublishedAnnouncementEvents(userId, since) {
+  const { AnnouncementItem, ContentAudienceRule } = require('../../database/models');
+
+  const rows = await AnnouncementItem.findAll({
+    where: {
+      status: 'PUBLISHED',
+      published_at: { [Op.gte]: since },
+    },
+    attributes: ['announcement_item_id', 'title', 'published_at'],
+    include: [{
+      model: ContentAudienceRule,
+      as: 'audienceRules',
+      where: { entity_type: 'ANNOUNCEMENT' },
+      required: false,
+    }],
+    order: [['published_at', 'DESC']],
+  });
+
+  const userKeys = await audienceService.getUserAudienceScopeKeys(userId, 'announcements');
+  return rows
+    .filter((row) => audienceService.matchesAudience(row.audienceRules, userKeys))
+    .map((row) => ({
+      kind: 'ANNOUNCEMENT_PUBLISHED',
+      title: 'New announcement',
+      description: row.title,
+      timestamp: row.published_at,
+      link: `/announcements/${row.announcement_item_id}`,
+      icon: 'campaign',
+      iconBg: 'bg-amber-50',
+      iconColor: 'text-amber-600',
     }));
 }
 
@@ -215,6 +249,7 @@ const homeActivityService = {
       const tasks = [];
       if (kinds.has('NEWS_PUBLISHED'))     tasks.push(fetchPublishedNewsEvents(userId, since));
       if (kinds.has('DOCUMENT_PUBLISHED')) tasks.push(fetchPublishedDocumentEvents(userId, since));
+      if (kinds.has('ANNOUNCEMENT_PUBLISHED')) tasks.push(fetchPublishedAnnouncementEvents(userId, since));
       if (kinds.has('MEMBER_JOINED'))      tasks.push(fetchMemberJoinedEvents(userId, since, level));
 
       const events = (await Promise.all(tasks))

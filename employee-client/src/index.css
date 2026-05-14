@@ -37,6 +37,10 @@ body {
   animation: scrollAnnouncement 30s linear infinite;
 }
 
+.announcement-marquee:hover .announcement-text {
+  animation-play-state: paused;
+}
+
 @keyframes scrollAnnouncement {
   from {
     transform: translateX(0);
