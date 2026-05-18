@@ -256,6 +256,7 @@ const announcementsService = {
         show_in_marquee: data.show_in_marquee || false,
         marquee_starts_at: data.marquee_starts_at || null,
         marquee_ends_at: data.marquee_ends_at || null,
+        push_notify: data.push_notify !== false,
         author_id: authorId,
         owning_scope_type: data.owning_scope_type || 'ORGANISATION',
         owning_scope_id: data.owning_scope_id,
@@ -296,7 +297,7 @@ const announcementsService = {
       const item = await AnnouncementItem.findByPk(id, { transaction: tx });
       if (!item) throw ApiError.notFound('Announcement not found');
 
-      const fields = ['title', 'priority', 'show_in_marquee', 'marquee_starts_at', 'marquee_ends_at'];
+      const fields = ['title', 'priority', 'show_in_marquee', 'marquee_starts_at', 'marquee_ends_at', 'push_notify'];
       fields.forEach((f) => { if (data[f] !== undefined) item[f] = data[f]; });
       if (data.body !== undefined) item.body = sanitiseRichText(data.body || '');
 
@@ -350,11 +351,13 @@ const announcementsService = {
     return { message: 'Announcement moved to trash' };
   },
 
-  async publish(id, userId) {
+  async publish(id, userId, { pushNotify } = {}) {
     const { AnnouncementItem, ContentAudienceRule } = require('../../database/models');
     const item = await AnnouncementItem.findByPk(id);
     if (!item) throw ApiError.notFound('Announcement not found');
     if (item.status === 'PUBLISHED') throw ApiError.badRequest('Announcement is already published');
+
+    const shouldNotify = pushNotify !== undefined ? pushNotify : item.push_notify !== false;
 
     await item.update({
       status: 'PUBLISHED',
@@ -371,24 +374,26 @@ const announcementsService = {
       resource_id: id,
     });
 
-    // Fan notifications out to the audience. Fire-and-forget.
-    try {
-      const audienceRules = await ContentAudienceRule.findAll({
-        where: { entity_type: 'ANNOUNCEMENT', entity_id: id },
-      });
-      const notificationService = require('../notifications/notifications.service');
-      const logger = require('../../config/logger');
-      notificationService
-        .notifyOnPublish({
-          type: 'ANNOUNCEMENT',
-          entity: { id, title: item.title, summary: null },
-          audienceRules,
-          entityKey: 'announcements',
-        })
-        .catch((err) => logger.error(`notifyOnPublish (ANNOUNCEMENT ${id}) rejected: ${err.message}`));
-    } catch (_) {
-      // Notification pipeline may not yet know about ANNOUNCEMENT type; do not
-      // fail publish on that account.
+    // Fan notifications out to the audience only when push-notify is on.
+    if (shouldNotify) {
+      try {
+        const audienceRules = await ContentAudienceRule.findAll({
+          where: { entity_type: 'ANNOUNCEMENT', entity_id: id },
+        });
+        const notificationService = require('../notifications/notifications.service');
+        const logger = require('../../config/logger');
+        notificationService
+          .notifyOnPublish({
+            type: 'ANNOUNCEMENT',
+            entity: { id, title: item.title, summary: null },
+            audienceRules,
+            entityKey: 'announcements',
+          })
+          .catch((err) => logger.error(`notifyOnPublish (ANNOUNCEMENT ${id}) rejected: ${err.message}`));
+      } catch (_) {
+        // Notification pipeline may not yet know about ANNOUNCEMENT type; do not
+        // fail publish on that account.
+      }
     }
 
     return this.getById(id);

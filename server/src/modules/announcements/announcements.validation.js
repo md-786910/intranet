@@ -44,6 +44,14 @@ const createSchema = {
     owning_scope_type: scopeTypePattern.optional(),
     owning_scope_id: idPattern.optional(),
     audience_targets: Joi.array().items(scopeTarget).optional(),
+    push_notify: Joi.boolean().optional(),
+  }),
+};
+
+const publishSchema = {
+  params: Joi.object({ id: idPattern.required() }),
+  body: Joi.object({
+    push_notify: Joi.boolean().optional(),
   }),
 };
 
@@ -59,6 +67,7 @@ const updateSchema = {
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
     audience_targets: Joi.array().items(scopeTarget).optional(),
+    push_notify: Joi.boolean().optional(),
   }),
 };
 
@@ -76,6 +85,7 @@ module.exports = {
   idParam,
   bulkIdsSchema,
   createSchema,
+  publishSchema,
   updateSchema,
   setAudienceSchema,
 };

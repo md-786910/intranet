@@ -72,7 +72,17 @@ const createDocSchema = {
     file_size: Joi.number().integer().optional(),
     mime_type: Joi.string().optional().allow('', null),
     changelog: Joi.string().trim().max(500).optional().allow('', null),
+    push_notify: Joi.boolean().optional(),
   }).or('files', 'file_url'),
+};
+
+const publishSchema = {
+  params: Joi.object({
+    id: idPattern.required(),
+  }),
+  body: Joi.object({
+    push_notify: Joi.boolean().optional(),
+  }),
 };
 
 const updateDocSchema = {
@@ -87,6 +97,7 @@ const updateDocSchema = {
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
     audience_targets: Joi.array().items(scopeTarget).optional(),
+    push_notify: Joi.boolean().optional(),
   }),
 };
 
@@ -141,6 +152,7 @@ module.exports = {
   idParam,
   categoryIdParam,
   createDocSchema,
+  publishSchema,
   updateDocSchema,
   createVersionSchema,
   createCategorySchema,

@@ -27,6 +27,7 @@ export default function NewsCreatePage() {
   const [form, setForm] = useState({
     title: '', summary: '', body: '', category_id: '', priority: 'NORMAL',
   });
+  const [pushNotify, setPushNotify] = useState(true);
   const [cover, setCover] = useState(null);
   const [relatedIds, setRelatedIds] = useState([]); // array of string ids for MultiSelect
   const [audienceTargets, setAudienceTargets] = useState([]);
@@ -84,6 +85,7 @@ export default function NewsCreatePage() {
       scope_type: target.scope_type,
       scope_id: target.scope_id,
     })),
+    push_notify: pushNotify,
   });
 
   const handleError = (err, fallback) => {
@@ -216,6 +218,24 @@ export default function NewsCreatePage() {
             />
           </div>
         </div>
+        {canPublishNews && (
+          <div className="pt-2">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={pushNotify}
+                onChange={(e) => setPushNotify(e.target.checked)}
+                className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-gray-700">Push notify employees in real-time</span>
+                <span className="block text-xs text-gray-500">
+                  Sends an instant in-app notification to the audience. Uncheck to publish silently.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
           <Button variant="secondary" onClick={() => navigate('/news')}>Cancel</Button>
           <Button variant="secondary" onClick={handleSave} loading={saving} disabled={publishing}>Save Draft</Button>

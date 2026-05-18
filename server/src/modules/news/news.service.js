@@ -314,6 +314,7 @@ const newsService = {
         category_id: data.category_id || null,
         priority: data.priority || 'NORMAL',
         related_news_ids: normaliseRelatedIds(data.related_news_ids) || [],
+        push_notify: data.push_notify !== false,
         status: 'DRAFT',
         author_id: authorId,
         owning_scope_type: data.owning_scope_type || 'ORGANISATION',
@@ -360,7 +361,7 @@ const newsService = {
       const article = await NewsItem.findByPk(id, { transaction });
       if (!article) throw ApiError.notFound('News article not found');
 
-      const fields = ['title', 'summary', 'cover_image_url', 'cover_image_id', 'category_id', 'priority'];
+      const fields = ['title', 'summary', 'cover_image_url', 'cover_image_id', 'category_id', 'priority', 'push_notify'];
       fields.forEach((f) => {
         if (data[f] !== undefined) article[f] = data[f];
       });
@@ -488,12 +489,16 @@ const newsService = {
     return { purged };
   },
 
-  async publish(id, userId) {
+  async publish(id, userId, { pushNotify } = {}) {
     const { NewsItem, ContentAudienceRule } = require('../../database/models');
 
     const article = await NewsItem.findByPk(id);
     if (!article) throw ApiError.notFound('News article not found');
     if (article.status === 'PUBLISHED') throw ApiError.badRequest('Article is already published');
+
+    // Resolved push-notify: explicit override wins, otherwise use the stored
+    // flag on the entity (which is editable from Create/Edit).
+    const shouldNotify = pushNotify !== undefined ? pushNotify : article.push_notify !== false;
 
     await article.update({
       status: 'PUBLISHED',
@@ -510,23 +515,23 @@ const newsService = {
       resource_id: id,
     });
 
-    // Fan notifications out to the audience. Fire-and-forget — the publish
-    // action must succeed even if notification persistence/socket fails.
-    // The internal try/catch in notifyOnPublish handles errors, but we add an
-    // extra `.catch()` here as a safety net in case it ever rethrows.
-    const audienceRules = await ContentAudienceRule.findAll({
-      where: { entity_type: 'NEWS', entity_id: id },
-    });
-    const notificationService = require('../notifications/notifications.service');
-    const logger = require('../../config/logger');
-    notificationService
-      .notifyOnPublish({
-        type: 'NEWS',
-        entity: { id, title: article.title, summary: article.summary },
-        audienceRules,
-        entityKey: 'news',
-      })
-      .catch((err) => logger.error(`notifyOnPublish (NEWS ${id}) rejected: ${err.message}`));
+    // Fan notifications out to the audience only when push-notify is on.
+    // Fire-and-forget — publish must succeed even if notification fails.
+    if (shouldNotify) {
+      const audienceRules = await ContentAudienceRule.findAll({
+        where: { entity_type: 'NEWS', entity_id: id },
+      });
+      const notificationService = require('../notifications/notifications.service');
+      const logger = require('../../config/logger');
+      notificationService
+        .notifyOnPublish({
+          type: 'NEWS',
+          entity: { id, title: article.title, summary: article.summary },
+          audienceRules,
+          entityKey: 'news',
+        })
+        .catch((err) => logger.error(`notifyOnPublish (NEWS ${id}) rejected: ${err.message}`));
+    }
 
     return this.getById(id);
   },

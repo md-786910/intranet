@@ -24,14 +24,18 @@ export default function DocumentEditPage() {
   const { addToast } = useToast();
   const { currentOrganisationId } = useCurrentOrganisation();
   const { hasPermission: canEditDocuments } = usePermission('DOCUMENTS', 'EDIT');
+  const { hasPermission: canPublishDocuments } = usePermission('DOCUMENTS', 'PUBLISH');
   const { lockAudience, lockedTargets, owningScope } = usePublishingScope();
 
   const [form, setForm] = useState({ title: '', summary: '', category_id: '', priority: 'NORMAL' });
   const [audienceTargets, setAudienceTargets] = useState([]);
   const [categories, setCategories] = useState([]);
   const [versions, setVersions] = useState([]);
+  const [status, setStatus] = useState('DRAFT');
+  const [pushNotify, setPushNotify] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [previewAsset, setPreviewAsset] = useState(null);
 
   // New-version uploader state — separate transaction from metadata save.
@@ -54,6 +58,8 @@ export default function DocumentEditPage() {
           scope_id: rule.target_scope_id,
           scope_label: rule.scope_label,
         })));
+        setStatus(d.status || 'DRAFT');
+        setPushNotify(d.push_notify !== false);
         setVersions(Array.isArray(d.versions) ? d.versions : []);
       })
       .catch(() => addToast('Failed to load document', 'error'))
@@ -73,28 +79,46 @@ export default function DocumentEditPage() {
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+  const buildUpdatePayload = () => ({
+    title: form.title,
+    summary: form.summary || null,
+    category_id: form.category_id ? Number(form.category_id) : null,
+    priority: form.priority || 'NORMAL',
+    scope_type: owningScope.scope_type,
+    scope_id: owningScope.scope_id,
+    audience_targets: audienceTargets.map((target) => ({
+      scope_type: target.scope_type,
+      scope_id: target.scope_id,
+    })),
+    push_notify: pushNotify,
+  });
+
   const handleSaveMetadata = async () => {
     if (!form.title.trim()) { addToast('Title is required', 'error'); return; }
     setSaving(true);
     try {
-      await documentService.updateDocument(id, {
-        title: form.title,
-        summary: form.summary || null,
-        category_id: form.category_id ? Number(form.category_id) : null,
-        priority: form.priority || 'NORMAL',
-        scope_type: owningScope.scope_type,
-        scope_id: owningScope.scope_id,
-        audience_targets: audienceTargets.map((target) => ({
-          scope_type: target.scope_type,
-          scope_id: target.scope_id,
-        })),
-      });
+      await documentService.updateDocument(id, buildUpdatePayload());
       addToast('Document updated', 'success');
       navigate(`/documents/${id}`);
     } catch (err) {
       addToast(err.response?.data?.message || 'Failed to update', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveAndPublish = async () => {
+    if (!form.title.trim()) { addToast('Title is required', 'error'); return; }
+    setPublishing(true);
+    try {
+      await documentService.updateDocument(id, buildUpdatePayload());
+      await documentService.publishDocument(id, { push_notify: pushNotify });
+      addToast(pushNotify ? 'Document published — employees notified' : 'Document published', 'success');
+      navigate(`/documents/${id}`);
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to publish', 'error');
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -165,9 +189,32 @@ export default function DocumentEditPage() {
             />
           </div>
         </div>
+        {canPublishDocuments && (
+          <div className="pt-2">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={pushNotify}
+                onChange={(e) => setPushNotify(e.target.checked)}
+                className="mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-gray-700">Push notify employees in real-time on publish</span>
+                <span className="block text-xs text-gray-500">
+                  Sends an instant in-app notification to the audience when this document is published. Uncheck to publish silently.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
           <Button variant="secondary" onClick={() => navigate(`/documents/${id}`)}>Cancel</Button>
-          <Button onClick={handleSaveMetadata} loading={saving}>Save Changes</Button>
+          <Button variant="secondary" onClick={handleSaveMetadata} loading={saving} disabled={publishing}>Save Changes</Button>
+          {canPublishDocuments && status === 'DRAFT' && (
+            <Button onClick={handleSaveAndPublish} loading={publishing} disabled={saving}>
+              Save &amp; Publish
+            </Button>
+          )}
         </div>
       </div>
 

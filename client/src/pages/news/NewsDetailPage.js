@@ -29,7 +29,6 @@ export default function NewsDetailPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
-  const [notifyLoading, setNotifyLoading] = useState(false);
 
   const fetchArticle = () => {
     newsService.getArticle(id)
@@ -42,16 +41,13 @@ export default function NewsDetailPage() {
 
   const askPublish = () => setPendingAction({
     title: 'Publish article',
-    message: `Publish "${article.title}"? It will become visible to everyone in the audience.`,
+    message: `Publish "${article.title}"? It will become visible to everyone in the audience${article.push_notify === false ? ' (silently — push notifications are off for this article)' : ' and an in-app notification will be sent'}.`,
     confirmLabel: 'Publish',
     confirmVariant: 'primary',
     run: async () => {
-      // Send no scope — the backend `loadEntityScope` middleware reads the
-      // article's `owning_scope_type/id` and authorizes against that. Sending
-      // a hardcoded ORGANISATION here would override the middleware and 403
-      // for scope-locked editors.
+      // Backend reads push_notify from the entity; no override sent.
       await newsService.publishArticle(id);
-      addToast('Article published', 'success');
+      addToast(article.push_notify === false ? 'Article published' : 'Article published — employees notified', 'success');
       fetchArticle();
     },
   });
@@ -80,25 +76,6 @@ export default function NewsDetailPage() {
     },
   });
 
-  // Re-fire the publish notification. Useful for older articles whose original
-  // fan-out failed or was missed (e.g., notification table didn't exist yet).
-  const handleResendNotification = async () => {
-    setNotifyLoading(true);
-    try {
-      const res = await newsService.resendNotification(id);
-      // `sent` = brand-new bell rows. `nudged` = existing rows that got a live
-      // re-toast without a duplicate row. Surface the total — admin doesn't
-      // need the internal distinction.
-      const { sent = 0, nudged = 0 } = res.data?.data || {};
-      const total = sent + nudged;
-      addToast(`Notified ${total} employee${total === 1 ? '' : 's'}`, 'success');
-    } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to send notification', 'error');
-    } finally {
-      setNotifyLoading(false);
-    }
-  };
-
   const handleConfirm = async () => {
     if (!pendingAction) return;
     setActionLoading(true);
@@ -126,12 +103,7 @@ export default function NewsDetailPage() {
               <Button onClick={askPublish}>Publish</Button>
             )}
             {canPublishNews && article.status === 'PUBLISHED' && (
-              <>
-                <Button variant="secondary" onClick={handleResendNotification} loading={notifyLoading}>
-                  Send Notification
-                </Button>
-                <Button variant="secondary" onClick={askUnpublish}>Unpublish</Button>
-              </>
+              <Button variant="secondary" onClick={askUnpublish}>Unpublish</Button>
             )}
             {canEditNews && <Button variant="secondary" onClick={() => navigate(`/news/${id}/edit`)}>Edit</Button>}
             {canDeleteNews && article.status !== 'PUBLISHED' && (
@@ -159,6 +131,28 @@ export default function NewsDetailPage() {
             <span className="text-sm text-green-600">Published {formatDate(article.published_at)}</span>
           )}
         </div>
+        {canPublishNews && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50/40 px-4 py-3 mb-6 flex items-start gap-2">
+            <input
+              type="checkbox"
+              checked={article.push_notify !== false}
+              readOnly
+              disabled
+              className="mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded"
+            />
+            <span className="text-sm">
+              <span className="font-medium text-gray-700">
+                Push notify employees in real-time
+                {article.push_notify === false && <span className="ml-2 text-xs uppercase tracking-wide text-gray-500">disabled</span>}
+              </span>
+              <span className="block text-xs text-gray-500">
+                {article.push_notify === false
+                  ? 'Publishing will not fan out an in-app notification. Change this from the Edit page.'
+                  : 'Publishing will send an instant in-app notification to the audience. Change this from the Edit page.'}
+              </span>
+            </span>
+          </div>
+        )}
         {article.summary && (
           <p className="text-gray-600 mb-4 italic">{article.summary}</p>
         )}

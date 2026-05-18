@@ -3,7 +3,7 @@ import Modal from './Modal';
 import Button from './Button';
 
 export default function ConfirmDialog({
-  isOpen, onConfirm, onCancel, title = 'Confirm', message,
+  isOpen, onConfirm, onCancel, title = 'Confirm', message, extra,
   confirmLabel = 'Confirm', confirmVariant = 'danger', loading,
 }) {
   return (
@@ -20,6 +20,7 @@ export default function ConfirmDialog({
       }
     >
       <p className="text-sm text-gray-600">{message}</p>
+      {extra ? <div className="mt-3">{extra}</div> : null}
     </Modal>
   );
 }

@@ -27,7 +27,9 @@ const remove = catchAsync(async (req, res) => {
 });
 
 const publish = catchAsync(async (req, res) => {
-  const doc = await documentsService.publish(req.params.id, req.user.user_id);
+  const doc = await documentsService.publish(req.params.id, req.user.user_id, {
+    pushNotify: req.body?.push_notify,
+  });
   res.status(200).json({ status: 'success', data: doc });
 });
 

@@ -18,6 +18,7 @@ export default function AnnouncementEditPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const { hasPermission: canEdit } = usePermission('NEWS', 'EDIT');
+  const { hasPermission: canPublish } = usePermission('NEWS', 'PUBLISH');
   const { lockAudience, lockedTargets, owningScope } = usePublishingScope();
   const [form, setForm] = useState({
     title: '',
@@ -28,8 +29,11 @@ export default function AnnouncementEditPage() {
     marquee_ends_at: '',
   });
   const [audienceTargets, setAudienceTargets] = useState([]);
+  const [status, setStatus] = useState('DRAFT');
+  const [pushNotify, setPushNotify] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
     announcementService.get(id)
@@ -43,6 +47,8 @@ export default function AnnouncementEditPage() {
           marquee_starts_at: toLocalInputValue(a.marquee_starts_at),
           marquee_ends_at: toLocalInputValue(a.marquee_ends_at),
         });
+        setStatus(a.status || 'DRAFT');
+        setPushNotify(a.push_notify !== false);
         setAudienceTargets((a.audienceRules || []).map((rule) => ({
           scope_type: rule.target_scope_type,
           scope_id: rule.target_scope_id,
@@ -62,27 +68,45 @@ export default function AnnouncementEditPage() {
     setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
+  const buildUpdatePayload = () => ({
+    title: form.title,
+    body: form.body,
+    priority: form.priority || 'NORMAL',
+    show_in_marquee: Boolean(form.show_in_marquee),
+    marquee_starts_at: fromLocalInputValue(form.marquee_starts_at),
+    marquee_ends_at: fromLocalInputValue(form.marquee_ends_at),
+    scope_type: owningScope.scope_type,
+    scope_id: owningScope.scope_id,
+    audience_targets: audienceTargets.map((t) => ({ scope_type: t.scope_type, scope_id: t.scope_id })),
+    push_notify: pushNotify,
+  });
+
   const handleSave = async () => {
     if (!form.title.trim()) { addToast('Title is required', 'error'); return; }
     setSaving(true);
     try {
-      await announcementService.update(id, {
-        title: form.title,
-        body: form.body,
-        priority: form.priority || 'NORMAL',
-        show_in_marquee: Boolean(form.show_in_marquee),
-        marquee_starts_at: fromLocalInputValue(form.marquee_starts_at),
-        marquee_ends_at: fromLocalInputValue(form.marquee_ends_at),
-        scope_type: owningScope.scope_type,
-        scope_id: owningScope.scope_id,
-        audience_targets: audienceTargets.map((t) => ({ scope_type: t.scope_type, scope_id: t.scope_id })),
-      });
+      await announcementService.update(id, buildUpdatePayload());
       addToast('Announcement updated', 'success');
       navigate(`/announcements/${id}`);
     } catch (err) {
       addToast(err.response?.data?.message || 'Failed to update', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveAndPublish = async () => {
+    if (!form.title.trim()) { addToast('Title is required', 'error'); return; }
+    setPublishing(true);
+    try {
+      await announcementService.update(id, buildUpdatePayload());
+      await announcementService.publish(id, { push_notify: pushNotify });
+      addToast(pushNotify ? 'Announcement published — employees notified' : 'Announcement published', 'success');
+      navigate(`/announcements/${id}`);
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to publish', 'error');
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -167,9 +191,32 @@ export default function AnnouncementEditPage() {
           </div>
         </div>
 
+        {canPublish && (
+          <div className="pt-2">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={pushNotify}
+                onChange={(e) => setPushNotify(e.target.checked)}
+                className="mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-gray-700">Push notify employees in real-time on publish</span>
+                <span className="block text-xs text-gray-500">
+                  Sends an instant in-app notification to the audience when this announcement is published. Uncheck to publish silently.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
           <Button variant="secondary" onClick={() => navigate(`/announcements/${id}`)}>Cancel</Button>
-          <Button onClick={handleSave} loading={saving}>Save Changes</Button>
+          <Button variant="secondary" onClick={handleSave} loading={saving} disabled={publishing}>Save Changes</Button>
+          {canPublish && status === 'DRAFT' && (
+            <Button onClick={handleSaveAndPublish} loading={publishing} disabled={saving}>
+              Save &amp; Publish
+            </Button>
+          )}
         </div>
       </div>
     </div>

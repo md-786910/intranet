@@ -36,6 +36,11 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 'NORMAL',
       allowNull: false,
     },
+    push_notify: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
     author_id: {
       type: DataTypes.INTEGER,
       allowNull: false,

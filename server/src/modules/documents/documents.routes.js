@@ -37,7 +37,7 @@ router.post('/', authorize('DOCUMENTS', 'CREATE'), validate(schemas.createDocSch
 router.post('/publish-now', authorize('DOCUMENTS', 'PUBLISH'), validate(schemas.createDocSchema), auditLogger('DOC_PUBLISHED'), controller.createAndPublish);
 router.put('/:id', loadDocScope, authorize('DOCUMENTS', 'EDIT'), validate(schemas.updateDocSchema), auditLogger('DOC_UPDATED'), controller.update);
 router.delete('/:id', loadDocScope, authorize('DOCUMENTS', 'DELETE'), auditLogger('DOC_DELETED'), controller.remove);
-router.post('/:id/publish', loadDocScope, authorize('DOCUMENTS', 'PUBLISH'), auditLogger('DOC_PUBLISHED'), controller.publish);
+router.post('/:id/publish', loadDocScope, authorize('DOCUMENTS', 'PUBLISH'), validate(schemas.publishSchema), auditLogger('DOC_PUBLISHED'), controller.publish);
 // Re-send the publish notification for an already-published document.
 router.post('/:id/notify', loadDocScope, authorize('DOCUMENTS', 'PUBLISH'), validate(schemas.idParam), controller.resendNotification);
 router.post('/:id/unpublish', loadDocScope, authorize('DOCUMENTS', 'PUBLISH'), auditLogger('DOC_UNPUBLISHED'), controller.unpublish);

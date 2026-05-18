@@ -22,7 +22,7 @@ router.post('/', authorize('NEWS', 'CREATE'), validate(schemas.createSchema), au
 router.post('/publish-now', authorize('NEWS', 'PUBLISH'), validate(schemas.createSchema), auditLogger('ANNOUNCEMENT_PUBLISHED'), controller.createAndPublish);
 router.put('/:id', loadAnnouncementScope, authorize('NEWS', 'EDIT'), validate(schemas.updateSchema), auditLogger('ANNOUNCEMENT_UPDATED'), controller.update);
 router.delete('/:id', loadAnnouncementScope, authorize('NEWS', 'DELETE'), auditLogger('ANNOUNCEMENT_DELETED'), controller.remove);
-router.post('/:id/publish', loadAnnouncementScope, authorize('NEWS', 'PUBLISH'), auditLogger('ANNOUNCEMENT_PUBLISHED'), controller.publish);
+router.post('/:id/publish', loadAnnouncementScope, authorize('NEWS', 'PUBLISH'), validate(schemas.publishSchema), auditLogger('ANNOUNCEMENT_PUBLISHED'), controller.publish);
 router.post('/:id/unpublish', loadAnnouncementScope, authorize('NEWS', 'PUBLISH'), auditLogger('ANNOUNCEMENT_UNPUBLISHED'), controller.unpublish);
 router.post('/:id/archive', loadAnnouncementScope, authorize('NEWS', 'EDIT'), auditLogger('ANNOUNCEMENT_ARCHIVED'), controller.archive);
 router.post('/:id/audience', loadAnnouncementScope, authorize('NEWS', 'EDIT'), validate(schemas.setAudienceSchema), auditLogger('ANNOUNCEMENT_AUDIENCE_UPDATED'), controller.setAudience);

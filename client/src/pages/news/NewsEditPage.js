@@ -20,6 +20,7 @@ export default function NewsEditPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const { hasPermission: canEditNews } = usePermission('NEWS', 'EDIT');
+  const { hasPermission: canPublishNews } = usePermission('NEWS', 'PUBLISH');
   const { lockAudience, lockedTargets, owningScope } = usePublishingScope();
   const [form, setForm] = useState({ title: '', summary: '', body: '', category_id: '', priority: 'NORMAL' });
   const [cover, setCover] = useState(null);
@@ -27,8 +28,11 @@ export default function NewsEditPage() {
   const [audienceTargets, setAudienceTargets] = useState([]);
   const [categories, setCategories] = useState([]);
   const [otherArticles, setOtherArticles] = useState([]);
+  const [status, setStatus] = useState('DRAFT');
+  const [pushNotify, setPushNotify] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
     newsService.getArticle(id)
@@ -53,6 +57,8 @@ export default function NewsEditPage() {
         } else {
           setCover(null);
         }
+        setStatus(a.status || 'DRAFT');
+        setPushNotify(a.push_notify !== false);
         setRelatedIds((a.related_news_ids || []).map((rid) => String(rid)));
         setAudienceTargets((a.audienceRules || []).map((rule) => ({
           scope_type: rule.target_scope_type,
@@ -92,32 +98,51 @@ export default function NewsEditPage() {
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+  const buildUpdatePayload = () => ({
+    title: form.title,
+    summary: form.summary || null,
+    body: form.body,
+    category_id: form.category_id ? Number(form.category_id) : null,
+    priority: form.priority || 'NORMAL',
+    cover_image_url: cover?.url || null,
+    cover_image_id: cover?.media_asset_id || null,
+    related_news_ids: relatedIds.map((v) => Number(v)).filter(Boolean),
+    scope_type: owningScope.scope_type,
+    scope_id: owningScope.scope_id,
+    audience_targets: audienceTargets.map((target) => ({
+      scope_type: target.scope_type,
+      scope_id: target.scope_id,
+    })),
+    push_notify: pushNotify,
+  });
+
   const handleSave = async () => {
     if (!form.title.trim()) { addToast('Title is required', 'error'); return; }
     setSaving(true);
     try {
-      await newsService.updateArticle(id, {
-        title: form.title,
-        summary: form.summary || null,
-        body: form.body,
-        category_id: form.category_id ? Number(form.category_id) : null,
-        priority: form.priority || 'NORMAL',
-        cover_image_url: cover?.url || null,
-        cover_image_id: cover?.media_asset_id || null,
-        related_news_ids: relatedIds.map((v) => Number(v)).filter(Boolean),
-        scope_type: owningScope.scope_type,
-        scope_id: owningScope.scope_id,
-        audience_targets: audienceTargets.map((target) => ({
-          scope_type: target.scope_type,
-          scope_id: target.scope_id,
-        })),
-      });
+      await newsService.updateArticle(id, buildUpdatePayload());
       addToast('Article updated', 'success');
       navigate(`/news/${id}`);
     } catch (err) {
       addToast(err.response?.data?.message || 'Failed to update', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Save edits then immediately publish, honoring the push-notify toggle.
+  const handleSaveAndPublish = async () => {
+    if (!form.title.trim()) { addToast('Title is required', 'error'); return; }
+    setPublishing(true);
+    try {
+      await newsService.updateArticle(id, buildUpdatePayload());
+      await newsService.publishArticle(id, { push_notify: pushNotify });
+      addToast(pushNotify ? 'Article published — employees notified' : 'Article published', 'success');
+      navigate(`/news/${id}`);
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to publish', 'error');
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -205,9 +230,32 @@ export default function NewsEditPage() {
             />
           </div>
         </div>
+        {canPublishNews && (
+          <div className="pt-2">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={pushNotify}
+                onChange={(e) => setPushNotify(e.target.checked)}
+                className="mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-gray-700">Push notify employees in real-time on publish</span>
+                <span className="block text-xs text-gray-500">
+                  Sends an instant in-app notification to the audience when this article is published. Uncheck to publish silently.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
           <Button variant="secondary" onClick={() => navigate(`/news/${id}`)}>Cancel</Button>
-          <Button onClick={handleSave} loading={saving}>Save Changes</Button>
+          <Button variant="secondary" onClick={handleSave} loading={saving} disabled={publishing}>Save Changes</Button>
+          {canPublishNews && status === 'DRAFT' && (
+            <Button onClick={handleSaveAndPublish} loading={publishing} disabled={saving}>
+              Save &amp; Publish
+            </Button>
+          )}
         </div>
       </div>
     </div>

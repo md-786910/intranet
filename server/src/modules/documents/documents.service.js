@@ -313,6 +313,7 @@ const documentsService = {
         summary: data.summary || null,
         category_id: data.category_id || null,
         priority: data.priority || 'NORMAL',
+        push_notify: data.push_notify !== false,
         status: 'DRAFT',
         author_id: authorId,
         owning_scope_type: data.owning_scope_type || 'ORGANISATION',
@@ -373,7 +374,7 @@ const documentsService = {
       const doc = await DocumentItem.findByPk(id, { transaction });
       if (!doc) throw ApiError.notFound('Document not found');
 
-      const fields = ['title', 'summary', 'category_id', 'priority'];
+      const fields = ['title', 'summary', 'category_id', 'priority', 'push_notify'];
       fields.forEach((f) => {
         if (data[f] !== undefined) doc[f] = data[f];
       });
@@ -494,12 +495,14 @@ const documentsService = {
     return { purged };
   },
 
-  async publish(id, userId) {
+  async publish(id, userId, { pushNotify } = {}) {
     const { DocumentItem, ContentAudienceRule } = require('../../database/models');
 
     const doc = await DocumentItem.findByPk(id);
     if (!doc) throw ApiError.notFound('Document not found');
     if (doc.status === 'PUBLISHED') throw ApiError.badRequest('Document is already published');
+
+    const shouldNotify = pushNotify !== undefined ? pushNotify : doc.push_notify !== false;
 
     // published_at gets a fresh timestamp on every publish; unpublished_at is
     // cleared because the most recent unpublish is now stale.
@@ -518,22 +521,22 @@ const documentsService = {
       resource_id: id,
     });
 
-    // Fan notifications out to the audience. Fire-and-forget — must not undo
-    // the publish if downstream notification persistence/socket fails. The
-    // `.catch()` here is a safety net beneath the internal try/catch.
-    const audienceRules = await ContentAudienceRule.findAll({
-      where: { entity_type: 'DOCUMENT', entity_id: id },
-    });
-    const notificationService = require('../notifications/notifications.service');
-    const logger = require('../../config/logger');
-    notificationService
-      .notifyOnPublish({
-        type: 'DOCUMENT',
-        entity: { id, title: doc.title, summary: doc.summary },
-        audienceRules,
-        entityKey: 'documents',
-      })
-      .catch((err) => logger.error(`notifyOnPublish (DOCUMENT ${id}) rejected: ${err.message}`));
+    // Fan notifications out to the audience only when push-notify is on.
+    if (shouldNotify) {
+      const audienceRules = await ContentAudienceRule.findAll({
+        where: { entity_type: 'DOCUMENT', entity_id: id },
+      });
+      const notificationService = require('../notifications/notifications.service');
+      const logger = require('../../config/logger');
+      notificationService
+        .notifyOnPublish({
+          type: 'DOCUMENT',
+          entity: { id, title: doc.title, summary: doc.summary },
+          audienceRules,
+          entityKey: 'documents',
+        })
+        .catch((err) => logger.error(`notifyOnPublish (DOCUMENT ${id}) rejected: ${err.message}`));
+    }
 
     return this.getById(id, userId);
   },
