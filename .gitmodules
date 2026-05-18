@@ -1,0 +1,3 @@
+[submodule "mobile"]
+	path = mobile
+	url = git@github.com:md-786910/intranet-mobile.git
