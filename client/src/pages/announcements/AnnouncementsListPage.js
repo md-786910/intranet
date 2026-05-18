@@ -38,7 +38,7 @@ function latestAction(row) {
   return null;
 }
 
-const STATUS_TABS = ['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED'];
+const STATUS_TABS = ['ALL', 'DRAFT', 'SCHEDULED', 'PUBLISHED', 'ARCHIVED'];
 
 export default function AnnouncementsListPage() {
   const navigate = useNavigate();
@@ -147,9 +147,17 @@ export default function AnnouncementsListPage() {
         </div>
       );
     }},
-    { key: 'created_at', label: 'Created', render: (row) => (
-      <span className="text-gray-500">{formatDateTime(row.created_at)}</span>
-    )},
+    { key: 'created_at', label: 'Created', render: (row) => {
+      if (row.status === 'SCHEDULED' && row.scheduled_at) {
+        return (
+          <div className="flex flex-col">
+            <span className="text-blue-700 font-medium">Scheduled for</span>
+            <span className="text-blue-700">{formatDateTime(row.scheduled_at)}</span>
+          </div>
+        );
+      }
+      return <span className="text-gray-500">{formatDateTime(row.created_at)}</span>;
+    }},
   ];
 
   const trashColumns = [

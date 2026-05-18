@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
@@ -8,6 +8,7 @@ import MultiSelect from '../../components/common/MultiSelect';
 import RichTextEditor from '../../components/common/RichTextEditor';
 import FilePicker from '../../components/common/FilePicker';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
+import SchedulePopover from '../../components/common/SchedulePopover';
 import { PRIORITY_OPTIONS } from '../../components/common/PriorityBadge';
 import { newsService } from '../../services/newsService';
 import { categoryService } from '../../services/categoryService';
@@ -35,6 +36,9 @@ export default function NewsCreatePage() {
   const [otherArticles, setOtherArticles] = useState([]);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const scheduleBtnRef = useRef(null);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -109,6 +113,27 @@ export default function NewsCreatePage() {
       handleError(err, 'Failed to create article');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Publish Later — create and immediately move to SCHEDULED. The periodic
+  // publisher will auto-publish when scheduled_at elapses.
+  const handleScheduleSave = async ({ iso }) => {
+    if (!currentOrganisationId) {
+      addToast('No active organisation available', 'error');
+      return;
+    }
+    setScheduling(true);
+    setErrors({});
+    try {
+      await newsService.createAndScheduleArticle({ ...buildPayload(), scheduled_at: iso });
+      addToast(`Article scheduled for ${new Date(iso).toLocaleString()}`, 'success');
+      navigate('/news?status=SCHEDULED');
+    } catch (err) {
+      handleError(err, 'Failed to schedule article');
+    } finally {
+      setScheduling(false);
+      setScheduleOpen(false);
     }
   };
 
@@ -237,14 +262,31 @@ export default function NewsCreatePage() {
           </div>
         )}
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-          <Button variant="secondary" onClick={() => navigate('/news')}>Cancel</Button>
-          <Button variant="secondary" onClick={handleSave} loading={saving} disabled={publishing}>Save Draft</Button>
+          <Button variant="ghost" onClick={() => navigate('/news')}>Cancel</Button>
+          <Button variant="secondary" onClick={handleSave} loading={saving} disabled={publishing || scheduling}>Save Draft</Button>
           {canPublishNews && (
-            <Button onClick={handlePublishNow} loading={publishing} disabled={saving}>
-              Publish Now
-            </Button>
+            <>
+              <Button onClick={handlePublishNow} loading={publishing} disabled={saving || scheduling}>
+                Publish Now
+              </Button>
+              <Button
+                ref={scheduleBtnRef}
+                variant="tonal"
+                onClick={() => setScheduleOpen((v) => !v)}
+                disabled={saving || publishing}
+              >
+                Publish Later
+              </Button>
+            </>
           )}
         </div>
+        <SchedulePopover
+          open={scheduleOpen}
+          anchorRef={scheduleBtnRef}
+          saving={scheduling}
+          onCancel={() => setScheduleOpen(false)}
+          onSave={handleScheduleSave}
+        />
       </div>
     </div>
   );

@@ -19,9 +19,13 @@ router.post('/', authorize('NEWS', 'CREATE'), validate(schemas.createNewsSchema)
 // "Publish Now" — create and immediately publish in one shot. Requires the
 // same payload as create plus the PUBLISH permission. Fires notifications.
 router.post('/publish-now', authorize('NEWS', 'PUBLISH'), validate(schemas.createNewsSchema), auditLogger('NEWS_PUBLISHED'), controller.createAndPublish);
+// "Publish Later" — create + schedule in one shot. Same payload as create plus `scheduled_at`.
+router.post('/schedule-now', authorize('NEWS', 'PUBLISH'), validate(schemas.createAndScheduleSchema), auditLogger('NEWS_SCHEDULED'), controller.createAndSchedule);
 router.put('/:id', loadNewsScope, authorize('NEWS', 'EDIT'), validate(schemas.updateNewsSchema), auditLogger('NEWS_UPDATED'), controller.update);
 router.delete('/:id', loadNewsScope, authorize('NEWS', 'DELETE'), auditLogger('NEWS_DELETED'), controller.remove);
 router.post('/:id/publish', loadNewsScope, authorize('NEWS', 'PUBLISH'), validate(schemas.publishSchema), auditLogger('NEWS_PUBLISHED'), controller.publish);
+router.post('/:id/schedule', loadNewsScope, authorize('NEWS', 'PUBLISH'), validate(schemas.scheduleSchema), auditLogger('NEWS_SCHEDULED'), controller.schedule);
+router.post('/:id/unschedule', loadNewsScope, authorize('NEWS', 'PUBLISH'), auditLogger('NEWS_UNSCHEDULED'), controller.unschedule);
 // Re-send the publish notification for an already-published article.
 router.post('/:id/notify', loadNewsScope, authorize('NEWS', 'PUBLISH'), validate(schemas.idParam), controller.resendNotification);
 router.post('/:id/unpublish', loadNewsScope, authorize('NEWS', 'PUBLISH'), auditLogger('NEWS_UNPUBLISHED'), controller.unpublish);

@@ -21,6 +21,25 @@ const createAndPublish = catchAsync(async (req, res) => {
   res.status(201).json({ status: 'success', data: item });
 });
 
+const schedule = catchAsync(async (req, res) => {
+  const item = await announcementsService.schedule(
+    req.params.id,
+    req.user.user_id,
+    req.body.scheduled_at,
+  );
+  res.status(200).json({ status: 'success', data: item });
+});
+
+const unschedule = catchAsync(async (req, res) => {
+  const item = await announcementsService.unschedule(req.params.id, req.user.user_id);
+  res.status(200).json({ status: 'success', data: item });
+});
+
+const createAndSchedule = catchAsync(async (req, res) => {
+  const item = await announcementsService.createAndSchedule(req.body, req.user.user_id);
+  res.status(201).json({ status: 'success', data: item });
+});
+
 const update = catchAsync(async (req, res) => {
   const item = await announcementsService.update(req.params.id, req.body, req.user.user_id);
   res.status(200).json({ status: 'success', data: item });
@@ -78,6 +97,9 @@ module.exports = {
   publish,
   unpublish,
   archive,
+  schedule,
+  unschedule,
+  createAndSchedule,
   setAudience,
   bulkRestore,
   bulkPurge,

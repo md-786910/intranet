@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
@@ -7,6 +7,7 @@ import Textarea from '../../components/common/Textarea';
 import Select from '../../components/common/Select';
 import FilePicker from '../../components/common/FilePicker';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
+import SchedulePopover from '../../components/common/SchedulePopover';
 import { PRIORITY_OPTIONS } from '../../components/common/PriorityBadge';
 import { documentService } from '../../services/documentService';
 import { useToast } from '../../hooks/useToast';
@@ -30,6 +31,9 @@ export default function DocumentCreatePage() {
   const [audienceTargets, setAudienceTargets] = useState([]);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const scheduleBtnRef = useRef(null);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -92,6 +96,22 @@ export default function DocumentCreatePage() {
       addToast(err.response?.data?.message || 'Failed to create document', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleScheduleSave = async ({ iso }) => {
+    if (!validate()) return;
+    setScheduling(true);
+    setErrors({});
+    try {
+      await documentService.createAndScheduleDocument({ ...buildPayload(), scheduled_at: iso });
+      addToast(`Document scheduled for ${new Date(iso).toLocaleString()}`, 'success');
+      navigate('/documents?status=SCHEDULED');
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to schedule document', 'error');
+    } finally {
+      setScheduling(false);
+      setScheduleOpen(false);
     }
   };
 
@@ -180,14 +200,31 @@ export default function DocumentCreatePage() {
           </div>
         )}
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-          <Button variant="secondary" onClick={() => navigate('/documents')}>Cancel</Button>
-          <Button variant="secondary" onClick={handleSave} loading={saving} disabled={publishing}>Save Draft</Button>
+          <Button variant="ghost" onClick={() => navigate('/documents')}>Cancel</Button>
+          <Button variant="secondary" onClick={handleSave} loading={saving} disabled={publishing || scheduling}>Save Draft</Button>
           {canPublishDocuments && (
-            <Button onClick={handlePublishNow} loading={publishing} disabled={saving}>
-              Publish Now
-            </Button>
+            <>
+              <Button onClick={handlePublishNow} loading={publishing} disabled={saving || scheduling}>
+                Publish Now
+              </Button>
+              <Button
+                ref={scheduleBtnRef}
+                variant="tonal"
+                onClick={() => setScheduleOpen((v) => !v)}
+                disabled={saving || publishing}
+              >
+                Publish Later
+              </Button>
+            </>
           )}
         </div>
+        <SchedulePopover
+          open={scheduleOpen}
+          anchorRef={scheduleBtnRef}
+          saving={scheduling}
+          onCancel={() => setScheduleOpen(false)}
+          onSave={handleScheduleSave}
+        />
       </div>
     </div>
   );

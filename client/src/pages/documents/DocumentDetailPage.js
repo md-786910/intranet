@@ -54,6 +54,14 @@ export default function DocumentDetailPage() {
     fetchDoc();
   }, [id]); // eslint-disable-line
 
+  // Light auto-refresh while SCHEDULED so the page flips to PUBLISHED soon
+  // after the backend publisher fires.
+  useEffect(() => {
+    if (doc?.status !== "SCHEDULED") return undefined;
+    const t = setInterval(() => { fetchDoc(); }, 15 * 1000);
+    return () => clearInterval(t);
+  }, [doc?.status, id]); // eslint-disable-line
+
   const askPublish = () =>
     setPendingAction({
       title: "Publish document",
@@ -82,6 +90,19 @@ export default function DocumentDetailPage() {
       run: async () => {
         await documentService.unpublishDocument(id);
         addToast("Document unpublished — back to draft", "success");
+        fetchDoc();
+      },
+    });
+
+  const askUnschedule = () =>
+    setPendingAction({
+      title: "Cancel schedule",
+      message: `Cancel the scheduled publish for "${doc.title}"? It will revert to draft.`,
+      confirmLabel: "Cancel schedule",
+      confirmVariant: "primary",
+      run: async () => {
+        await documentService.unscheduleDocument(id);
+        addToast("Schedule cancelled — back to draft", "success");
         fetchDoc();
       },
     });
@@ -129,6 +150,11 @@ export default function DocumentDetailPage() {
             {canPublishDocuments && doc.status === "DRAFT" && (
               <Button onClick={askPublish}>Publish</Button>
             )}
+            {canPublishDocuments && doc.status === "SCHEDULED" && (
+              <Button variant="secondary" onClick={askUnschedule}>
+                Cancel Schedule
+              </Button>
+            )}
             {canPublishDocuments && doc.status === "PUBLISHED" && (
               <Button variant="secondary" onClick={askUnpublish}>
                 Unpublish
@@ -162,6 +188,11 @@ export default function DocumentDetailPage() {
           <span className="text-sm text-gray-500">
             By {doc.author?.first_name} {doc.author?.last_name}
           </span>
+          {doc.status === "SCHEDULED" && doc.scheduled_at && (
+            <span className="text-sm text-blue-700">
+              Scheduled for {formatDate(doc.scheduled_at)}
+            </span>
+          )}
         </div>
 
         {canPublishDocuments && (

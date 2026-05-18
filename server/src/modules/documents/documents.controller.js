@@ -38,6 +38,25 @@ const createAndPublish = catchAsync(async (req, res) => {
   res.status(201).json({ status: 'success', data: doc });
 });
 
+const schedule = catchAsync(async (req, res) => {
+  const doc = await documentsService.schedule(
+    req.params.id,
+    req.user.user_id,
+    req.body.scheduled_at,
+  );
+  res.status(200).json({ status: 'success', data: doc });
+});
+
+const unschedule = catchAsync(async (req, res) => {
+  const doc = await documentsService.unschedule(req.params.id, req.user.user_id);
+  res.status(200).json({ status: 'success', data: doc });
+});
+
+const createAndSchedule = catchAsync(async (req, res) => {
+  const doc = await documentsService.createAndSchedule(req.body, req.user.user_id);
+  res.status(201).json({ status: 'success', data: doc });
+});
+
 const resendNotification = catchAsync(async (req, res) => {
   const result = await documentsService.resendNotification(req.params.id);
   res.status(200).json({ status: 'success', data: result });
@@ -120,6 +139,7 @@ const deleteCategory = catchAsync(async (req, res) => {
 
 module.exports = {
   list, getById, create, update, remove, publish, createAndPublish, resendNotification, unpublish,
+  schedule, unschedule, createAndSchedule,
   bulkRestore, bulkPurge,
   listVersions, createVersion,
   listCategories, getCategoryById, createCategory, updateCategory, deleteCategory,

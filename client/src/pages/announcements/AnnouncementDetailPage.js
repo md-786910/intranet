@@ -36,6 +36,14 @@ export default function AnnouncementDetailPage() {
     fetchItem();
   }, [id]); // eslint-disable-line
 
+  // Light auto-refresh while SCHEDULED so the page flips to PUBLISHED soon
+  // after the backend publisher fires.
+  useEffect(() => {
+    if (item?.status !== "SCHEDULED") return undefined;
+    const t = setInterval(() => { fetchItem(); }, 15 * 1000);
+    return () => clearInterval(t);
+  }, [item?.status, id]); // eslint-disable-line
+
   const askPublish = () =>
     setPendingAction({
       title: "Publish announcement",
@@ -63,6 +71,19 @@ export default function AnnouncementDetailPage() {
       run: async () => {
         await announcementService.unpublish(id);
         addToast("Announcement unpublished", "success");
+        fetchItem();
+      },
+    });
+
+  const askUnschedule = () =>
+    setPendingAction({
+      title: "Cancel schedule",
+      message: `Cancel the scheduled publish for "${item.title}"? It will revert to draft.`,
+      confirmLabel: "Cancel schedule",
+      confirmVariant: "primary",
+      run: async () => {
+        await announcementService.unschedule(id);
+        addToast("Schedule cancelled — back to draft", "success");
         fetchItem();
       },
     });
@@ -125,6 +146,11 @@ export default function AnnouncementDetailPage() {
             {canPublish && item.status === "DRAFT" && (
               <Button onClick={askPublish}>Publish</Button>
             )}
+            {canPublish && item.status === "SCHEDULED" && (
+              <Button variant="secondary" onClick={askUnschedule}>
+                Cancel Schedule
+              </Button>
+            )}
             {canPublish && item.status === "PUBLISHED" && (
               <Button variant="secondary" onClick={askUnpublish}>
                 Unpublish
@@ -167,6 +193,11 @@ export default function AnnouncementDetailPage() {
           <span className="text-sm text-gray-400">
             {formatDate(item.created_at)}
           </span>
+          {item.status === "SCHEDULED" && item.scheduled_at && (
+            <span className="text-sm text-blue-700">
+              Scheduled for {formatDateTime(item.scheduled_at)}
+            </span>
+          )}
           {item.published_at && (
             <span className="text-sm text-green-600">
               Published {formatDate(item.published_at)}

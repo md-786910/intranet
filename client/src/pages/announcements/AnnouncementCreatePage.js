@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
@@ -6,6 +6,7 @@ import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
 import RichTextEditor from '../../components/common/RichTextEditor';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
+import SchedulePopover from '../../components/common/SchedulePopover';
 import { PRIORITY_OPTIONS } from '../../components/common/PriorityBadge';
 import { announcementService } from '../../services/announcementService';
 import { useToast } from '../../hooks/useToast';
@@ -14,19 +15,7 @@ import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { usePermission } from '../../hooks/usePermission';
 import { usePublishingScope } from '../../hooks/usePublishingScope';
 
-function toLocalInputValue(isoOrNull) {
-  if (!isoOrNull) return '';
-  const d = new Date(isoOrNull);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function fromLocalInputValue(v) {
-  if (!v) return null;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
+import { toLocalInputValue, fromLocalInputValue } from '../../utils/datetime';
 
 export default function AnnouncementCreatePage() {
   const navigate = useNavigate();
@@ -47,6 +36,9 @@ export default function AnnouncementCreatePage() {
   const [audienceTargets, setAudienceTargets] = useState([]);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const scheduleBtnRef = useRef(null);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -93,6 +85,25 @@ export default function AnnouncementCreatePage() {
       handleError(err, 'Failed to create announcement');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleScheduleSave = async ({ iso }) => {
+    if (!currentOrganisationId) {
+      addToast('No active organisation available', 'error');
+      return;
+    }
+    setScheduling(true);
+    setErrors({});
+    try {
+      await announcementService.createAndSchedule({ ...buildPayload(), scheduled_at: iso });
+      addToast(`Announcement scheduled for ${new Date(iso).toLocaleString()}`, 'success');
+      navigate('/announcements?status=SCHEDULED');
+    } catch (err) {
+      handleError(err, 'Failed to schedule announcement');
+    } finally {
+      setScheduling(false);
+      setScheduleOpen(false);
     }
   };
 
@@ -225,14 +236,31 @@ export default function AnnouncementCreatePage() {
           </div>
         )}
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-          <Button variant="secondary" onClick={() => navigate('/announcements')}>Cancel</Button>
-          <Button variant="secondary" onClick={handleSave} loading={saving} disabled={publishing}>Save Draft</Button>
+          <Button variant="ghost" onClick={() => navigate('/announcements')}>Cancel</Button>
+          <Button variant="secondary" onClick={handleSave} loading={saving} disabled={publishing || scheduling}>Save Draft</Button>
           {canPublish && (
-            <Button onClick={handlePublishNow} loading={publishing} disabled={saving}>
-              Publish Now
-            </Button>
+            <>
+              <Button onClick={handlePublishNow} loading={publishing} disabled={saving || scheduling}>
+                Publish Now
+              </Button>
+              <Button
+                ref={scheduleBtnRef}
+                variant="tonal"
+                onClick={() => setScheduleOpen((v) => !v)}
+                disabled={saving || publishing}
+              >
+                Publish Later
+              </Button>
+            </>
           )}
         </div>
+        <SchedulePopover
+          open={scheduleOpen}
+          anchorRef={scheduleBtnRef}
+          saving={scheduling}
+          onCancel={() => setScheduleOpen(false)}
+          onSave={handleScheduleSave}
+        />
       </div>
     </div>
   );

@@ -70,6 +70,10 @@ export function useNotifications() {
         setUnreadCount((c) => c + 1);
       }
       toast.info(toastMessageFor(notification));
+      // Also resync with the server in the background. Cheap insurance against
+      // missed events (e.g. a quick disconnect/reconnect) and keeps the bell
+      // authoritative even if a notification got deleted server-side.
+      fetchInitial();
     };
 
     const onNudge = ({ notification }) => {
@@ -77,15 +81,22 @@ export function useNotifications() {
       // Re-notify path — toast only. We do not touch `items` or `unreadCount`
       // because the bell row already exists from the original publish.
       toast.info(toastMessageFor(notification));
+      fetchInitial();
     };
+
+    // On (re)connect, pull the latest list so the bell reflects anything that
+    // happened while the socket was down.
+    const onConnect = () => { fetchInitial(); };
 
     socket.on('notification:new', onNew);
     socket.on('notification:nudge', onNudge);
+    socket.on('connect', onConnect);
     return () => {
       socket.off('notification:new', onNew);
       socket.off('notification:nudge', onNudge);
+      socket.off('connect', onConnect);
     };
-  }, [socket, toast]);
+  }, [socket, toast, fetchInitial]);
 
   const markRead = useCallback(async (id) => {
     // Optimistic — flip locally first, then sync. Roll back on failure.

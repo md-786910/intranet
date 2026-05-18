@@ -3,6 +3,7 @@ import React from 'react';
 const variants = {
   primary: 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500',
   secondary: 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-primary-500',
+  tonal: 'bg-primary-50 text-primary-700 border border-primary-100 hover:bg-primary-100 focus:ring-primary-500',
   danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
   ghost: 'text-gray-600 hover:bg-gray-100 focus:ring-gray-500',
 };
@@ -13,12 +14,13 @@ const sizes = {
   lg: 'px-6 py-3 text-base',
 };
 
-export default function Button({
+const Button = React.forwardRef(function Button({
   children, type = 'button', variant = 'primary', size = 'md',
   disabled, loading, icon, onClick, className = '', ...rest
-}) {
+}, ref) {
   return (
     <button
+      ref={ref}
       type={type}
       disabled={disabled || loading}
       onClick={onClick}
@@ -35,4 +37,6 @@ export default function Button({
       {children}
     </button>
   );
-}
+});
+
+export default Button;

@@ -15,7 +15,7 @@ const listNewsSchema = {
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(20),
     search: Joi.string().trim().max(255).optional().allow(''),
-    status: Joi.string().valid('DRAFT', 'PUBLISHED', 'ARCHIVED').optional(),
+    status: Joi.string().valid('DRAFT', 'SCHEDULED', 'PUBLISHED', 'ARCHIVED').optional(),
     category_id: idPattern.optional(),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
@@ -61,6 +61,33 @@ const publishSchema = {
   }),
 };
 
+const scheduleSchema = {
+  params: Joi.object({
+    id: idPattern.required(),
+  }),
+  body: Joi.object({
+    scheduled_at: Joi.date().iso().greater('now').required(),
+  }),
+};
+
+const createAndScheduleSchema = {
+  body: Joi.object({
+    title: Joi.string().trim().min(1).max(255).required(),
+    summary: Joi.string().trim().max(500).optional().allow('', null),
+    body: Joi.string().required(),
+    cover_image_url: Joi.string().uri({ allowRelative: true }).optional().allow('', null),
+    cover_image_id: idPattern.optional().allow(null),
+    category_id: idPattern.optional().allow(null),
+    priority: priorityPattern.optional(),
+    related_news_ids: relatedIdsPattern.optional(),
+    owning_scope_type: scopeTypePattern.optional(),
+    owning_scope_id: idPattern.optional(),
+    audience_targets: Joi.array().items(scopeTarget).optional(),
+    push_notify: Joi.boolean().optional(),
+    scheduled_at: Joi.date().iso().greater('now').required(),
+  }),
+};
+
 const updateNewsSchema = {
   params: Joi.object({
     id: idPattern.required(),
@@ -97,6 +124,8 @@ module.exports = {
   idParam,
   createNewsSchema,
   publishSchema,
+  scheduleSchema,
+  createAndScheduleSchema,
   updateNewsSchema,
   setAudienceSchema,
   bulkIdsSchema,

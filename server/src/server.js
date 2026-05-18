@@ -42,6 +42,10 @@ const start = async () => {
   // Start BullMQ chat worker
   startChatWorker();
 
+  // Start the scheduled-content publisher (auto-publishes SCHEDULED rows when
+  // their `scheduled_at` elapses).
+  require('./jobs/scheduled-publisher').start();
+
   // Start HTTP server
   server.listen(PORT, "0.0.0.0", () => {
     logger.info(

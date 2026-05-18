@@ -39,9 +39,17 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     status: {
-      type: DataTypes.ENUM('DRAFT', 'PUBLISHED', 'ARCHIVED'),
+      type: DataTypes.ENUM('DRAFT', 'SCHEDULED', 'PUBLISHED', 'ARCHIVED'),
       defaultValue: 'DRAFT',
       allowNull: false,
+    },
+    scheduled_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    scheduled_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
     priority: {
       type: DataTypes.ENUM('LOW', 'NORMAL', 'HIGH', 'URGENT'),

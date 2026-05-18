@@ -38,6 +38,25 @@ const createAndPublish = catchAsync(async (req, res) => {
   res.status(201).json({ status: 'success', data: article });
 });
 
+const schedule = catchAsync(async (req, res) => {
+  const article = await newsService.schedule(
+    req.params.id,
+    req.user.user_id,
+    req.body.scheduled_at,
+  );
+  res.status(200).json({ status: 'success', data: article });
+});
+
+const unschedule = catchAsync(async (req, res) => {
+  const article = await newsService.unschedule(req.params.id, req.user.user_id);
+  res.status(200).json({ status: 'success', data: article });
+});
+
+const createAndSchedule = catchAsync(async (req, res) => {
+  const article = await newsService.createAndSchedule(req.body, req.user.user_id);
+  res.status(201).json({ status: 'success', data: article });
+});
+
 const resendNotification = catchAsync(async (req, res) => {
   const result = await newsService.resendNotification(req.params.id);
   res.status(200).json({ status: 'success', data: result });
@@ -70,4 +89,9 @@ const bulkPurge = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
-module.exports = { list, getById, create, update, remove, publish, createAndPublish, resendNotification, unpublish, archive, setAudience, bulkRestore, bulkPurge };
+module.exports = {
+  list, getById, create, update, remove,
+  publish, createAndPublish, resendNotification, unpublish, archive,
+  schedule, unschedule, createAndSchedule,
+  setAudience, bulkRestore, bulkPurge,
+};

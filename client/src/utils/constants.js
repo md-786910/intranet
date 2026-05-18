@@ -20,6 +20,7 @@ export const USER_STATUS = {
 
 export const CONTENT_STATUS = {
   DRAFT: 'DRAFT',
+  SCHEDULED: 'SCHEDULED',
   PUBLISHED: 'PUBLISHED',
   ARCHIVED: 'ARCHIVED',
 };

@@ -12,7 +12,7 @@ import { newsEvents } from '../../utils/activityEvents';
 import NewsEngagementPanel from './detail/NewsEngagementPanel';
 import { newsService } from '../../services/newsService';
 import { useToast } from '../../hooks/useToast';
-import { formatDate } from '../../utils/formatters';
+import { formatDate, formatDateTime } from '../../utils/formatters';
 import { resolveAssetUrl } from '../../utils/mediaUrl';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { usePermission } from '../../hooks/usePermission';
@@ -39,6 +39,15 @@ export default function NewsDetailPage() {
 
   useEffect(() => { fetchArticle(); }, [id]); // eslint-disable-line
 
+  // Light auto-refresh: while the article is SCHEDULED, poll every 15s so the
+  // page flips to PUBLISHED soon after the backend publisher fires. Stops once
+  // the status leaves SCHEDULED.
+  useEffect(() => {
+    if (article?.status !== 'SCHEDULED') return undefined;
+    const t = setInterval(() => { fetchArticle(); }, 15 * 1000);
+    return () => clearInterval(t);
+  }, [article?.status, id]); // eslint-disable-line
+
   const askPublish = () => setPendingAction({
     title: 'Publish article',
     message: `Publish "${article.title}"? It will become visible to everyone in the audience${article.push_notify === false ? ' (silently — push notifications are off for this article)' : ' and an in-app notification will be sent'}.`,
@@ -60,6 +69,18 @@ export default function NewsDetailPage() {
     run: async () => {
       await newsService.unpublishArticle(id);
       addToast('Article unpublished — back to draft', 'success');
+      fetchArticle();
+    },
+  });
+
+  const askUnschedule = () => setPendingAction({
+    title: 'Cancel schedule',
+    message: `Cancel the scheduled publish for "${article.title}"? It will revert to draft and you can publish it manually or reschedule later.`,
+    confirmLabel: 'Cancel schedule',
+    confirmVariant: 'primary',
+    run: async () => {
+      await newsService.unscheduleArticle(id);
+      addToast('Schedule cancelled — back to draft', 'success');
       fetchArticle();
     },
   });
@@ -102,6 +123,9 @@ export default function NewsDetailPage() {
             {canPublishNews && article.status === 'DRAFT' && (
               <Button onClick={askPublish}>Publish</Button>
             )}
+            {canPublishNews && article.status === 'SCHEDULED' && (
+              <Button variant="secondary" onClick={askUnschedule}>Cancel Schedule</Button>
+            )}
             {canPublishNews && article.status === 'PUBLISHED' && (
               <Button variant="secondary" onClick={askUnpublish}>Unpublish</Button>
             )}
@@ -127,6 +151,11 @@ export default function NewsDetailPage() {
             By {article.author?.first_name} {article.author?.last_name}
           </span>
           <span className="text-sm text-gray-400">{formatDate(article.created_at)}</span>
+          {article.status === 'SCHEDULED' && article.scheduled_at && (
+            <span className="text-sm text-blue-700">
+              Scheduled for {formatDateTime(article.scheduled_at)}
+            </span>
+          )}
           {article.published_at && (
             <span className="text-sm text-green-600">Published {formatDate(article.published_at)}</span>
           )}

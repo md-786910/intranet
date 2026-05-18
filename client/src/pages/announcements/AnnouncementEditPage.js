@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
@@ -6,6 +6,7 @@ import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
 import RichTextEditor from '../../components/common/RichTextEditor';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
+import SchedulePopover from '../../components/common/SchedulePopover';
 import { PRIORITY_OPTIONS } from '../../components/common/PriorityBadge';
 import { announcementService } from '../../services/announcementService';
 import { useToast } from '../../hooks/useToast';
@@ -34,6 +35,9 @@ export default function AnnouncementEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const scheduleBtnRef = useRef(null);
 
   useEffect(() => {
     announcementService.get(id)
@@ -92,6 +96,22 @@ export default function AnnouncementEditPage() {
       addToast(err.response?.data?.message || 'Failed to update', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveAndSchedule = async ({ iso }) => {
+    if (!form.title.trim()) { addToast('Title is required', 'error'); return; }
+    setScheduling(true);
+    try {
+      await announcementService.update(id, buildUpdatePayload());
+      await announcementService.schedule(id, { scheduled_at: iso });
+      addToast(`Announcement scheduled for ${new Date(iso).toLocaleString()}`, 'success');
+      navigate(`/announcements/${id}`);
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to schedule', 'error');
+    } finally {
+      setScheduling(false);
+      setScheduleOpen(false);
     }
   };
 
@@ -210,14 +230,31 @@ export default function AnnouncementEditPage() {
           </div>
         )}
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-          <Button variant="secondary" onClick={() => navigate(`/announcements/${id}`)}>Cancel</Button>
-          <Button variant="secondary" onClick={handleSave} loading={saving} disabled={publishing}>Save Changes</Button>
+          <Button variant="ghost" onClick={() => navigate(`/announcements/${id}`)}>Cancel</Button>
+          <Button variant="secondary" onClick={handleSave} loading={saving} disabled={publishing || scheduling}>Save Changes</Button>
           {canPublish && status === 'DRAFT' && (
-            <Button onClick={handleSaveAndPublish} loading={publishing} disabled={saving}>
-              Save &amp; Publish
-            </Button>
+            <>
+              <Button onClick={handleSaveAndPublish} loading={publishing} disabled={saving || scheduling}>
+                Save &amp; Publish
+              </Button>
+              <Button
+                ref={scheduleBtnRef}
+                variant="tonal"
+                onClick={() => setScheduleOpen((v) => !v)}
+                disabled={saving || publishing}
+              >
+                Publish Later
+              </Button>
+            </>
           )}
         </div>
+        <SchedulePopover
+          open={scheduleOpen}
+          anchorRef={scheduleBtnRef}
+          saving={scheduling}
+          onCancel={() => setScheduleOpen(false)}
+          onSave={handleSaveAndSchedule}
+        />
       </div>
     </div>
   );

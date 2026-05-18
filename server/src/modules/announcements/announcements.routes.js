@@ -20,9 +20,12 @@ router.get('/', authorize('NEWS', 'VIEW'), validate(schemas.listSchema), control
 router.get('/:id', authorize('NEWS', 'VIEW'), validate(schemas.idParam), controller.getById);
 router.post('/', authorize('NEWS', 'CREATE'), validate(schemas.createSchema), auditLogger('ANNOUNCEMENT_CREATED'), controller.create);
 router.post('/publish-now', authorize('NEWS', 'PUBLISH'), validate(schemas.createSchema), auditLogger('ANNOUNCEMENT_PUBLISHED'), controller.createAndPublish);
+router.post('/schedule-now', authorize('NEWS', 'PUBLISH'), validate(schemas.createAndScheduleSchema), auditLogger('ANNOUNCEMENT_SCHEDULED'), controller.createAndSchedule);
 router.put('/:id', loadAnnouncementScope, authorize('NEWS', 'EDIT'), validate(schemas.updateSchema), auditLogger('ANNOUNCEMENT_UPDATED'), controller.update);
 router.delete('/:id', loadAnnouncementScope, authorize('NEWS', 'DELETE'), auditLogger('ANNOUNCEMENT_DELETED'), controller.remove);
 router.post('/:id/publish', loadAnnouncementScope, authorize('NEWS', 'PUBLISH'), validate(schemas.publishSchema), auditLogger('ANNOUNCEMENT_PUBLISHED'), controller.publish);
+router.post('/:id/schedule', loadAnnouncementScope, authorize('NEWS', 'PUBLISH'), validate(schemas.scheduleSchema), auditLogger('ANNOUNCEMENT_SCHEDULED'), controller.schedule);
+router.post('/:id/unschedule', loadAnnouncementScope, authorize('NEWS', 'PUBLISH'), auditLogger('ANNOUNCEMENT_UNSCHEDULED'), controller.unschedule);
 router.post('/:id/unpublish', loadAnnouncementScope, authorize('NEWS', 'PUBLISH'), auditLogger('ANNOUNCEMENT_UNPUBLISHED'), controller.unpublish);
 router.post('/:id/archive', loadAnnouncementScope, authorize('NEWS', 'EDIT'), auditLogger('ANNOUNCEMENT_ARCHIVED'), controller.archive);
 router.post('/:id/audience', loadAnnouncementScope, authorize('NEWS', 'EDIT'), validate(schemas.setAudienceSchema), auditLogger('ANNOUNCEMENT_AUDIENCE_UPDATED'), controller.setAudience);

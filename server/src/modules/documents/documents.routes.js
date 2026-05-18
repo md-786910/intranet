@@ -35,9 +35,12 @@ router.post('/:id/view', validate(schemas.idParam), controller.recordView);
 router.post('/', authorize('DOCUMENTS', 'CREATE'), validate(schemas.createDocSchema), auditLogger('DOC_CREATED'), controller.create);
 // "Publish Now" — create and immediately publish, fanning out notifications.
 router.post('/publish-now', authorize('DOCUMENTS', 'PUBLISH'), validate(schemas.createDocSchema), auditLogger('DOC_PUBLISHED'), controller.createAndPublish);
+router.post('/schedule-now', authorize('DOCUMENTS', 'PUBLISH'), validate(schemas.createAndScheduleSchema), auditLogger('DOC_SCHEDULED'), controller.createAndSchedule);
 router.put('/:id', loadDocScope, authorize('DOCUMENTS', 'EDIT'), validate(schemas.updateDocSchema), auditLogger('DOC_UPDATED'), controller.update);
 router.delete('/:id', loadDocScope, authorize('DOCUMENTS', 'DELETE'), auditLogger('DOC_DELETED'), controller.remove);
 router.post('/:id/publish', loadDocScope, authorize('DOCUMENTS', 'PUBLISH'), validate(schemas.publishSchema), auditLogger('DOC_PUBLISHED'), controller.publish);
+router.post('/:id/schedule', loadDocScope, authorize('DOCUMENTS', 'PUBLISH'), validate(schemas.scheduleSchema), auditLogger('DOC_SCHEDULED'), controller.schedule);
+router.post('/:id/unschedule', loadDocScope, authorize('DOCUMENTS', 'PUBLISH'), auditLogger('DOC_UNSCHEDULED'), controller.unschedule);
 // Re-send the publish notification for an already-published document.
 router.post('/:id/notify', loadDocScope, authorize('DOCUMENTS', 'PUBLISH'), validate(schemas.idParam), controller.resendNotification);
 router.post('/:id/unpublish', loadDocScope, authorize('DOCUMENTS', 'PUBLISH'), auditLogger('DOC_UNPUBLISHED'), controller.unpublish);

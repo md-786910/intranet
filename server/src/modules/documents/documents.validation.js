@@ -23,7 +23,7 @@ const listDocsSchema = {
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(20),
     search: Joi.string().trim().max(255).optional().allow(''),
-    status: Joi.string().valid('DRAFT', 'PUBLISHED', 'ARCHIVED').optional(),
+    status: Joi.string().valid('DRAFT', 'SCHEDULED', 'PUBLISHED', 'ARCHIVED').optional(),
     category_id: idPattern.optional(),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
@@ -83,6 +83,35 @@ const publishSchema = {
   body: Joi.object({
     push_notify: Joi.boolean().optional(),
   }),
+};
+
+const scheduleSchema = {
+  params: Joi.object({
+    id: idPattern.required(),
+  }),
+  body: Joi.object({
+    scheduled_at: Joi.date().iso().greater('now').required(),
+  }),
+};
+
+const createAndScheduleSchema = {
+  body: Joi.object({
+    title: Joi.string().trim().min(1).max(255).required(),
+    summary: Joi.string().trim().max(2000).optional().allow('', null),
+    category_id: idPattern.optional().allow(null),
+    priority: priorityPattern.optional(),
+    owning_scope_type: scopeTypePattern.optional(),
+    owning_scope_id: idPattern.optional(),
+    audience_targets: Joi.array().items(scopeTarget).optional(),
+    files: Joi.array().items(fileEntry).min(1).optional(),
+    file_url: Joi.string().optional().allow('', null),
+    file_name: Joi.string().optional().allow('', null),
+    file_size: Joi.number().integer().optional(),
+    mime_type: Joi.string().optional().allow('', null),
+    changelog: Joi.string().trim().max(500).optional().allow('', null),
+    push_notify: Joi.boolean().optional(),
+    scheduled_at: Joi.date().iso().greater('now').required(),
+  }).or('files', 'file_url'),
 };
 
 const updateDocSchema = {
@@ -153,6 +182,8 @@ module.exports = {
   categoryIdParam,
   createDocSchema,
   publishSchema,
+  scheduleSchema,
+  createAndScheduleSchema,
   updateDocSchema,
   createVersionSchema,
   createCategorySchema,

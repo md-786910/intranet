@@ -506,6 +506,8 @@ const newsService = {
       published_by: userId,
       unpublished_at: null,
       unpublished_by: null,
+      scheduled_at: null,
+      scheduled_by: null,
     });
 
     await auditService.log({
@@ -573,6 +575,81 @@ const newsService = {
         await this.delete(created.news_item_id, userId);
       } catch (cleanupErr) {
         // Logged via the audit/error pipeline elsewhere; nothing more to do.
+      }
+      throw err;
+    }
+  },
+
+  // Move a DRAFT article into SCHEDULED with a future publish time. The
+  // periodic scheduled-publisher job promotes it to PUBLISHED when the time
+  // arrives, calling publish() so audit + audience fan-out flow identically.
+  async schedule(id, userId, scheduledAt) {
+    const { NewsItem } = require('../../database/models');
+    const article = await NewsItem.findByPk(id);
+    if (!article) throw ApiError.notFound('News article not found');
+    if (article.status === 'PUBLISHED') throw ApiError.badRequest('Article is already published');
+    if (article.status === 'ARCHIVED') throw ApiError.badRequest('Archived articles cannot be scheduled');
+
+    const when = new Date(scheduledAt);
+    if (Number.isNaN(when.getTime()) || when <= new Date()) {
+      throw ApiError.badRequest('Schedule time must be in the future');
+    }
+
+    await article.update({
+      status: 'SCHEDULED',
+      scheduled_at: when,
+      scheduled_by: userId,
+    });
+
+    await auditService.log({
+      user_id: userId,
+      action: 'NEWS_SCHEDULED',
+      resource_type: 'NewsItem',
+      resource_id: id,
+      details: { scheduled_at: when.toISOString() },
+    });
+
+    return this.getById(id, userId);
+  },
+
+  // Cancel a SCHEDULED article and send it back to DRAFT so an editor can
+  // either edit further or publish manually.
+  async unschedule(id, userId) {
+    const { NewsItem } = require('../../database/models');
+    const article = await NewsItem.findByPk(id);
+    if (!article) throw ApiError.notFound('News article not found');
+    if (article.status !== 'SCHEDULED') {
+      throw ApiError.badRequest('Only scheduled articles can be unscheduled');
+    }
+
+    await article.update({
+      status: 'DRAFT',
+      scheduled_at: null,
+      scheduled_by: null,
+    });
+
+    await auditService.log({
+      user_id: userId,
+      action: 'NEWS_UNSCHEDULED',
+      resource_type: 'NewsItem',
+      resource_id: id,
+    });
+
+    return this.getById(id, userId);
+  },
+
+  // "Publish Later" flow: create the row then immediately move it to SCHEDULED.
+  // If scheduling fails after create, soft-delete the orphan to keep the list clean.
+  async createAndSchedule(data, userId) {
+    const { scheduled_at: scheduledAt, ...rest } = data;
+    const created = await this.create(rest, userId);
+    try {
+      return await this.schedule(created.news_item_id, userId, scheduledAt);
+    } catch (err) {
+      try {
+        await this.delete(created.news_item_id, userId);
+      } catch (cleanupErr) {
+        // Best-effort cleanup.
       }
       throw err;
     }

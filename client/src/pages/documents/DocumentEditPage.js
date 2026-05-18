@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
@@ -7,6 +7,7 @@ import Textarea from '../../components/common/Textarea';
 import Select from '../../components/common/Select';
 import FilePicker from '../../components/common/FilePicker';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
+import SchedulePopover from '../../components/common/SchedulePopover';
 import MediaTypeIcon, { getMediaKind } from '../../components/common/MediaTypeIcon';
 import MediaPreviewDrawer from '../../components/common/MediaPreviewDrawer';
 import { PRIORITY_OPTIONS } from '../../components/common/PriorityBadge';
@@ -36,6 +37,9 @@ export default function DocumentEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const scheduleBtnRef = useRef(null);
   const [previewAsset, setPreviewAsset] = useState(null);
 
   // New-version uploader state — separate transaction from metadata save.
@@ -104,6 +108,22 @@ export default function DocumentEditPage() {
       addToast(err.response?.data?.message || 'Failed to update', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveAndSchedule = async ({ iso }) => {
+    if (!form.title.trim()) { addToast('Title is required', 'error'); return; }
+    setScheduling(true);
+    try {
+      await documentService.updateDocument(id, buildUpdatePayload());
+      await documentService.scheduleDocument(id, { scheduled_at: iso });
+      addToast(`Document scheduled for ${new Date(iso).toLocaleString()}`, 'success');
+      navigate(`/documents/${id}`);
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to schedule', 'error');
+    } finally {
+      setScheduling(false);
+      setScheduleOpen(false);
     }
   };
 
@@ -208,14 +228,31 @@ export default function DocumentEditPage() {
           </div>
         )}
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-          <Button variant="secondary" onClick={() => navigate(`/documents/${id}`)}>Cancel</Button>
-          <Button variant="secondary" onClick={handleSaveMetadata} loading={saving} disabled={publishing}>Save Changes</Button>
+          <Button variant="ghost" onClick={() => navigate(`/documents/${id}`)}>Cancel</Button>
+          <Button variant="secondary" onClick={handleSaveMetadata} loading={saving} disabled={publishing || scheduling}>Save Changes</Button>
           {canPublishDocuments && status === 'DRAFT' && (
-            <Button onClick={handleSaveAndPublish} loading={publishing} disabled={saving}>
-              Save &amp; Publish
-            </Button>
+            <>
+              <Button onClick={handleSaveAndPublish} loading={publishing} disabled={saving || scheduling}>
+                Save &amp; Publish
+              </Button>
+              <Button
+                ref={scheduleBtnRef}
+                variant="tonal"
+                onClick={() => setScheduleOpen((v) => !v)}
+                disabled={saving || publishing}
+              >
+                Publish Later
+              </Button>
+            </>
           )}
         </div>
+        <SchedulePopover
+          open={scheduleOpen}
+          anchorRef={scheduleBtnRef}
+          saving={scheduling}
+          onCancel={() => setScheduleOpen(false)}
+          onSave={handleSaveAndSchedule}
+        />
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4 mb-6">

@@ -512,6 +512,8 @@ const documentsService = {
       published_by: userId,
       unpublished_at: null,
       unpublished_by: null,
+      scheduled_at: null,
+      scheduled_by: null,
     });
 
     await auditService.log({
@@ -573,6 +575,77 @@ const documentsService = {
         await this.delete(created.document_item_id, userId);
       } catch (cleanupErr) {
         // Best-effort cleanup; not fatal.
+      }
+      throw err;
+    }
+  },
+
+  // Move a DRAFT document into SCHEDULED. The periodic publisher promotes it
+  // to PUBLISHED when scheduled_at elapses, running through publish() so audit
+  // + audience fan-out work identically.
+  async schedule(id, userId, scheduledAt) {
+    const { DocumentItem } = require('../../database/models');
+    const doc = await DocumentItem.findByPk(id);
+    if (!doc) throw ApiError.notFound('Document not found');
+    if (doc.status === 'PUBLISHED') throw ApiError.badRequest('Document is already published');
+    if (doc.status === 'ARCHIVED') throw ApiError.badRequest('Archived documents cannot be scheduled');
+
+    const when = new Date(scheduledAt);
+    if (Number.isNaN(when.getTime()) || when <= new Date()) {
+      throw ApiError.badRequest('Schedule time must be in the future');
+    }
+
+    await doc.update({
+      status: 'SCHEDULED',
+      scheduled_at: when,
+      scheduled_by: userId,
+    });
+
+    await auditService.log({
+      user_id: userId,
+      action: 'DOC_SCHEDULED',
+      resource_type: 'DocumentItem',
+      resource_id: id,
+      details: { scheduled_at: when.toISOString() },
+    });
+
+    return this.getById(id, userId);
+  },
+
+  async unschedule(id, userId) {
+    const { DocumentItem } = require('../../database/models');
+    const doc = await DocumentItem.findByPk(id);
+    if (!doc) throw ApiError.notFound('Document not found');
+    if (doc.status !== 'SCHEDULED') {
+      throw ApiError.badRequest('Only scheduled documents can be unscheduled');
+    }
+
+    await doc.update({
+      status: 'DRAFT',
+      scheduled_at: null,
+      scheduled_by: null,
+    });
+
+    await auditService.log({
+      user_id: userId,
+      action: 'DOC_UNSCHEDULED',
+      resource_type: 'DocumentItem',
+      resource_id: id,
+    });
+
+    return this.getById(id, userId);
+  },
+
+  async createAndSchedule(data, userId) {
+    const { scheduled_at: scheduledAt, ...rest } = data;
+    const created = await this.create(rest, userId);
+    try {
+      return await this.schedule(created.document_item_id, userId, scheduledAt);
+    } catch (err) {
+      try {
+        await this.delete(created.document_item_id, userId);
+      } catch (cleanupErr) {
+        // Best-effort cleanup.
       }
       throw err;
     }

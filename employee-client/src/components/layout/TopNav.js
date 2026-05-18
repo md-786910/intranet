@@ -78,6 +78,7 @@ export default function TopNav() {
     loading: notificationsLoading,
     markRead,
     markAllRead,
+    refresh: refreshNotifications,
   } = useNotifications();
 
   const onNotificationClick = (notification) => {
@@ -142,7 +143,13 @@ export default function TopNav() {
             <div className="relative" ref={notificationsRef}>
               <button
                 type="button"
-                onClick={() => setNotificationsOpen((v) => !v)}
+                onClick={() => setNotificationsOpen((v) => {
+                  // Pull fresh state from the server whenever the user opens
+                  // the bell — covers the case where socket events arrived
+                  // mid-session and we want absolute consistency.
+                  if (!v) refreshNotifications();
+                  return !v;
+                })}
                 className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800 transition-all active:scale-90 relative"
                 aria-label="Notifications"
               >
