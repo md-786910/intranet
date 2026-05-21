@@ -358,6 +358,28 @@ export default function UserDetailPage() {
                     <Field label="Job title" value={user.profile?.job_title} />
                     <Field label="Employee ID" value={user.profile?.employee_id} />
                     <Field label="Phone" value={user.phone} />
+                    <Field label="Location" value={user.profile?.location} />
+                    <Field label="Date of joining" value={user.profile?.date_of_joining ? formatDate(user.profile.date_of_joining) : null} />
+                    {user.profile?.bio && <Field label="Bio" value={user.profile.bio} />}
+                  </dl>
+                </section>
+
+                {/* Profession card */}
+                <section className="rounded-lg border border-gray-200 bg-gray-50/40 px-5 py-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Profession</h3>
+                  <dl className="divide-y divide-gray-100">
+                    <Field
+                      label="Role category"
+                      value={user.profile?.roleCategory?.name
+                        ? <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-primary-50 text-primary-700 text-xs font-medium">{user.profile.roleCategory.name}</span>
+                        : null}
+                    />
+                    <Field
+                      label="Reports to"
+                      value={user.profile?.manager
+                        ? <a href={`/users/${user.profile.manager.user_id}`} className="text-primary-600 hover:underline font-medium">{user.profile.manager.first_name} {user.profile.manager.last_name}</a>
+                        : null}
+                    />
                   </dl>
                 </section>
 

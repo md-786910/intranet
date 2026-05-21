@@ -151,7 +151,11 @@ function buildDepartmentPath(department) {
 
 const usersService = {
   async list(query) {
-    const { UserAccount, PersonProfile, DepartmentMembership, sequelize } = require('../../database/models');
+    const {
+      UserAccount, PersonProfile, RoleCategory,
+      DepartmentMembership, Department, Vertical, OfficeLocation,
+      UserRoleAssignment, Role, sequelize,
+    } = require('../../database/models');
     const { Op } = require('sequelize');
     const { page, limit, offset } = parsePagination(query);
 
@@ -165,35 +169,75 @@ const usersService = {
       ];
     }
 
-    // Hide pure members (invited via /employees flow with only EMPLOYEE role).
-    // Promoted members (any non-EMPLOYEE role assigned) reappear here.
-    where[Op.and] = [
-      sequelize.literal(`(
-        NOT EXISTS (
-          SELECT 1 FROM employee_invitation ei
-           WHERE ei.user_id = "UserAccount"."user_id"
-        )
-        OR EXISTS (
-          SELECT 1 FROM user_role_assignment ura
-            JOIN role r ON r.role_id = ura.role_id
-           WHERE ura.user_id = "UserAccount"."user_id"
-             AND r.code <> 'EMPLOYEE'
-        )
-      )`),
-    ];
-
-    const include = [
-      { model: PersonProfile, as: 'profile', required: false },
-    ];
-
-    // Filter by department if specified
+    // Use EXISTS subqueries for org-hierarchy filters to avoid broken JOIN-based
+    // WHERE clauses in Sequelize's findAndCountAll subquery generation.
+    const andClauses = [];
     if (query.department_id) {
-      include.push({
+      andClauses.push(sequelize.literal(`EXISTS (
+        SELECT 1 FROM department_membership _dm
+         WHERE _dm.user_id = "UserAccount"."user_id"
+           AND _dm.department_id = ${Number(query.department_id)}
+      )`));
+    } else if (query.vertical_id) {
+      andClauses.push(sequelize.literal(`EXISTS (
+        SELECT 1 FROM department_membership _dm
+          JOIN department _d ON _d.id = _dm.department_id
+         WHERE _dm.user_id = "UserAccount"."user_id"
+           AND _d.vertical_id = ${Number(query.vertical_id)}
+      )`));
+    } else if (query.office_location_id) {
+      andClauses.push(sequelize.literal(`EXISTS (
+        SELECT 1 FROM department_membership _dm
+          JOIN department _d ON _d.id = _dm.department_id
+          JOIN vertical _v  ON _v.id  = _d.vertical_id
+         WHERE _dm.user_id = "UserAccount"."user_id"
+           AND _v.office_location_id = ${Number(query.office_location_id)}
+      )`));
+    }
+    if (andClauses.length) where[Op.and] = andClauses;
+
+    // All includes are required:false (LEFT JOINs) so the count subquery stays clean.
+    const include = [
+      {
+        model: PersonProfile,
+        as: 'profile',
+        required: false,
+        include: [{ model: RoleCategory, as: 'roleCategory', attributes: ['id', 'name'] }],
+      },
+      {
         model: DepartmentMembership,
         as: 'departmentMemberships',
-        where: { department_id: query.department_id },
-        required: true,
-      });
+        required: false,
+        include: [{
+          model: Department,
+          as: 'department',
+          attributes: ['id', 'name'],
+          include: [{
+            model: Vertical,
+            as: 'vertical',
+            attributes: ['id', 'name'],
+            include: [{ model: OfficeLocation, as: 'officeLocation', attributes: ['id', 'name'] }],
+          }],
+        }],
+      },
+      {
+        model: UserRoleAssignment,
+        as: 'roleAssignments',
+        required: false,
+        include: [{ model: Role, as: 'role', attributes: ['role_id', 'name', 'code'] }],
+      },
+    ];
+
+    const sortDir = query.sort_dir === 'desc' ? 'DESC' : 'ASC';
+    let order;
+    if (query.sort_by === 'profession') {
+      order = [[{ model: PersonProfile, as: 'profile' }, 'job_title', sortDir], ['first_name', 'ASC']];
+    } else if (query.sort_by === 'status') {
+      order = [['status', sortDir], ['first_name', 'ASC']];
+    } else if (query.sort_by === 'created_at') {
+      order = [['created_at', sortDir], ['first_name', 'ASC']];
+    } else {
+      order = [['first_name', sortDir], ['last_name', sortDir]];
     }
 
     const { rows, count } = await UserAccount.findAndCountAll({
@@ -201,8 +245,9 @@ const usersService = {
       limit,
       offset,
       include,
-      order: [['first_name', 'ASC'], ['last_name', 'ASC']],
+      order,
       distinct: true,
+      subQuery: false,
     });
 
     return {
@@ -215,6 +260,7 @@ const usersService = {
     const {
       UserAccount,
       PersonProfile,
+      RoleCategory,
       UserRoleAssignment,
       Role,
       DepartmentMembership,
@@ -230,7 +276,15 @@ const usersService = {
     const user = await UserAccount.findByPk(id, {
       attributes: { exclude: ['password_hash'] },
       include: [
-        { model: PersonProfile, as: 'profile', required: false },
+        {
+          model: PersonProfile,
+          as: 'profile',
+          required: false,
+          include: [
+            { model: RoleCategory, as: 'roleCategory', attributes: ['id', 'name'] },
+            { model: UserAccount, as: 'manager', attributes: ['user_id', 'first_name', 'last_name'] },
+          ],
+        },
         {
           model: UserRoleAssignment,
           as: 'roleAssignments',
