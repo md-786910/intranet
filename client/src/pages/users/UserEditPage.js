@@ -8,8 +8,10 @@ import Badge from '../../components/common/Badge';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
 import PermissionMatrix from '../../components/roles/PermissionMatrix';
 import { getPermLabel } from '../../components/roles/PermissionMatrix';
+import ChatAccessSelector from '../../components/common/ChatAccessSelector';
 import ReportsToPicker from '../employees/ReportsToPicker';
 import { userService } from '../../services/userService';
+import { employeeService } from '../../services/employeeService';
 import { roleService } from '../../services/roleService';
 import { roleCategoryService } from '../../services/roleCategoryService';
 import { jobTitleService } from '../../services/jobTitleService';
@@ -103,6 +105,11 @@ export default function UserEditPage() {
   const [reportsTo, setReportsTo] = useState(null);
   const jobTitleSynced = useRef(false);
 
+  // Chat access
+  const [chatCandidates, setChatCandidates] = useState([]);
+  const [chatCandidatesLoading, setChatCandidatesLoading] = useState(true);
+  const [chatBlockedIds, setChatBlockedIds] = useState([]);
+
   // Roles + modules
   const [allRoles, setAllRoles] = useState([]);
   const [modules, setModules] = useState([]);
@@ -158,6 +165,7 @@ export default function UserEditPage() {
         setJobTitleId('');
         jobTitleSynced.current = false;
         setReportsTo(u.profile?.manager || null);
+        setChatBlockedIds(Array.isArray(u.chat_blocked_user_ids) ? u.chat_blocked_user_ids : []);
       })
       .catch(() => addToast('Failed to load user', 'error'))
       .finally(() => setLoading(false));
@@ -170,6 +178,10 @@ export default function UserEditPage() {
     roleService.getModules().then((res) => setModules(res.data?.data || [])).catch(() => {});
     jobTitleService.list().then((res) => setJobTitles(res.data?.data || [])).catch(() => {});
     roleCategoryService.list().then((res) => setRoleCategories(res.data?.data || [])).catch(() => {});
+    employeeService.listChatCandidates()
+      .then((res) => setChatCandidates(res.data?.data || []))
+      .catch(() => setChatCandidates([]))
+      .finally(() => setChatCandidatesLoading(false));
   }, []);
 
   // Pre-populate jobTitleId from saved job_title name once both user data and job titles list are ready
@@ -209,6 +221,7 @@ export default function UserEditPage() {
           bio: form.bio || null,
           reports_to_user_id: reportsTo?.user_id || null,
         },
+        chat_blocked_user_ids: chatBlockedIds,
       });
       addToast('Profile updated', 'success');
       fetchUser();
@@ -522,6 +535,21 @@ export default function UserEditPage() {
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
                   />
                 </div>
+              </div>
+
+              {/* Chat access */}
+              <div className="border-t border-gray-100 pt-5">
+                <h3 className="text-sm font-medium text-gray-700 mb-1">Chat access</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  All active colleagues are reachable by default. Uncheck anyone this user should NOT be able to find in chat — the block is bidirectional.
+                </p>
+                <ChatAccessSelector
+                  candidates={chatCandidates}
+                  value={chatBlockedIds}
+                  onChange={setChatBlockedIds}
+                  loading={chatCandidatesLoading}
+                  excludeUserId={Number(id)}
+                />
               </div>
 
               {/* Roles & org hierarchy — full width tree picker. */}
