@@ -271,6 +271,28 @@ export default function UsersListPage() {
       ),
     },
     {
+      key: 'reports_to',
+      label: 'Reporting To',
+      render: (row) => {
+        const m = row.profile?.manager;
+        if (!m) return <span className="text-gray-400">—</span>;
+        return (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); navigate(`/users/${m.user_id}`); }}
+            className="flex items-center gap-1.5 group text-left"
+          >
+            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-[10px] font-semibold">
+              {`${m.first_name?.[0] || ''}${m.last_name?.[0] || ''}`.toUpperCase()}
+            </div>
+            <span className="text-sm text-gray-700 group-hover:text-primary-600 transition-colors truncate max-w-[110px]">
+              {m.first_name} {m.last_name}
+            </span>
+          </button>
+        );
+      },
+    },
+    {
       key: 'status',
       label: 'Status',
       sortable: true,

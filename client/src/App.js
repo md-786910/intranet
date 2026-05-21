@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { OrganisationProvider } from './contexts/OrganisationContext';
 import { PermissionProvider } from './contexts/PermissionContext';
@@ -20,10 +20,6 @@ import UsersListPage from './pages/users/UsersListPage';
 import UserCreatePage from './pages/users/UserCreatePage';
 import UserDetailPage from './pages/users/UserDetailPage';
 import UserEditPage from './pages/users/UserEditPage';
-import EmployeesListPage from './pages/employees/EmployeesListPage';
-import EmployeeCreatePage from './pages/employees/EmployeeCreatePage';
-import EmployeeDetailPage from './pages/employees/EmployeeDetailPage';
-import EmployeeEditPage from './pages/employees/EmployeeEditPage';
 import RoleCategoriesPage from './pages/role-categories/RoleCategoriesPage';
 import JobTitlesPage from './pages/job-titles/JobTitlesPage';
 import RolesListPage from './pages/roles/RolesListPage';
@@ -50,6 +46,11 @@ import CategoriesPage from './pages/categories/CategoriesPage';
 import ActivityLogPage from './pages/activity/ActivityLogPage';
 import QuickLinksPage from './pages/quick-links/QuickLinksPage';
 
+function EmployeeIdRedirect({ suffix = '' }) {
+  const { id } = useParams();
+  return <Navigate to={`/users/${id}${suffix}`} replace />;
+}
+
 function HomeRedirect() {
   const { hasPermission } = useContext(PermissionContext);
 
@@ -57,7 +58,7 @@ function HomeRedirect() {
   if (hasPermission('NEWS', 'VIEW')) return <Navigate to="/news" replace />;
   if (hasPermission('DOCUMENTS', 'VIEW')) return <Navigate to="/documents" replace />;
   if (hasPermission('PUSH', 'VIEW')) return <Navigate to="/push" replace />;
-  if (hasPermission('ADMIN', 'MANAGE_EMPLOYEES')) return <Navigate to="/employees" replace />;
+  if (hasPermission('ADMIN', 'MANAGE_EMPLOYEES')) return <Navigate to="/users" replace />;
   if (hasPermission('ADMIN', 'MANAGE_USERS')) return <Navigate to="/users" replace />;
   if (hasPermission('ADMIN', 'MANAGE_ROLES')) return <Navigate to="/roles" replace />;
   if (hasPermission('ADMIN', 'MANAGE_OFFICE_LOCATIONS')) return <Navigate to="/organisation" replace />;
@@ -95,11 +96,11 @@ function App() {
                 <Route path="/users/:id" element={<UserDetailPage />} />
                 <Route path="/users/:id/edit" element={<UserEditPage />} />
 
-                {/* Employees */}
-                <Route path="/employees" element={<EmployeesListPage />} />
-                <Route path="/employees/create" element={<EmployeeCreatePage />} />
-                <Route path="/employees/:id" element={<EmployeeDetailPage />} />
-                <Route path="/employees/:id/edit" element={<EmployeeEditPage />} />
+                {/* Legacy employee routes — redirect to users */}
+                <Route path="/employees" element={<Navigate to="/users" replace />} />
+                <Route path="/employees/create" element={<Navigate to="/users/create" replace />} />
+                <Route path="/employees/:id/edit" element={<EmployeeIdRedirect suffix="/edit" />} />
+                <Route path="/employees/:id" element={<EmployeeIdRedirect />} />
 
                 {/* Role Categories */}
                 <Route path="/role-categories" element={<RoleCategoriesPage />} />

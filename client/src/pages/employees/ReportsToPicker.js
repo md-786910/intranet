@@ -1,8 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { employeeService } from '../../services/employeeService';
 
+function getOrgPath(user) {
+  const primary = user.departmentMemberships?.find((m) => m.is_primary) || user.departmentMemberships?.[0];
+  if (!primary) return null;
+  const parts = [
+    primary.department?.vertical?.officeLocation?.name,
+    primary.department?.vertical?.name,
+    primary.department?.name,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' › ') : null;
+}
+
 export default function ReportsToPicker({
-  label, value, onChange, helpText, excludeUserId,
+  label, value, onChange, helpText, excludeUserId, maxRoleRank,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -27,7 +38,9 @@ export default function ReportsToPicker({
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const res = await employeeService.listEmployees({ search: trimmed, limit: 20 });
+        const params = { search: trimmed, limit: 20 };
+        if (maxRoleRank) params.max_role_rank = maxRoleRank;
+        const res = await employeeService.listEmployees(params);
         if (cancelled) return;
         const list = res.data?.data?.employees || [];
         const filtered = excludeUserId ? list.filter((u) => u.user_id !== excludeUserId) : list;
@@ -39,7 +52,7 @@ export default function ReportsToPicker({
       }
     }, 200);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [query, open, excludeUserId]);
+  }, [query, open, excludeUserId, maxRoleRank]);
 
   const select = (user) => {
     onChange({
@@ -110,24 +123,36 @@ export default function ReportsToPicker({
             {!loading && results.length === 0 && (
               <div className="px-3 py-3 text-xs text-gray-500">No matches.</div>
             )}
-            {!loading && results.map((u) => (
-              <button
-                type="button"
-                key={u.user_id}
-                onClick={() => select(u)}
-                className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-b-0"
-              >
-                <div className="text-sm font-medium text-gray-900">{u.first_name} {u.last_name}</div>
-                <div className="text-xs text-gray-500">
-                  {u.email}
-                  {u.profile?.roleCategory?.name && (
-                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[10px] font-medium">
-                      {u.profile.roleCategory.name}
-                    </span>
-                  )}
-                </div>
-              </button>
-            ))}
+            {!loading && results.map((u) => {
+              const orgPath = getOrgPath(u);
+              const initials = `${u.first_name?.[0] || ''}${u.last_name?.[0] || ''}`.toUpperCase();
+              return (
+                <button
+                  type="button"
+                  key={u.user_id}
+                  onClick={() => select(u)}
+                  className="w-full text-left px-3 py-2.5 hover:bg-primary-50/60 border-b border-gray-100 last:border-b-0 flex items-center gap-3 transition-colors"
+                >
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-semibold">
+                    {initials}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-900 truncate">{u.first_name} {u.last_name}</span>
+                      {u.profile?.roleCategory?.name && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-50 text-violet-700 text-[10px] font-semibold border border-violet-100 flex-shrink-0">
+                          {u.profile.roleCategory.name}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-400 truncate mt-0.5">{u.email}</div>
+                    {orgPath && (
+                      <div className="text-[11px] text-primary-500 mt-0.5 truncate">{orgPath}</div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

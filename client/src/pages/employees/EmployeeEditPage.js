@@ -42,6 +42,7 @@ export default function EmployeeEditPage() {
   const [form, setForm] = useState({
     first_name: '', last_name: '', phone: '', status: 'ACTIVE',
     job_title: '', employee_id: '', role_category_id: '',
+    date_of_joining: '', location: '', bio: '',
   });
   const [reportsTo, setReportsTo] = useState(null);
   const [roleCategories, setRoleCategories] = useState([]);
@@ -76,6 +77,9 @@ export default function EmployeeEditPage() {
           phone: e.phone || '', status: e.status === 'INVITED' ? 'INVITED' : (e.status || 'ACTIVE'),
           job_title: e.profile?.job_title || '', employee_id: e.profile?.employee_id || '',
           role_category_id: e.profile?.role_category_id ? String(e.profile.role_category_id) : '',
+          date_of_joining: e.profile?.date_of_joining ? e.profile.date_of_joining.slice(0, 10) : '',
+          location: e.profile?.location || '',
+          bio: e.profile?.bio || '',
         });
         if (e.profile?.manager) {
           setReportsTo({
@@ -102,6 +106,11 @@ export default function EmployeeEditPage() {
     () => roleCategories.map((c) => ({ value: String(c.id), label: c.name })),
     [roleCategories],
   );
+
+  const currentRoleCategoryRank = useMemo(() => {
+    if (!form.role_category_id) return null;
+    return roleCategories.find((c) => String(c.id) === form.role_category_id)?.rank || null;
+  }, [form.role_category_id, roleCategories]);
 
   const departmentScopes = useMemo(
     () => scopes.filter((scope) => scope.scope_type === 'DEPARTMENT'),
@@ -155,6 +164,9 @@ export default function EmployeeEditPage() {
         employee_id: form.employee_id || undefined,
         role_category_id: form.role_category_id ? Number(form.role_category_id) : null,
         reports_to_user_id: reportsTo ? reportsTo.user_id : null,
+        date_of_joining: form.date_of_joining || undefined,
+        location: form.location || undefined,
+        bio: form.bio || undefined,
         department_ids,
         primary_department_id: primaryDeptId ? Number(primaryDeptId) : department_ids[0],
         chat_blocked_user_ids: chatBlockedIds,
@@ -216,7 +228,25 @@ export default function EmployeeEditPage() {
                 value={reportsTo}
                 onChange={setReportsTo}
                 excludeUserId={Number(id)}
+                maxRoleRank={currentRoleCategoryRank}
                 helpText="Search by name or email."
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <Input label="Date of Joining" name="date_of_joining" type="date"
+                value={form.date_of_joining} onChange={handleChange} />
+              <Input label="Location" name="location" value={form.location} onChange={handleChange}
+                placeholder="e.g. New York Office" />
+            </div>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+              <textarea
+                name="bio"
+                value={form.bio}
+                onChange={handleChange}
+                rows={3}
+                placeholder="Short bio…"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
               />
             </div>
           </div>

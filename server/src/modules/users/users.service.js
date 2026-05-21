@@ -136,6 +136,48 @@ async function sendWelcomeEmailForNewUser({ newUser, plainPassword, rolesToAssig
   });
 }
 
+async function syncChatBlocks({ userId, blockedIds, actorUserId, transaction }) {
+  const { ChatBlock } = require('../../database/models');
+  const { Op } = require('sequelize');
+
+  const desired = Array.from(new Set((blockedIds || [])
+    .map(Number)
+    .filter((id) => Number.isInteger(id) && id > 0 && id !== Number(userId))));
+
+  const existing = await ChatBlock.findAll({
+    where: { user_id: userId },
+    attributes: ['blocked_user_id'],
+    transaction,
+  });
+  const existingIds = existing.map((row) => row.blocked_user_id);
+
+  const desiredSet = new Set(desired);
+  const existingSet = new Set(existingIds);
+
+  const toAdd = desired.filter((id) => !existingSet.has(id));
+  const toRemove = existingIds.filter((id) => !desiredSet.has(id));
+
+  for (const otherId of toAdd) {
+    // eslint-disable-next-line no-await-in-loop
+    await ChatBlock.bulkCreate([
+      { user_id: userId, blocked_user_id: otherId, created_by: actorUserId || null },
+      { user_id: otherId, blocked_user_id: userId, created_by: actorUserId || null },
+    ], { transaction, ignoreDuplicates: true });
+  }
+
+  if (toRemove.length > 0) {
+    await ChatBlock.destroy({
+      where: {
+        [Op.or]: [
+          { user_id: userId, blocked_user_id: toRemove },
+          { user_id: toRemove, blocked_user_id: userId },
+        ],
+      },
+      transaction,
+    });
+  }
+}
+
 function buildDepartmentPath(department) {
   if (!department) return null;
 
@@ -228,7 +270,10 @@ const usersService = {
         model: PersonProfile,
         as: 'profile',
         required: false,
-        include: [{ model: RoleCategory, as: 'roleCategory', attributes: ['id', 'name'] }],
+        include: [
+          { model: RoleCategory, as: 'roleCategory', attributes: ['id', 'name'] },
+          { model: UserAccount, as: 'manager', attributes: ['user_id', 'first_name', 'last_name', 'email'] },
+        ],
       },
       {
         model: DepartmentMembership,
@@ -297,6 +342,7 @@ const usersService = {
       UserPermission,
       ModuleAction,
       Module,
+      ChatBlock,
     } = require('../../database/models');
 
     const user = await UserAccount.findByPk(id, {
@@ -308,7 +354,7 @@ const usersService = {
           required: false,
           include: [
             { model: RoleCategory, as: 'roleCategory', attributes: ['id', 'name'] },
-            { model: UserAccount, as: 'manager', attributes: ['user_id', 'first_name', 'last_name'] },
+            { model: UserAccount, as: 'manager', attributes: ['user_id', 'first_name', 'last_name', 'email'] },
           ],
         },
         {
@@ -363,6 +409,12 @@ const usersService = {
               attributes: ['module_id', 'code', 'name'],
             }],
           }],
+        },
+        {
+          model: ChatBlock,
+          as: 'chatBlocks',
+          attributes: ['blocked_user_id'],
+          required: false,
         },
       ],
     });
@@ -435,6 +487,7 @@ const usersService = {
 
     const userData = user.toJSON();
     userData.departmentMemberships = existingMemberships;
+    userData.chat_blocked_user_ids = (userData.chatBlocks || []).map((b) => b.blocked_user_id);
     return userData;
   },
 
@@ -583,6 +636,15 @@ const usersService = {
         } else {
           await PersonProfile.create({ user_id: id, ...data.profile }, { transaction });
         }
+      }
+
+      if (Array.isArray(data.chat_blocked_user_ids)) {
+        await syncChatBlocks({
+          userId: Number(id),
+          blockedIds: data.chat_blocked_user_ids,
+          actorUserId,
+          transaction,
+        });
       }
 
       await auditService.log({

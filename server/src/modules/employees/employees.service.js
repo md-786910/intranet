@@ -267,6 +267,18 @@ const employeesService = {
       conditions.push(orgExists);
     }
 
+    if (query.max_role_rank) {
+      conditions.push(
+        '(NOT EXISTS (SELECT 1 FROM person_profile _pp'
+        + ' JOIN role_category _rc ON _rc.id = _pp.role_category_id'
+        + ' WHERE _pp.user_id = ua.user_id)'
+        + ' OR EXISTS (SELECT 1 FROM person_profile _pp'
+        + ' JOIN role_category _rc ON _rc.id = _pp.role_category_id'
+        + ' WHERE _pp.user_id = ua.user_id AND _rc.rank <= :maxRoleRank))',
+      );
+      replacements.maxRoleRank = Number(query.max_role_rank);
+    }
+
     const whereClause = conditions.join(' AND ');
 
     const [{ count }] = await sequelize.query(
@@ -539,8 +551,10 @@ const employeesService = {
       });
       await user.save({ transaction });
 
-      const profileFieldsTouched = ['job_title', 'employee_id', 'role_category_id', 'reports_to_user_id']
-        .some((key) => data[key] !== undefined);
+      const profileFieldsTouched = [
+        'job_title', 'employee_id', 'role_category_id', 'reports_to_user_id',
+        'date_of_joining', 'location', 'bio',
+      ].some((key) => data[key] !== undefined);
       if (profileFieldsTouched) {
         if (data.role_category_id !== undefined && data.role_category_id !== null) {
           await validateRoleCategoryExists(data.role_category_id);
@@ -554,6 +568,9 @@ const employeesService = {
         if (data.employee_id !== undefined) patch.employee_id = data.employee_id || null;
         if (data.role_category_id !== undefined) patch.role_category_id = data.role_category_id || null;
         if (data.reports_to_user_id !== undefined) patch.reports_to_user_id = data.reports_to_user_id || null;
+        if (data.date_of_joining !== undefined) patch.date_of_joining = data.date_of_joining || null;
+        if (data.location !== undefined) patch.location = data.location || null;
+        if (data.bio !== undefined) patch.bio = data.bio || null;
         if (profile) {
           await profile.update(patch, { transaction });
         } else {

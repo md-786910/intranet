@@ -88,12 +88,16 @@ const updateUserSchema = {
     status: Joi.string().valid('ACTIVE', 'INACTIVE', 'LOCKED').optional(),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
+    chat_blocked_user_ids: Joi.array().items(Joi.number().integer().positive()).optional(),
     profile: Joi.object({
       job_title: Joi.string().trim().max(255).optional().allow('', null),
       bio: Joi.string().trim().max(2000).optional().allow('', null),
       employee_id: Joi.string().trim().max(50).optional().allow('', null),
       date_of_birth: Joi.date().iso().optional().allow(null),
       date_of_joining: Joi.date().iso().optional().allow(null),
+      role_category_id: idPattern.optional().allow(null),
+      reports_to_user_id: idPattern.optional().allow(null),
+      location: Joi.string().trim().max(255).optional().allow('', null),
     }).optional(),
   }),
 };

@@ -11,6 +11,7 @@ const listEmployeesSchema = {
     office_location_id: idPattern.optional(),
     vertical_id: idPattern.optional(),
     department_id: idPattern.optional(),
+    max_role_rank: Joi.number().integer().min(1).optional(),
   }),
 };
 
@@ -52,6 +53,9 @@ const updateEmployeeSchema = {
     department_ids: Joi.array().items(idPattern).min(1).optional(),
     primary_department_id: idPattern.optional(),
     chat_blocked_user_ids: Joi.array().items(idPattern).optional(),
+    date_of_joining: Joi.date().iso().optional().allow(null),
+    location: Joi.string().trim().max(255).optional().allow('', null),
+    bio: Joi.string().trim().max(2000).optional().allow('', null),
   }),
 };
 

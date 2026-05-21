@@ -50,6 +50,11 @@ export default function EmployeeCreatePage() {
     [roleCategories],
   );
 
+  const currentRoleCategoryRank = useMemo(() => {
+    if (!form.role_category_id) return null;
+    return roleCategories.find((c) => String(c.id) === form.role_category_id)?.rank || null;
+  }, [form.role_category_id, roleCategories]);
+
   const departmentScopes = useMemo(
     () => scopes.filter((scope) => scope.scope_type === 'DEPARTMENT'),
     [scopes],
@@ -156,6 +161,7 @@ export default function EmployeeCreatePage() {
                 label="Reporting To"
                 value={reportsTo}
                 onChange={setReportsTo}
+                maxRoleRank={currentRoleCategoryRank}
                 helpText="Search by name or email."
               />
             </div>

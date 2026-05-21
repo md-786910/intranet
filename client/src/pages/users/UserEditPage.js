@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
@@ -101,6 +101,7 @@ export default function UserEditPage() {
   const [jobTitleId, setJobTitleId] = useState('');
   const [roleCategories, setRoleCategories] = useState([]);
   const [reportsTo, setReportsTo] = useState(null);
+  const jobTitleSynced = useRef(false);
 
   // Roles + modules
   const [allRoles, setAllRoles] = useState([]);
@@ -155,7 +156,8 @@ export default function UserEditPage() {
           bio: u.profile?.bio || '',
         });
         setJobTitleId('');
-        setReportsTo(u.profile?.reportsTo || null);
+        jobTitleSynced.current = false;
+        setReportsTo(u.profile?.manager || null);
       })
       .catch(() => addToast('Failed to load user', 'error'))
       .finally(() => setLoading(false));
@@ -169,6 +171,14 @@ export default function UserEditPage() {
     jobTitleService.list().then((res) => setJobTitles(res.data?.data || [])).catch(() => {});
     roleCategoryService.list().then((res) => setRoleCategories(res.data?.data || [])).catch(() => {});
   }, []);
+
+  // Pre-populate jobTitleId from saved job_title name once both user data and job titles list are ready
+  useEffect(() => {
+    if (jobTitleSynced.current || !form.job_title || jobTitles.length === 0) return;
+    const match = jobTitles.find((t) => t.name === form.job_title);
+    setJobTitleId(match ? String(match.id) : '');
+    jobTitleSynced.current = true;
+  }, [form.job_title, jobTitles]);
 
   // ── Profile handlers ──
   const handleChange = (e) => {
@@ -191,13 +201,13 @@ export default function UserEditPage() {
         first_name: form.first_name, last_name: form.last_name,
         phone: form.phone || undefined, status: form.status,
         profile: {
-          job_title: resolvedJobTitle,
-          employee_id: form.employee_id || undefined,
-          role_category_id: form.role_category_id ? Number(form.role_category_id) : undefined,
-          date_of_joining: form.date_of_joining || undefined,
-          location: form.location || undefined,
-          bio: form.bio || undefined,
-          reports_to_user_id: reportsTo?.user_id || undefined,
+          job_title: resolvedJobTitle || null,
+          employee_id: form.employee_id || null,
+          role_category_id: form.role_category_id ? Number(form.role_category_id) : null,
+          date_of_joining: form.date_of_joining || null,
+          location: form.location || null,
+          bio: form.bio || null,
+          reports_to_user_id: reportsTo?.user_id || null,
         },
       });
       addToast('Profile updated', 'success');
@@ -390,6 +400,11 @@ export default function UserEditPage() {
 
   const directPermCount = user?.directPermissions?.length || 0;
 
+  const currentRoleCategoryRank = useMemo(() => {
+    if (!form.role_category_id) return null;
+    return roleCategories.find((c) => String(c.id) === form.role_category_id)?.rank || null;
+  }, [form.role_category_id, roleCategories]);
+
   // Org tree cascading selects for department assignment
   const orgNode = orgTree[0] || null;
   const deptOfficeOptions = useMemo(
@@ -490,7 +505,7 @@ export default function UserEditPage() {
                 </div>
                 <div className="mt-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Reports To</label>
-                  <ReportsToPicker value={reportsTo} onChange={setReportsTo} excludeUserId={id} />
+                  <ReportsToPicker value={reportsTo} onChange={setReportsTo} excludeUserId={id} maxRoleRank={currentRoleCategoryRank} />
                 </div>
                 <div className="grid grid-cols-2 gap-4 mt-4">
                   <Input label="Location" name="location" value={form.location} onChange={handleChange}

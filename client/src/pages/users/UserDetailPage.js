@@ -11,6 +11,7 @@ import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PermissionMatrix from '../../components/roles/PermissionMatrix';
 import { getPermLabel } from '../../components/roles/PermissionMatrix';
 import { userService } from '../../services/userService';
+import { employeeService } from '../../services/employeeService';
 import { roleService } from '../../services/roleService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate, formatDateTime, formatRelativeTime } from '../../utils/formatters';
@@ -136,6 +137,7 @@ export default function UserDetailPage() {
   const [tab, setTab] = useState('profile');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [resending, setResending] = useState(false);
 
   // Roles & modules
   const [allRoles, setAllRoles] = useState([]);
@@ -171,6 +173,16 @@ export default function UserDetailPage() {
     roleService.getRoles({ limit: 100 }).then((res) => setAllRoles(res.data?.data?.roles || [])).catch(() => {});
     roleService.getModules().then((res) => setModules(res.data?.data || [])).catch(() => {});
   }, []);
+
+  const handleResendInvite = async () => {
+    setResending(true);
+    try {
+      await employeeService.resendInvite(id);
+      addToast('Invitation resent', 'success');
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to resend invitation', 'error');
+    } finally { setResending(false); }
+  };
 
   const handleDeactivate = async () => {
     setDeleting(true);
@@ -306,6 +318,11 @@ export default function UserDetailPage() {
         actions={
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={() => navigate(`/users/${id}/edit`)}>Edit</Button>
+            {user.status === 'INVITED' && (
+              <Button variant="secondary" size="sm" onClick={handleResendInvite} loading={resending}>
+                Resend Invite
+              </Button>
+            )}
             {user.status === 'ACTIVE' && (
               <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>Deactivate</Button>
             )}
@@ -355,7 +372,6 @@ export default function UserDetailPage() {
                 <section className="rounded-lg border border-gray-200 bg-gray-50/40 px-5 py-3">
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Personal info</h3>
                   <dl className="divide-y divide-gray-100">
-                    <Field label="Job title" value={user.profile?.job_title} />
                     <Field label="Employee ID" value={user.profile?.employee_id} />
                     <Field label="Phone" value={user.phone} />
                     <Field label="Location" value={user.profile?.location} />
@@ -371,18 +387,80 @@ export default function UserDetailPage() {
                     <Field
                       label="Role category"
                       value={user.profile?.roleCategory?.name
-                        ? <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-primary-50 text-primary-700 text-xs font-medium">{user.profile.roleCategory.name}</span>
+                        ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100 text-xs font-semibold">
+                            {user.profile.roleCategory.name}
+                          </span>
+                        )
                         : null}
                     />
-                    <Field
-                      label="Reports to"
-                      value={user.profile?.manager
-                        ? <a href={`/users/${user.profile.manager.user_id}`} className="text-primary-600 hover:underline font-medium">{user.profile.manager.first_name} {user.profile.manager.last_name}</a>
-                        : null}
-                    />
+                    <Field label="Job title" value={user.profile?.job_title} />
                   </dl>
-                </section>
 
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <dt className="text-xs uppercase tracking-wide text-gray-500 mb-2">Reports to</dt>
+                    {user.profile?.manager ? (
+                      <a
+                        href={`/users/${user.profile.manager.user_id}`}
+                        className="group flex items-center gap-3 p-2.5 rounded-lg hover:bg-white border border-transparent hover:border-gray-200 transition-all -mx-1"
+                      >
+                        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-semibold">
+                          {initialsOf(user.profile.manager.first_name, user.profile.manager.last_name, user.profile.manager.email)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                            {user.profile.manager.first_name} {user.profile.manager.last_name}
+                          </div>
+                          <div className="text-xs text-gray-400 truncate">{user.profile.manager.email}</div>
+                        </div>
+                        <svg className="w-4 h-4 text-gray-300 group-hover:text-primary-400 ml-auto flex-shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
+                      </a>
+                    ) : (
+                      <dd className="text-sm text-gray-400 italic font-normal">Not set</dd>
+                    )}
+                  </div>
+                </section>
+              </div>
+
+              {/* Org hierarchy — full width */}
+              {user.departmentMemberships?.length > 0 && (
+                <section className="rounded-lg border border-gray-200 bg-gray-50/40 px-5 py-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Organisation</h3>
+                  <div className="space-y-2">
+                    {user.departmentMemberships.map((m) => {
+                      const parts = [
+                        m.department?.vertical?.officeLocation?.name,
+                        m.department?.vertical?.name,
+                        m.department?.name,
+                      ].filter(Boolean);
+                      return (
+                        <div
+                          key={m.membership_id || m.department_id}
+                          className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-gray-100"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" />
+                            </svg>
+                            <span className="text-sm text-gray-700 truncate">
+                              {parts.length > 0 ? parts.join(' › ') : (m.department?.name || 'Department')}
+                            </span>
+                          </div>
+                          {m.is_primary && (
+                            <span className="ml-3 flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-100">
+                              Primary
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Account card */}
                 <section className="rounded-lg border border-gray-200 bg-gray-50/40 px-5 py-3">
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Account</h3>

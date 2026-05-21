@@ -5,10 +5,12 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
+import ChatAccessSelector from '../../components/common/ChatAccessSelector';
 import PermissionMatrix from '../../components/roles/PermissionMatrix';
 import { getPermLabel } from '../../components/roles/PermissionMatrix';
 import ReportsToPicker from '../employees/ReportsToPicker';
 import { userService } from '../../services/userService';
+import { employeeService } from '../../services/employeeService';
 import { roleService } from '../../services/roleService';
 import { roleCategoryService } from '../../services/roleCategoryService';
 import { jobTitleService } from '../../services/jobTitleService';
@@ -117,12 +119,29 @@ export default function UserCreatePage() {
   const [permScopes, setPermScopes] = useState([]);
   const [showPermForm, setShowPermForm] = useState(false);
 
+  // Invite mode (employee-style email invitation)
+  const [inviteMode, setInviteMode] = useState(false);
+  const [deptScopes, setDeptScopes] = useState([]);
+  const [primaryDeptId, setPrimaryDeptId] = useState('');
+  const [chatCandidates, setChatCandidates] = useState([]);
+  const [chatCandidatesLoading, setChatCandidatesLoading] = useState(false);
+  const [chatBlockedIds, setChatBlockedIds] = useState([]);
+
   useEffect(() => {
     roleService.getRoles({ limit: 100 }).then((res) => setAllRoles(res.data?.data?.roles || [])).catch(() => {});
     roleService.getModules().then((res) => setModules(res.data?.data || [])).catch(() => {});
     jobTitleService.list().then((res) => setJobTitles(res.data?.data || [])).catch(() => {});
     roleCategoryService.list().then((res) => setRoleCategories(res.data?.data || [])).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!inviteMode) return;
+    setChatCandidatesLoading(true);
+    employeeService.listChatCandidates()
+      .then((res) => setChatCandidates(res.data?.data || []))
+      .catch(() => setChatCandidates([]))
+      .finally(() => setChatCandidatesLoading(false));
+  }, [inviteMode]);
 
   // ── Derived ──
   const roleOptions = useMemo(() => {
@@ -147,6 +166,23 @@ export default function UserCreatePage() {
     return mod.actions
       .map((a) => { const { label } = getPermLabel(mod.code, a.action_code); return { value: String(a.module_action_id), label }; });
   }, [permModuleId, modules]);
+
+  const currentRoleCategoryRank = useMemo(() => {
+    if (!roleCategoryId) return null;
+    return roleCategories.find((c) => String(c.id) === roleCategoryId)?.rank || null;
+  }, [roleCategoryId, roleCategories]);
+
+  const deptScopesDept = useMemo(
+    () => deptScopes.filter((s) => s.scope_type === 'DEPARTMENT'),
+    [deptScopes],
+  );
+  const deptOptions = useMemo(
+    () => deptScopesDept.map((s) => ({
+      value: String(s.scope_id),
+      label: s.scope_label?.replace(/^Department:\s*/, '') || String(s.scope_id),
+    })),
+    [deptScopesDept],
+  );
 
   // ── Handlers ──
   const handleChange = (e) => {
@@ -228,58 +264,84 @@ export default function UserCreatePage() {
   const handleSave = async () => {
     const newErrors = {};
     if (!form.email) newErrors.email = 'Email is required';
-    if (!form.password) newErrors.password = 'Password is required';
     if (!form.first_name) newErrors.first_name = 'First name is required';
     if (!form.last_name) newErrors.last_name = 'Last name is required';
-    if (!currentOrganisationId) newErrors.organisation = 'Active organisation is required';
+    if (!inviteMode && !form.password) newErrors.password = 'Password is required';
+    if (inviteMode && deptScopesDept.length === 0) newErrors.deptScopes = 'Select at least one department.';
+    if (!inviteMode && !currentOrganisationId) newErrors.organisation = 'Active organisation is required';
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
     setSaving(true);
     try {
-      const draftRoles = buildDraftRoleAssignments(allRoles, pickerRoleId, pickerScopes, currentOrganisationId);
-      const finalRoles = [...assignedRoles];
-      draftRoles.forEach((assignment) => {
-        if (!finalRoles.some((existing) => isSameRoleAssignment(existing, assignment))) {
-          finalRoles.push(assignment);
-        }
-      });
+      const resolvedJobTitle = jobTitleId
+        ? (jobTitles.find((t) => t.id === Number(jobTitleId))?.name || undefined)
+        : undefined;
 
-      const draftPermissions = buildDraftPermissions(modules, permModuleId, permActionId, permScopes, currentOrganisationId);
-      const finalPermissions = [...extraPerms];
-      draftPermissions.forEach((permission) => {
-        if (!finalPermissions.some((existing) => isSamePermissionAssignment(existing, permission))) {
-          finalPermissions.push(permission);
-        }
-      });
-
-      await userService.createUser({
-        email: form.email,
-        password: form.password,
-        first_name: form.first_name,
-        last_name: form.last_name,
-        phone: form.phone || undefined,
-        scope_type: 'ORGANISATION',
-        scope_id: currentOrganisationId,
-        profile: {
-          job_title: jobTitleId ? jobTitles.find((t) => t.id === Number(jobTitleId))?.name || undefined : undefined,
+      if (inviteMode) {
+        const department_ids = deptScopesDept.map((s) => Number(s.scope_id));
+        await employeeService.createEmployee({
+          email: form.email,
+          first_name: form.first_name,
+          last_name: form.last_name,
+          phone: form.phone || undefined,
+          job_title: resolvedJobTitle || form.job_title || undefined,
           employee_id: form.employee_id || undefined,
-          date_of_joining: form.date_of_joining || undefined,
-          bio: form.bio || undefined,
-          location: form.location || undefined,
           role_category_id: roleCategoryId ? Number(roleCategoryId) : undefined,
           reports_to_user_id: reportsTo?.user_id || undefined,
-        },
-        initial_roles: finalRoles.length > 0
-          ? finalRoles.map((a) => ({ role_id: a.role_id, scope_type: a.scope_type, scope_id: a.scope_id }))
-          : undefined,
-        initial_permissions: finalPermissions.length > 0
-          ? finalPermissions.map((p) => ({ module_action_id: p.module_action_id, scope_type: p.scope_type, scope_id: p.scope_id }))
-          : undefined,
-      });
-      addToast('User created successfully', 'success');
+          date_of_joining: form.date_of_joining || undefined,
+          location: form.location || undefined,
+          bio: form.bio || undefined,
+          department_ids,
+          primary_department_id: primaryDeptId ? Number(primaryDeptId) : department_ids[0],
+          chat_blocked_user_ids: chatBlockedIds,
+        });
+        addToast(`Invitation sent to ${form.email}`, 'success');
+      } else {
+        const draftRoles = buildDraftRoleAssignments(allRoles, pickerRoleId, pickerScopes, currentOrganisationId);
+        const finalRoles = [...assignedRoles];
+        draftRoles.forEach((assignment) => {
+          if (!finalRoles.some((existing) => isSameRoleAssignment(existing, assignment))) {
+            finalRoles.push(assignment);
+          }
+        });
+
+        const draftPermissions = buildDraftPermissions(modules, permModuleId, permActionId, permScopes, currentOrganisationId);
+        const finalPermissions = [...extraPerms];
+        draftPermissions.forEach((permission) => {
+          if (!finalPermissions.some((existing) => isSamePermissionAssignment(existing, permission))) {
+            finalPermissions.push(permission);
+          }
+        });
+
+        await userService.createUser({
+          email: form.email,
+          password: form.password,
+          first_name: form.first_name,
+          last_name: form.last_name,
+          phone: form.phone || undefined,
+          scope_type: 'ORGANISATION',
+          scope_id: currentOrganisationId,
+          profile: {
+            job_title: resolvedJobTitle || undefined,
+            employee_id: form.employee_id || undefined,
+            date_of_joining: form.date_of_joining || undefined,
+            bio: form.bio || undefined,
+            location: form.location || undefined,
+            role_category_id: roleCategoryId ? Number(roleCategoryId) : undefined,
+            reports_to_user_id: reportsTo?.user_id || undefined,
+          },
+          initial_roles: finalRoles.length > 0
+            ? finalRoles.map((a) => ({ role_id: a.role_id, scope_type: a.scope_type, scope_id: a.scope_id }))
+            : undefined,
+          initial_permissions: finalPermissions.length > 0
+            ? finalPermissions.map((p) => ({ module_action_id: p.module_action_id, scope_type: p.scope_type, scope_id: p.scope_id }))
+            : undefined,
+        });
+        addToast('User created successfully', 'success');
+      }
       navigate('/users');
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to create user'), 'error');
+      addToast(getErrorMessage(err, 'Failed'), 'error');
       const validationErrors = extractValidationErrors(err);
       if (Object.keys(validationErrors).length > 0) setErrors(validationErrors);
     } finally {
@@ -293,6 +355,34 @@ export default function UserCreatePage() {
 
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="p-6 space-y-5">
+          {/* ── Mode toggle ── */}
+          <div className="flex items-center gap-4 p-4 rounded-lg border border-gray-200 bg-gray-50/50">
+            <button
+              type="button"
+              onClick={() => { setInviteMode(false); setErrors({}); }}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all border ${
+                !inviteMode
+                  ? 'bg-white border-primary-500 text-primary-700 shadow-sm'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <div className="font-semibold">Create with password</div>
+              <div className="text-xs font-normal mt-0.5 opacity-75">Admin sets credentials directly</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setInviteMode(true); setErrors({}); }}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all border ${
+                inviteMode
+                  ? 'bg-white border-primary-500 text-primary-700 shadow-sm'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <div className="font-semibold">Invite via email</div>
+              <div className="text-xs font-normal mt-0.5 opacity-75">User receives an invitation link</div>
+            </button>
+          </div>
+
           {/* ── Account ── */}
           <div className="grid grid-cols-2 gap-4">
             <Input label="First Name" name="first_name" required value={form.first_name}
@@ -302,11 +392,15 @@ export default function UserCreatePage() {
           </div>
           <Input label="Email" name="email" type="email" required value={form.email}
             error={errors.email} onChange={handleChange} />
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Password" name="password" type="password" required value={form.password}
-              error={errors.password} onChange={handleChange} helpText="Minimum 6 characters" />
+          {!inviteMode ? (
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="Password" name="password" type="password" required value={form.password}
+                error={errors.password} onChange={handleChange} helpText="Minimum 6 characters" />
+              <Input label="Phone" name="phone" value={form.phone} onChange={handleChange} />
+            </div>
+          ) : (
             <Input label="Phone" name="phone" value={form.phone} onChange={handleChange} />
-          </div>
+          )}
 
           {/* ── Profile ── */}
           <div className="border-t border-gray-100 pt-5">
@@ -342,7 +436,7 @@ export default function UserCreatePage() {
             </div>
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Reports To</label>
-              <ReportsToPicker value={reportsTo} onChange={setReportsTo} />
+              <ReportsToPicker value={reportsTo} onChange={setReportsTo} maxRoleRank={currentRoleCategoryRank} />
             </div>
             <div className="grid grid-cols-2 gap-4 mt-4">
               <Input label="Location" name="location" value={form.location} onChange={handleChange}
@@ -361,8 +455,46 @@ export default function UserCreatePage() {
             </div>
           </div>
 
+          {/* ── Invite mode: Department + Chat ── */}
+          {inviteMode && (
+            <>
+              <div className="border-t border-gray-100 pt-5">
+                <h3 className="text-sm font-medium text-gray-700 mb-1">
+                  Organisation Assignment <span className="text-red-500">*</span>
+                </h3>
+                <p className="text-xs text-gray-500 mb-3">Select the department(s) this employee belongs to.</p>
+                <HierarchyScopeSelector value={deptScopes} onChange={setDeptScopes} />
+                {errors.deptScopes && <p className="mt-2 text-xs text-red-600">{errors.deptScopes}</p>}
+                {deptOptions.length > 1 && (
+                  <div className="mt-4">
+                    <Select
+                      label="Primary Department"
+                      name="primary_dept"
+                      value={primaryDeptId}
+                      onChange={(e) => setPrimaryDeptId(e.target.value)}
+                      options={deptOptions}
+                      placeholder="First selected (default)"
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="border-t border-gray-100 pt-5">
+                <h3 className="text-sm font-medium text-gray-700 mb-1">Chat access</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  All active colleagues are reachable by default. Uncheck anyone this employee should NOT be able to find in chat.
+                </p>
+                <ChatAccessSelector
+                  candidates={chatCandidates}
+                  value={chatBlockedIds}
+                  onChange={setChatBlockedIds}
+                  loading={chatCandidatesLoading}
+                />
+              </div>
+            </>
+          )}
+
           {/* ── Roles ── */}
-          <div className="border-t border-gray-100 pt-5">
+          {!inviteMode && <div className="border-t border-gray-100 pt-5">
             <h3 className="text-sm font-medium text-gray-700 mb-3">Roles</h3>
 
             {assignedRoles.length > 0 && (
@@ -423,10 +555,10 @@ export default function UserCreatePage() {
                 )}
               </>
             )}
-          </div>
+          </div>}
 
           {/* ── Extra Permissions ── */}
-          <div className="border-t border-gray-100 pt-5">
+          {!inviteMode && <div className="border-t border-gray-100 pt-5">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h3 className="text-sm font-medium text-gray-700">Extra Permissions</h3>
@@ -481,13 +613,15 @@ export default function UserCreatePage() {
                 ))}
               </div>
             )}
-          </div>
+          </div>}
         </div>
 
         {/* ── Footer ── */}
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50/50 rounded-b-xl">
           <Button variant="secondary" onClick={() => navigate('/users')}>Cancel</Button>
-          <Button onClick={handleSave} loading={saving}>Create User</Button>
+          <Button onClick={handleSave} loading={saving}>
+            {inviteMode ? 'Send Invitation' : 'Create User'}
+          </Button>
         </div>
       </div>
     </div>
