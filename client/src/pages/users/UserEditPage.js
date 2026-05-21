@@ -8,8 +8,11 @@ import Badge from '../../components/common/Badge';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
 import PermissionMatrix from '../../components/roles/PermissionMatrix';
 import { getPermLabel } from '../../components/roles/PermissionMatrix';
+import ReportsToPicker from '../employees/ReportsToPicker';
 import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
+import { roleCategoryService } from '../../services/roleCategoryService';
+import { jobTitleService } from '../../services/jobTitleService';
 import { useToast } from '../../hooks/useToast';
 import { useOrgTree } from '../../hooks/useOrgTree';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
@@ -87,10 +90,17 @@ export default function UserEditPage() {
   // Profile form
   const [form, setForm] = useState({
     first_name: '', last_name: '', phone: '', status: 'ACTIVE',
-    job_title: '', employee_id: '',
+    job_title: '', employee_id: '', role_category_id: '',
+    date_of_joining: '', location: '', bio: '',
   });
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Profile extras
+  const [jobTitles, setJobTitles] = useState([]);
+  const [jobTitleId, setJobTitleId] = useState('');
+  const [roleCategories, setRoleCategories] = useState([]);
+  const [reportsTo, setReportsTo] = useState(null);
 
   // Roles + modules
   const [allRoles, setAllRoles] = useState([]);
@@ -112,6 +122,14 @@ export default function UserEditPage() {
   const [editScopes, setEditScopes] = useState([]);
   const [savingScope, setSavingScope] = useState(false);
 
+  // Department direct assignment
+  const [deptOfficeId, setDeptOfficeId] = useState('');
+  const [deptVerticalId, setDeptVerticalId] = useState('');
+  const [deptDeptId, setDeptDeptId] = useState('');
+  const [deptIsPrimary, setDeptIsPrimary] = useState(false);
+  const [deptAdding, setDeptAdding] = useState(false);
+  const [deptRemoving, setDeptRemoving] = useState(null);
+
   // Direct permissions — same multi-scope shape as roles.
   const [showPermForm, setShowPermForm] = useState(false);
   const [permModuleId, setPermModuleId] = useState('');
@@ -131,7 +149,13 @@ export default function UserEditPage() {
           first_name: u.first_name || '', last_name: u.last_name || '',
           phone: u.phone || '', status: u.status || 'ACTIVE',
           job_title: u.profile?.job_title || '', employee_id: u.profile?.employee_id || '',
+          role_category_id: u.profile?.role_category_id ? String(u.profile.role_category_id) : '',
+          date_of_joining: u.profile?.date_of_joining?.slice(0, 10) || '',
+          location: u.profile?.location || '',
+          bio: u.profile?.bio || '',
         });
+        setJobTitleId('');
+        setReportsTo(u.profile?.reportsTo || null);
       })
       .catch(() => addToast('Failed to load user', 'error'))
       .finally(() => setLoading(false));
@@ -142,6 +166,8 @@ export default function UserEditPage() {
   useEffect(() => {
     roleService.getRoles({ limit: 100 }).then((res) => setAllRoles(res.data?.data?.roles || [])).catch(() => {});
     roleService.getModules().then((res) => setModules(res.data?.data || [])).catch(() => {});
+    jobTitleService.list().then((res) => setJobTitles(res.data?.data || [])).catch(() => {});
+    roleCategoryService.list().then((res) => setRoleCategories(res.data?.data || [])).catch(() => {});
   }, []);
 
   // ── Profile handlers ──
@@ -158,10 +184,21 @@ export default function UserEditPage() {
 
     setSaving(true);
     try {
+      const resolvedJobTitle = jobTitleId
+        ? (jobTitles.find((t) => String(t.id) === jobTitleId)?.name || form.job_title || undefined)
+        : (form.job_title || undefined);
       await userService.updateUser(id, {
         first_name: form.first_name, last_name: form.last_name,
         phone: form.phone || undefined, status: form.status,
-        profile: { job_title: form.job_title || undefined, employee_id: form.employee_id || undefined },
+        profile: {
+          job_title: resolvedJobTitle,
+          employee_id: form.employee_id || undefined,
+          role_category_id: form.role_category_id ? Number(form.role_category_id) : undefined,
+          date_of_joining: form.date_of_joining || undefined,
+          location: form.location || undefined,
+          bio: form.bio || undefined,
+          reports_to_user_id: reportsTo?.user_id || undefined,
+        },
       });
       addToast('Profile updated', 'success');
       fetchUser();
@@ -306,6 +343,31 @@ export default function UserEditPage() {
     finally { setRemovingPerm(null); }
   };
 
+  // ── Department handlers ──
+  const handleAddDepartment = async () => {
+    if (!deptDeptId) return;
+    setDeptAdding(true);
+    try {
+      await userService.addDepartment(id, { department_id: Number(deptDeptId), is_primary: deptIsPrimary });
+      addToast('Department added', 'success');
+      fetchUser();
+      setDeptOfficeId(''); setDeptVerticalId(''); setDeptDeptId(''); setDeptIsPrimary(false);
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to add department', 'error');
+    } finally { setDeptAdding(false); }
+  };
+
+  const handleRemoveDepartment = async (deptId) => {
+    setDeptRemoving(deptId);
+    try {
+      await userService.removeDepartment(id, deptId);
+      addToast('Removed from department', 'success');
+      fetchUser();
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to remove department', 'error');
+    } finally { setDeptRemoving(null); }
+  };
+
   // ── Derived ──
   const assignableRoleOptions = useMemo(() => {
     const assigned = new Set((user?.roleAssignments || []).map((a) => a.role_id || a.role?.role_id));
@@ -327,6 +389,24 @@ export default function UserEditPage() {
   }, [permModuleId, modules, user?.directPermissions]);
 
   const directPermCount = user?.directPermissions?.length || 0;
+
+  // Org tree cascading selects for department assignment
+  const orgNode = orgTree[0] || null;
+  const deptOfficeOptions = useMemo(
+    () => (orgNode?.children || []).map((o) => ({ value: String(o.id), label: o.name })),
+    [orgNode],
+  );
+  const deptVerticalOptions = useMemo(() => {
+    if (!deptOfficeId) return [];
+    const office = (orgNode?.children || []).find((o) => String(o.id) === deptOfficeId);
+    return (office?.children || []).map((v) => ({ value: String(v.id), label: v.name }));
+  }, [orgNode, deptOfficeId]);
+  const deptDeptOptions = useMemo(() => {
+    if (!deptVerticalId) return [];
+    const office = (orgNode?.children || []).find((o) => String(o.id) === deptOfficeId);
+    const vertical = (office?.children || []).find((v) => String(v.id) === deptVerticalId);
+    return (vertical?.children || []).map((d) => ({ value: String(d.id), label: d.name }));
+  }, [orgNode, deptOfficeId, deptVerticalId]);
 
   if (loading) return <div className="animate-pulse h-64 bg-gray-100 rounded-xl" />;
   if (!user) return <div className="text-center py-12 text-gray-500">User not found</div>;
@@ -380,10 +460,52 @@ export default function UserEditPage() {
               <div className="border-t border-gray-100 pt-5">
                 <h3 className="text-sm font-medium text-gray-700 mb-3">Profile</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <Input label="Job Title" name="job_title" value={form.job_title} onChange={handleChange}
-                    placeholder="e.g. Senior Engineer" />
+                  {jobTitles.length > 0 ? (
+                    <Select
+                      label="Job Title"
+                      name="job_title_id"
+                      value={jobTitleId}
+                      onChange={(e) => setJobTitleId(e.target.value)}
+                      options={jobTitles.map((t) => ({ value: String(t.id), label: t.name }))}
+                      placeholder="Select a job title…"
+                    />
+                  ) : (
+                    <Input label="Job Title" name="job_title" value={form.job_title} onChange={handleChange}
+                      placeholder="e.g. Senior Engineer" />
+                  )}
                   <Input label="Employee ID" name="employee_id" value={form.employee_id} onChange={handleChange}
                     placeholder="e.g. EMP-00123" />
+                </div>
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <Select
+                    label="Role Category"
+                    name="role_category_id"
+                    value={form.role_category_id}
+                    onChange={handleChange}
+                    options={roleCategories.map((c) => ({ value: String(c.id), label: c.name }))}
+                    placeholder="Select role category…"
+                  />
+                  <Input label="Date of Joining" name="date_of_joining" type="date"
+                    value={form.date_of_joining} onChange={handleChange} />
+                </div>
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Reports To</label>
+                  <ReportsToPicker value={reportsTo} onChange={setReportsTo} excludeUserId={id} />
+                </div>
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <Input label="Location" name="location" value={form.location} onChange={handleChange}
+                    placeholder="e.g. New York Office" />
+                </div>
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+                  <textarea
+                    name="bio"
+                    value={form.bio}
+                    onChange={handleChange}
+                    rows={3}
+                    placeholder="Short bio…"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                  />
                 </div>
               </div>
 
@@ -614,17 +736,10 @@ export default function UserEditPage() {
 
           {/* ═══ DEPARTMENTS TAB ═══ */}
           {tab === 'departments' && (
-            <div className="space-y-3">
-              <p className="text-xs text-gray-500">
-                Departments are derived from role assignments at the Department scope.
-                To add or remove a department, go to the <button
-                  type="button"
-                  onClick={() => setTab('roles')}
-                  className="text-primary-600 hover:text-primary-700 underline font-medium"
-                >Roles tab</button> and assign a role at the desired department.
-              </p>
+            <div className="space-y-4">
+              {/* Existing memberships */}
               {(user.departmentMemberships || []).length === 0 ? (
-                <p className="text-sm text-gray-400 py-4 text-center">No department memberships.</p>
+                <p className="text-sm text-gray-400 py-4 text-center">No department memberships yet.</p>
               ) : (
                 <div className="space-y-2">
                   {user.departmentMemberships.map((m) => (
@@ -634,13 +749,64 @@ export default function UserEditPage() {
                         <div className="text-xs text-gray-500 mt-0.5">
                           {m.path || m.department?.path || 'Department scope'}
                         </div>
-                        {m.source && <div className="text-xs text-gray-400 mt-1">{m.source}</div>}
                       </div>
-                      {m.is_primary && <Badge variant="success" size="sm">Primary</Badge>}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {m.is_primary && <Badge variant="success" size="sm">Primary</Badge>}
+                        <Button
+                          variant="ghost" size="sm"
+                          onClick={() => handleRemoveDepartment(m.department_id || m.department?.id)}
+                          loading={deptRemoving === (m.department_id || m.department?.id)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >Remove</Button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
+
+              {/* Add department form */}
+              <div className="border border-dashed border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-3">
+                <p className="text-xs font-medium text-gray-600">Add to a department</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <Select
+                    name="dept_office"
+                    value={deptOfficeId}
+                    onChange={(e) => { setDeptOfficeId(e.target.value); setDeptVerticalId(''); setDeptDeptId(''); }}
+                    placeholder="Office"
+                    options={deptOfficeOptions}
+                  />
+                  <Select
+                    name="dept_vertical"
+                    value={deptVerticalId}
+                    onChange={(e) => { setDeptVerticalId(e.target.value); setDeptDeptId(''); }}
+                    placeholder="Vertical"
+                    options={deptVerticalOptions}
+                    disabled={!deptOfficeId}
+                  />
+                  <Select
+                    name="dept_dept"
+                    value={deptDeptId}
+                    onChange={(e) => setDeptDeptId(e.target.value)}
+                    placeholder="Department"
+                    options={deptDeptOptions}
+                    disabled={!deptVerticalId}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={deptIsPrimary}
+                      onChange={(e) => setDeptIsPrimary(e.target.checked)}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    Set as primary department
+                  </label>
+                  <Button onClick={handleAddDepartment} loading={deptAdding} disabled={!deptDeptId} size="md">
+                    Add Department
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </div>
