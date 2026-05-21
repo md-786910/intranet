@@ -118,11 +118,33 @@ const service = {
       comment: {
         id: comment.id,
         body: comment.body,
-        created_at: comment.created_at,
+        created_at: comment.createdAt,
         deleted: false,
         author: authorPayload(author),
       },
       comment_count,
+    };
+  },
+
+  async editComment(newsItemId, commentId, userId, body) {
+    const { NewsComment } = require('../../database/models');
+    await assertVisibleAndLoad(newsItemId, userId);
+
+    const comment = await NewsComment.findOne({
+      where: { id: commentId, news_item_id: newsItemId },
+    });
+    if (!comment) throw ApiError.notFound('Comment not found');
+    if (comment.user_id !== userId) throw ApiError.forbidden('Not allowed to edit this comment');
+
+    await comment.update({ body });
+
+    return {
+      comment: {
+        id: comment.id,
+        body: comment.body,
+        created_at: comment.createdAt,
+        deleted: false,
+      },
     };
   },
 

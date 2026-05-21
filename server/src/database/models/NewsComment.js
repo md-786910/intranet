@@ -24,6 +24,9 @@ module.exports = (sequelize, DataTypes) => {
     },
   }, {
     tableName: 'news_comment',
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
     defaultScope: {
       where: { deleted_at: null },
     },

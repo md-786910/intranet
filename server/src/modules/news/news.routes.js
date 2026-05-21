@@ -44,6 +44,7 @@ router.post('/:id/like', validate(engagementSchemas.idParam), engagement.like);
 router.delete('/:id/like', validate(engagementSchemas.idParam), engagement.unlike);
 router.get('/:id/comments', validate(engagementSchemas.listCommentsSchema), engagement.listComments);
 router.post('/:id/comments', validate(engagementSchemas.createCommentSchema), engagement.addComment);
+router.patch('/:id/comments/:commentId', validate(engagementSchemas.editCommentSchema), engagement.editComment);
 router.delete('/:id/comments/:commentId', validate(engagementSchemas.newsAndCommentParams), engagement.deleteComment);
 router.post('/:id/share', validate(engagementSchemas.shareSchema), engagement.share);
 router.post('/:id/save', validate(engagementSchemas.idParam), engagement.save);

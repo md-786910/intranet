@@ -29,6 +29,16 @@ const createCommentSchema = {
   }),
 };
 
+const editCommentSchema = {
+  params: Joi.object({
+    id: idPattern.required(),
+    commentId: idPattern.required(),
+  }),
+  body: Joi.object({
+    body: Joi.string().trim().min(1).max(2000).required(),
+  }),
+};
+
 const shareSchema = {
   params: Joi.object({ id: idPattern.required() }),
   body: Joi.object({
@@ -56,6 +66,7 @@ module.exports = {
   newsAndCommentParams,
   listCommentsSchema,
   createCommentSchema,
+  editCommentSchema,
   shareSchema,
   tokenParam,
   adminListSchema,
