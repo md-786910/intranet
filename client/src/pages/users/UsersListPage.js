@@ -22,39 +22,39 @@ const STATUS_OPTIONS = [
 ];
 
 // ── Org cell ──────────────────────────────────────────────────────────────────
-function getPrimaryMembership(memberships = []) {
-  if (!memberships.length) return null;
+function OrgCell({ memberships = [], orgName }) {
+  if (!memberships.length) return <span className="text-gray-400">—</span>;
   const dept = memberships[0]?.department;
-  if (!dept) return null;
-  return {
-    department: dept.name,
-    vertical: dept.vertical?.name || null,
-    office: dept.vertical?.officeLocation?.name || null,
-    extraCount: Math.max(memberships.length - 1, 0),
-  };
-}
+  if (!dept) return <span className="text-gray-400">—</span>;
 
-function OrgCell({ memberships }) {
-  const primary = getPrimaryMembership(memberships);
-  if (!primary) return <span className="text-gray-400">—</span>;
-  const crumbs = [primary.office, primary.vertical].filter(Boolean);
+  const segments = [
+    orgName,
+    dept.vertical?.officeLocation?.name,
+    dept.vertical?.name,
+    dept.name,
+  ].filter(Boolean);
+
+  const breadcrumbs = segments.slice(0, -1);
+  const departmentName = segments[segments.length - 1];
+  const extraCount = Math.max(memberships.length - 1, 0);
+
   return (
     <div className="min-w-0">
-      {crumbs.length > 0 && (
-        <div className="flex items-center gap-0.5 text-[11px] text-gray-400 mb-0.5">
-          {crumbs.map((c, i) => (
-            <React.Fragment key={c}>
+      {breadcrumbs.length > 0 && (
+        <div className="flex items-center flex-wrap gap-0.5 text-[11px] text-gray-400 mb-0.5 leading-tight">
+          {breadcrumbs.map((c, i) => (
+            <React.Fragment key={i}>
               {i > 0 && <span className="text-gray-300 mx-0.5">›</span>}
-              <span className="truncate max-w-[80px]">{c}</span>
+              <span className="truncate max-w-[90px]">{c}</span>
             </React.Fragment>
           ))}
         </div>
       )}
       <div className="flex items-center gap-1.5">
-        <span className="text-sm font-medium text-gray-900 truncate">{primary.department}</span>
-        {primary.extraCount > 0 && (
+        <span className="text-sm font-medium text-gray-800 truncate">{departmentName}</span>
+        {extraCount > 0 && (
           <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-indigo-50 text-indigo-600 border border-indigo-100">
-            +{primary.extraCount}
+            +{extraCount}
           </span>
         )}
       </div>
@@ -62,7 +62,7 @@ function OrgCell({ memberships }) {
   );
 }
 
-// ── Role / Type cell ──────────────────────────────────────────────────────────
+// ── Role cells ────────────────────────────────────────────────────────────────
 const ROLE_STYLES = {
   employee: 'bg-sky-50 text-sky-700 border border-sky-100',
   category: 'bg-violet-50 text-violet-700 border border-violet-100',
@@ -70,15 +70,17 @@ const ROLE_STYLES = {
   custom:   'bg-gray-100 text-gray-700 border border-gray-200',
 };
 
-function RoleTypeCell({ row }) {
-  const roleCategory = row.profile?.roleCategory?.name;
-  if (roleCategory) {
-    return (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${ROLE_STYLES.category}`}>
-        {roleCategory}
-      </span>
-    );
-  }
+function RoleCategoryCell({ row }) {
+  const name = row.profile?.roleCategory?.name;
+  if (!name) return <span className="text-gray-400 text-xs">—</span>;
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${ROLE_STYLES.category}`}>
+      {name}
+    </span>
+  );
+}
+
+function RoleCell({ row }) {
   const nonEmployeeRole = (row.roleAssignments || []).find((a) => a.role?.code !== 'EMPLOYEE');
   if (nonEmployeeRole?.role) {
     const style = nonEmployeeRole.role.is_system ? ROLE_STYLES.system : ROLE_STYLES.custom;
@@ -206,12 +208,17 @@ export default function UsersListPage() {
     {
       key: 'org',
       label: 'Department',
-      render: (row) => <OrgCell memberships={row.departmentMemberships} />,
+      render: (row) => <OrgCell memberships={row.departmentMemberships} orgName={orgNode?.name} />,
     },
     {
-      key: 'role_type',
+      key: 'role_category',
+      label: 'Role Category',
+      render: (row) => <RoleCategoryCell row={row} />,
+    },
+    {
+      key: 'role',
       label: 'Role',
-      render: (row) => <RoleTypeCell row={row} />,
+      render: (row) => <RoleCell row={row} />,
     },
     {
       key: 'profession',
@@ -260,12 +267,33 @@ export default function UsersListPage() {
         <Select name="vertical" value={verticalId} onChange={(e) => setVerticalId(e.target.value)}
           placeholder="All verticals" options={verticalOptions} disabled={!officeId} />
       </div>
-      {verticalId && (
-        <div className="mb-3 max-w-xs">
-          <Select name="department" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}
-            placeholder="All departments" options={departmentOptions} />
-        </div>
-      )}
+      <div className="flex items-center gap-3 mb-3">
+        {verticalId && (
+          <div className="max-w-xs">
+            <Select name="department" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}
+              placeholder="All departments" options={departmentOptions} />
+          </div>
+        )}
+        {(search || statusFilter || officeId || verticalId || departmentId) && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearch('');
+              setStatusFilter('');
+              setOfficeId('');
+              setVerticalId('');
+              setDepartmentId('');
+              setPage(1);
+            }}
+            className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-300 hover:border-gray-400 rounded-lg px-3 py-2 bg-white hover:bg-gray-50 transition-colors whitespace-nowrap"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Clear filters
+          </button>
+        )}
+      </div>
 
       {/* Status summary */}
       {!loading && <SummaryBar users={data.users} />}

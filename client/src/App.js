@@ -25,6 +25,7 @@ import EmployeeCreatePage from './pages/employees/EmployeeCreatePage';
 import EmployeeDetailPage from './pages/employees/EmployeeDetailPage';
 import EmployeeEditPage from './pages/employees/EmployeeEditPage';
 import RoleCategoriesPage from './pages/role-categories/RoleCategoriesPage';
+import JobTitlesPage from './pages/job-titles/JobTitlesPage';
 import RolesListPage from './pages/roles/RolesListPage';
 import RoleCreatePage from './pages/roles/RoleCreatePage';
 import RoleEditPage from './pages/roles/RoleEditPage';
@@ -102,6 +103,9 @@ function App() {
 
                 {/* Role Categories */}
                 <Route path="/role-categories" element={<RoleCategoriesPage />} />
+
+                {/* Job Titles */}
+                <Route path="/job-titles" element={<JobTitlesPage />} />
 
                 {/* Roles */}
                 <Route path="/roles" element={<RolesListPage />} />

@@ -7,8 +7,11 @@ import Select from '../../components/common/Select';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
 import PermissionMatrix from '../../components/roles/PermissionMatrix';
 import { getPermLabel } from '../../components/roles/PermissionMatrix';
+import ReportsToPicker from '../employees/ReportsToPicker';
 import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
+import { roleCategoryService } from '../../services/roleCategoryService';
+import { jobTitleService } from '../../services/jobTitleService';
 import { useToast } from '../../hooks/useToast';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
@@ -89,8 +92,13 @@ export default function UserCreatePage() {
 
   const [form, setForm] = useState({
     email: '', password: '', first_name: '', last_name: '', phone: '',
-    job_title: '', employee_id: '',
+    employee_id: '', date_of_joining: '', bio: '', location: '',
   });
+  const [jobTitleId, setJobTitleId] = useState('');
+  const [roleCategoryId, setRoleCategoryId] = useState('');
+  const [reportsTo, setReportsTo] = useState(null);
+  const [jobTitles, setJobTitles] = useState([]);
+  const [roleCategories, setRoleCategories] = useState([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -112,6 +120,8 @@ export default function UserCreatePage() {
   useEffect(() => {
     roleService.getRoles({ limit: 100 }).then((res) => setAllRoles(res.data?.data?.roles || [])).catch(() => {});
     roleService.getModules().then((res) => setModules(res.data?.data || [])).catch(() => {});
+    jobTitleService.list().then((res) => setJobTitles(res.data?.data || [])).catch(() => {});
+    roleCategoryService.list().then((res) => setRoleCategories(res.data?.data || [])).catch(() => {});
   }, []);
 
   // ── Derived ──
@@ -251,8 +261,13 @@ export default function UserCreatePage() {
         scope_type: 'ORGANISATION',
         scope_id: currentOrganisationId,
         profile: {
-          job_title: form.job_title || undefined,
+          job_title: jobTitleId ? jobTitles.find((t) => t.id === Number(jobTitleId))?.name || undefined : undefined,
           employee_id: form.employee_id || undefined,
+          date_of_joining: form.date_of_joining || undefined,
+          bio: form.bio || undefined,
+          location: form.location || undefined,
+          role_category_id: roleCategoryId ? Number(roleCategoryId) : undefined,
+          reports_to_user_id: reportsTo?.user_id || undefined,
         },
         initial_roles: finalRoles.length > 0
           ? finalRoles.map((a) => ({ role_id: a.role_id, scope_type: a.scope_type, scope_id: a.scope_id }))
@@ -297,8 +312,52 @@ export default function UserCreatePage() {
           <div className="border-t border-gray-100 pt-5">
             <h3 className="text-sm font-medium text-gray-700 mb-3">Profile</h3>
             <div className="grid grid-cols-2 gap-4">
-              <Input label="Job Title" name="job_title" value={form.job_title} onChange={handleChange} />
+              {jobTitles.length > 0 ? (
+                <Select
+                  label="Job Title"
+                  name="job_title"
+                  value={jobTitleId}
+                  onChange={(e) => setJobTitleId(e.target.value)}
+                  options={jobTitles.map((t) => ({ value: String(t.id), label: t.name }))}
+                  placeholder="Select a job title…"
+                />
+              ) : (
+                <Input label="Job Title" name="job_title"
+                  value={form.job_title || ''}
+                  onChange={(e) => setForm({ ...form, job_title: e.target.value })} />
+              )}
               <Input label="Employee ID" name="employee_id" value={form.employee_id} onChange={handleChange} />
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <Select
+                label="Role Category"
+                name="role_category"
+                value={roleCategoryId}
+                onChange={(e) => setRoleCategoryId(e.target.value)}
+                options={roleCategories.map((c) => ({ value: String(c.id), label: c.name }))}
+                placeholder="Select role category…"
+              />
+              <Input label="Date of Joining" name="date_of_joining" type="date"
+                value={form.date_of_joining} onChange={handleChange} />
+            </div>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reports To</label>
+              <ReportsToPicker value={reportsTo} onChange={setReportsTo} />
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <Input label="Location" name="location" value={form.location} onChange={handleChange}
+                placeholder="e.g. New York Office" />
+            </div>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+              <textarea
+                name="bio"
+                value={form.bio}
+                onChange={handleChange}
+                rows={3}
+                placeholder="Short bio…"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+              />
             </div>
           </div>
 

@@ -13,7 +13,7 @@ const passwordPattern = Joi.string()
 const listUsersSchema = {
   query: Joi.object({
     page: Joi.number().integer().min(1).default(1),
-    limit: Joi.number().integer().min(1).max(100).default(20),
+    limit: Joi.number().integer().min(1).max(100).default(10),
     search: Joi.string().trim().max(255).optional().allow(''),
     status: Joi.string().valid('ACTIVE', 'INACTIVE', 'LOCKED', 'INVITED').optional(),
     department_id: idPattern.optional(),
@@ -48,6 +48,9 @@ const createUserSchema = {
       employee_id: Joi.string().trim().max(50).optional().allow('', null),
       date_of_birth: Joi.date().iso().optional().allow(null),
       date_of_joining: Joi.date().iso().optional().allow(null),
+      role_category_id: Joi.number().integer().positive().optional().allow(null),
+      reports_to_user_id: Joi.number().integer().positive().optional().allow(null),
+      location: Joi.string().trim().max(255).optional().allow('', null),
     }).optional(),
     initial_role: Joi.object({
       role_id: idPattern.required(),

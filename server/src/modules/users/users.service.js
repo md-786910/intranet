@@ -196,7 +196,11 @@ const usersService = {
     }
     if (andClauses.length) where[Op.and] = andClauses;
 
-    // All includes are required:false (LEFT JOINs) so the count subquery stays clean.
+    // PersonProfile: simple belongsTo-style JOIN, fine in main query.
+    // DepartmentMemberships / RoleAssignments: hasMany — use separate:true so Sequelize
+    // fetches them in follow-up queries keyed by the paginated user IDs.
+    // This avoids both the "missing FROM-clause" error from deeply nested JOINs
+    // inside Sequelize's pagination subquery AND the LIMIT-on-JOIN-rows problem.
     const include = [
       {
         model: PersonProfile,
@@ -208,6 +212,7 @@ const usersService = {
         model: DepartmentMembership,
         as: 'departmentMemberships',
         required: false,
+        separate: true,
         include: [{
           model: Department,
           as: 'department',
@@ -224,6 +229,7 @@ const usersService = {
         model: UserRoleAssignment,
         as: 'roleAssignments',
         required: false,
+        separate: true,
         include: [{ model: Role, as: 'role', attributes: ['role_id', 'name', 'code'] }],
       },
     ];
@@ -246,8 +252,6 @@ const usersService = {
       offset,
       include,
       order,
-      distinct: true,
-      subQuery: false,
     });
 
     return {

@@ -7,7 +7,7 @@ export default function Pagination({ page, totalPages, total, limit, onPageChang
   const end = Math.min(page * limit, total);
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 text-sm">
+    <div className="sticky bottom-0 z-10 bg-white border-t border-gray-200 flex items-center justify-between px-4 py-3 text-sm">
       <div className="text-gray-600">
         Showing {start}-{end} of {total}
       </div>
