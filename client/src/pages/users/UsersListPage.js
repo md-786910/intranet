@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
@@ -7,6 +7,7 @@ import Pagination from '../../components/common/Pagination';
 import SearchBar from '../../components/common/SearchBar';
 import StatusBadge from '../../components/common/StatusBadge';
 import Select from '../../components/common/Select';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { userService } from '../../services/userService';
 import { roleCategoryService } from '../../services/roleCategoryService';
 import { jobTitleService } from '../../services/jobTitleService';
@@ -154,6 +155,22 @@ export default function UsersListPage() {
 
   const debouncedSearch = useDebounce(search);
 
+  // ── Default status to ACTIVE on fresh mount ───────────────────────────────
+  const didInit = useRef(false);
+  useEffect(() => {
+    if (!didInit.current) {
+      didInit.current = true;
+      if (!searchParams.has('status')) {
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('status', 'ACTIVE');
+          return next;
+        }, { replace: true });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── URL writers ──────────────────────────────────────────────────────────
   const setParam = useCallback((updates) => {
     setSearchParams((prev) => {
@@ -234,6 +251,49 @@ export default function UsersListPage() {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
+  // ── Inactive user actions ─────────────────────────────────────────────────
+  const [confirmDialog, setConfirmDialog] = useState({ type: null, user: null });
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const openConfirm = useCallback((type, user, e) => {
+    e.stopPropagation();
+    setConfirmDialog({ type, user });
+  }, []);
+
+  const closeConfirm = useCallback(() => {
+    setConfirmDialog({ type: null, user: null });
+  }, []);
+
+  const handleReactivate = useCallback(async () => {
+    if (!confirmDialog.user) return;
+    setActionLoading(true);
+    try {
+      await userService.reactivateUser(confirmDialog.user.user_id);
+      addToast('User reactivated successfully', 'success');
+      closeConfirm();
+      fetchUsers();
+    } catch {
+      addToast('Failed to reactivate user', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [confirmDialog.user, addToast, closeConfirm, fetchUsers]);
+
+  const handlePermanentDelete = useCallback(async () => {
+    if (!confirmDialog.user) return;
+    setActionLoading(true);
+    try {
+      await userService.permanentDeleteUser(confirmDialog.user.user_id);
+      addToast('User permanently deleted', 'success');
+      closeConfirm();
+      fetchUsers();
+    } catch {
+      addToast('Failed to delete user', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [confirmDialog.user, addToast, closeConfirm, fetchUsers]);
+
   // ── Columns ───────────────────────────────────────────────────────────────
   const columns = [
     {
@@ -305,6 +365,31 @@ export default function UsersListPage() {
       render: (row) => {
         const date = row.createdAt || row.created_at;
         return <span className="text-xs text-gray-500 whitespace-nowrap">{date ? formatDate(date) : '—'}</span>;
+      },
+    },
+    {
+      key: 'actions',
+      label: '',
+      render: (row) => {
+        if (row.status !== 'INACTIVE') return null;
+        return (
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={(e) => openConfirm('reactivate', row, e)}
+              className="text-xs font-medium text-emerald-600 hover:text-emerald-800 border border-emerald-200 hover:border-emerald-400 rounded-md px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 transition-colors whitespace-nowrap"
+            >
+              Reactivate
+            </button>
+            <button
+              type="button"
+              onClick={(e) => openConfirm('delete', row, e)}
+              className="text-xs font-medium text-red-600 hover:text-red-800 border border-red-200 hover:border-red-400 rounded-md px-2.5 py-1 bg-red-50 hover:bg-red-100 transition-colors whitespace-nowrap"
+            >
+              Delete
+            </button>
+          </div>
+        );
       },
     },
   ];
@@ -403,6 +488,28 @@ export default function UsersListPage() {
         limit={limit}
         onPageChange={(p) => setParam({ page: p })}
         onLimitChange={(l) => setParam({ limit: l, page: '' })}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.type === 'reactivate'}
+        title="Reactivate User"
+        message={`Are you sure you want to reactivate ${confirmDialog.user?.first_name} ${confirmDialog.user?.last_name}? Their account will be restored to active status.`}
+        confirmLabel="Reactivate"
+        confirmVariant="primary"
+        loading={actionLoading}
+        onConfirm={handleReactivate}
+        onCancel={closeConfirm}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.type === 'delete'}
+        title="Permanently Delete User"
+        message={`Are you sure you want to permanently delete ${confirmDialog.user?.first_name} ${confirmDialog.user?.last_name}? This action cannot be undone and all their data will be removed.`}
+        confirmLabel="Delete Permanently"
+        confirmVariant="danger"
+        loading={actionLoading}
+        onConfirm={handlePermanentDelete}
+        onCancel={closeConfirm}
       />
     </div>
   );

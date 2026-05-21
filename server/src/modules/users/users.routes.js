@@ -58,6 +58,22 @@ router.delete(
   controller.deactivate
 );
 
+// POST /api/v1/users/:id/reactivate
+router.post(
+  '/:id/reactivate',
+  authorize('ADMIN', 'MANAGE_USERS'),
+  auditLogger('USER_REACTIVATED'),
+  controller.reactivate
+);
+
+// DELETE /api/v1/users/:id/permanent
+router.delete(
+  '/:id/permanent',
+  authorize('ADMIN', 'MANAGE_USERS'),
+  auditLogger('USER_PERMANENTLY_DELETED'),
+  controller.permanentDelete
+);
+
 // POST /api/v1/users/:id/roles
 router.post(
   '/:id/roles',

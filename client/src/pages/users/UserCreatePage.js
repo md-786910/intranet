@@ -16,162 +16,61 @@ import { roleCategoryService } from '../../services/roleCategoryService';
 import { jobTitleService } from '../../services/jobTitleService';
 import { useToast } from '../../hooks/useToast';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
-import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
-
-function isSameRoleAssignment(left, right) {
-  return left.role_id === right.role_id
-    && left.scope_type === right.scope_type
-    && left.scope_id === right.scope_id;
-}
-
-function isSamePermissionAssignment(left, right) {
-  return left.module_action_id === right.module_action_id
-    && left.scope_type === right.scope_type
-    && left.scope_id === right.scope_id;
-}
-
-function formatScopeLabel(scopeLabel, scopeType, scopeId) {
-  if (scopeLabel) return scopeLabel;
-  return `${scopeType.replace(/_/g, ' ')} #${scopeId}`;
-}
-
-function buildDraftRoleAssignments(allRoles, pickerRoleId, pickerScopes, currentOrganisationId) {
-  if (!pickerRoleId) return [];
-
-  const role = allRoles.find((item) => item.role_id === Number(pickerRoleId));
-  if (!role) return [];
-
-  const scopes = pickerScopes.length > 0
-    ? pickerScopes
-    : [{ scope_type: 'ORGANISATION', scope_id: currentOrganisationId, scope_label: 'Organisation' }];
-
-  return scopes.map((scope) => ({
-    role_id: role.role_id,
-    role_name: role.name,
-    is_system: role.is_system,
-    scope_type: scope.scope_type,
-    scope_id: scope.scope_id || currentOrganisationId,
-    scope_label: scope.scope_label,
-  }));
-}
-
-function buildDraftPermissions(modules, permModuleId, permActionId, permScopes, currentOrganisationId) {
-  if (!permActionId) return [];
-
-  const mod = modules.find((item) => item.module_id === Number(permModuleId));
-  const action = mod?.actions.find((item) => item.module_action_id === Number(permActionId));
-  if (!mod || !action) return [];
-
-  const { label } = getPermLabel(mod.code, action.action_code);
-  const scopes = permScopes.length > 0
-    ? permScopes
-    : [{ scope_type: 'ORGANISATION', scope_id: currentOrganisationId, scope_label: 'Organisation' }];
-
-  return scopes.map((scope) => ({
-    module_action_id: action.module_action_id,
-    module_name: mod.name,
-    action_label: label,
-    scope_type: scope.scope_type,
-    scope_id: scope.scope_id || currentOrganisationId,
-    scope_label: scope.scope_label,
-  }));
-}
-
-function extractPermissionIds(role) {
-  if (!role?.permissions) return new Set();
-  return new Set(
-    role.permissions
-      .filter((p) => p.effect === 'ALLOW')
-      .map((p) => p.moduleAction?.module_action_id)
-      .filter(Boolean)
-  );
-}
 
 export default function UserCreatePage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
-  const { currentOrganisationId } = useCurrentOrganisation();
 
   const [form, setForm] = useState({
     email: '', password: '', first_name: '', last_name: '', phone: '',
-    employee_id: '', date_of_joining: '', bio: '', location: '',
+    job_title: '', employee_id: '', date_of_joining: '', location: '', bio: '',
   });
   const [jobTitleId, setJobTitleId] = useState('');
   const [roleCategoryId, setRoleCategoryId] = useState('');
   const [reportsTo, setReportsTo] = useState(null);
+  const [deptScopes, setDeptScopes] = useState([]);
+  const [primaryDeptId, setPrimaryDeptId] = useState('');
+  const [chatBlockedIds, setChatBlockedIds] = useState([]);
+
   const [jobTitles, setJobTitles] = useState([]);
   const [roleCategories, setRoleCategories] = useState([]);
+  const [allRoles, setAllRoles] = useState([]);
+  const [chatCandidates, setChatCandidates] = useState([]);
+  const [chatCandidatesLoading, setChatCandidatesLoading] = useState(true);
+
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+  const [inviteMode, setInviteMode] = useState(false);
 
-  // Roles + modules
-  const [allRoles, setAllRoles] = useState([]);
+  // Additional roles (beyond the required Role applied at every department)
   const [modules, setModules] = useState([]);
   const [assignedRoles, setAssignedRoles] = useState([]);
   const [pickerRoleId, setPickerRoleId] = useState('');
   const [pickerScopes, setPickerScopes] = useState([]);
   const [previewRoleIndex, setPreviewRoleIndex] = useState(null);
 
-  // Extra permissions
+  // Extra direct permissions
   const [extraPerms, setExtraPerms] = useState([]);
   const [permModuleId, setPermModuleId] = useState('');
   const [permActionId, setPermActionId] = useState('');
   const [permScopes, setPermScopes] = useState([]);
   const [showPermForm, setShowPermForm] = useState(false);
 
-  // Invite mode (employee-style email invitation)
-  const [inviteMode, setInviteMode] = useState(false);
-  const [deptScopes, setDeptScopes] = useState([]);
-  const [primaryDeptId, setPrimaryDeptId] = useState('');
-  const [chatCandidates, setChatCandidates] = useState([]);
-  const [chatCandidatesLoading, setChatCandidatesLoading] = useState(false);
-  const [chatBlockedIds, setChatBlockedIds] = useState([]);
-
   useEffect(() => {
     roleService.getRoles({ limit: 100 }).then((res) => setAllRoles(res.data?.data?.roles || [])).catch(() => {});
     roleService.getModules().then((res) => setModules(res.data?.data || [])).catch(() => {});
     jobTitleService.list().then((res) => setJobTitles(res.data?.data || [])).catch(() => {});
     roleCategoryService.list().then((res) => setRoleCategories(res.data?.data || [])).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!inviteMode) return;
-    setChatCandidatesLoading(true);
     employeeService.listChatCandidates()
       .then((res) => setChatCandidates(res.data?.data || []))
       .catch(() => setChatCandidates([]))
       .finally(() => setChatCandidatesLoading(false));
-  }, [inviteMode]);
+  }, []);
 
-  // ── Derived ──
-  const roleOptions = useMemo(() => {
-    return allRoles
-      .map((r) => ({ value: String(r.role_id), label: `${r.name}${r.is_system ? ' (System)' : ''}` }));
-  }, [allRoles]);
-
-  const pickerRole = pickerRoleId ? allRoles.find((r) => r.role_id === Number(pickerRoleId)) : null;
-  const pickerPermissions = useMemo(() => extractPermissionIds(pickerRole), [pickerRole]);
-
-  const previewPermissions = useMemo(() => {
-    if (previewRoleIndex === null || !assignedRoles[previewRoleIndex]) return new Set();
-    const role = allRoles.find((r) => r.role_id === assignedRoles[previewRoleIndex].role_id);
-    return extractPermissionIds(role);
-  }, [previewRoleIndex, assignedRoles, allRoles]);
-
-  const moduleOptions = useMemo(() => modules.map((m) => ({ value: String(m.module_id), label: m.name })), [modules]);
-  const actionOptions = useMemo(() => {
-    if (!permModuleId) return [];
-    const mod = modules.find((m) => m.module_id === Number(permModuleId));
-    if (!mod) return [];
-    return mod.actions
-      .map((a) => { const { label } = getPermLabel(mod.code, a.action_code); return { value: String(a.module_action_id), label }; });
-  }, [permModuleId, modules]);
-
-  const currentRoleCategoryRank = useMemo(() => {
-    if (!roleCategoryId) return null;
-    return roleCategories.find((c) => String(c.id) === roleCategoryId)?.rank || null;
-  }, [roleCategoryId, roleCategories]);
-
+  const roleOptions = useMemo(
+    () => allRoles.map((r) => ({ value: String(r.role_id), label: `${r.name}${r.is_system ? ' (System)' : ''}` })),
+    [allRoles],
+  );
   const deptScopesDept = useMemo(
     () => deptScopes.filter((s) => s.scope_type === 'DEPARTMENT'),
     [deptScopes],
@@ -183,38 +82,58 @@ export default function UserCreatePage() {
     })),
     [deptScopesDept],
   );
+  const currentRoleCategoryRank = useMemo(() => {
+    if (!roleCategoryId) return null;
+    return roleCategories.find((c) => String(c.id) === roleCategoryId)?.rank || null;
+  }, [roleCategoryId, roleCategories]);
 
-  // ── Handlers ──
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-    if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: null });
-  };
+  const pickerRole = pickerRoleId ? allRoles.find((r) => r.role_id === Number(pickerRoleId)) : null;
+  const pickerPermissions = useMemo(() => {
+    if (!pickerRole?.permissions) return new Set();
+    return new Set(pickerRole.permissions.filter((p) => p.effect === 'ALLOW').map((p) => p.moduleAction?.module_action_id).filter(Boolean));
+  }, [pickerRole]);
+  const previewPermissions = useMemo(() => {
+    if (previewRoleIndex === null || !assignedRoles[previewRoleIndex]) return new Set();
+    const role = allRoles.find((r) => r.role_id === assignedRoles[previewRoleIndex].role_id);
+    if (!role?.permissions) return new Set();
+    return new Set(role.permissions.filter((p) => p.effect === 'ALLOW').map((p) => p.moduleAction?.module_action_id).filter(Boolean));
+  }, [previewRoleIndex, assignedRoles, allRoles]);
+
+  const moduleOptions = useMemo(() => modules.map((m) => ({ value: String(m.module_id), label: m.name })), [modules]);
+  const actionOptions = useMemo(() => {
+    if (!permModuleId) return [];
+    const mod = modules.find((m) => m.module_id === Number(permModuleId));
+    if (!mod) return [];
+    return mod.actions.map((a) => {
+      const { label } = getPermLabel(mod.code, a.action_code);
+      return { value: String(a.module_action_id), label };
+    });
+  }, [permModuleId, modules]);
+
+  const isSameRoleAssignment = (l, r) => l.role_id === r.role_id && l.scope_type === r.scope_type && l.scope_id === r.scope_id;
+  const isSamePermissionAssignment = (l, r) => l.module_action_id === r.module_action_id && l.scope_type === r.scope_type && l.scope_id === r.scope_id;
+  const formatScopeLabel = (label, type, id) => label || `${type.replace(/_/g, ' ')} #${id}`;
 
   const handleAddRole = () => {
     if (!pickerRoleId) return;
-    const roleId = Number(pickerRoleId);
-    const role = allRoles.find((r) => r.role_id === roleId);
+    const role = allRoles.find((r) => r.role_id === Number(pickerRoleId));
     if (!role) return;
-
     const scopesToAdd = pickerScopes.length > 0
       ? pickerScopes
-      : [{ scope_type: 'ORGANISATION', scope_id: currentOrganisationId, scope_label: 'Organisation' }];
-
+      : [{ scope_type: 'ORGANISATION', scope_id: 1, scope_label: 'Organisation' }];
     setAssignedRoles((prev) => {
-      const nextAssignments = scopesToAdd
-        .map((scope) => ({
-          role_id: roleId,
+      const next = scopesToAdd
+        .map((s) => ({
+          role_id: role.role_id,
           role_name: role.name,
           is_system: role.is_system,
-          scope_type: scope.scope_type,
-          scope_id: scope.scope_id || currentOrganisationId,
-          scope_label: scope.scope_label,
+          scope_type: s.scope_type,
+          scope_id: s.scope_id || 1,
+          scope_label: s.scope_label,
         }))
-        .filter((assignment) => !prev.some((existing) => isSameRoleAssignment(existing, assignment)));
-
-      return nextAssignments.length > 0 ? [...prev, ...nextAssignments] : prev;
+        .filter((a) => !prev.some((e) => isSameRoleAssignment(e, a)));
+      return next.length > 0 ? [...prev, ...next] : prev;
     });
-
     setPickerRoleId('');
     setPickerScopes([]);
   };
@@ -231,34 +150,33 @@ export default function UserCreatePage() {
     const action = mod?.actions.find((a) => a.module_action_id === Number(permActionId));
     if (!mod || !action) return;
     const { label } = getPermLabel(mod.code, action.action_code);
-
     const scopesToAdd = permScopes.length > 0
       ? permScopes
-      : [{ scope_type: 'ORGANISATION', scope_id: currentOrganisationId, scope_label: 'Organisation' }];
-
+      : [{ scope_type: 'ORGANISATION', scope_id: 1, scope_label: 'Organisation' }];
     setExtraPerms((prev) => {
-      const nextPermissions = scopesToAdd
-        .map((scope) => ({
+      const next = scopesToAdd
+        .map((s) => ({
           module_action_id: Number(permActionId),
           module_name: mod.name,
           action_label: label,
-          scope_type: scope.scope_type,
-          scope_id: scope.scope_id || currentOrganisationId,
-          scope_label: scope.scope_label,
+          scope_type: s.scope_type,
+          scope_id: s.scope_id || 1,
+          scope_label: s.scope_label,
         }))
-        .filter((permission) => !prev.some((existing) => isSamePermissionAssignment(existing, permission)));
-
-      return nextPermissions.length > 0 ? [...prev, ...nextPermissions] : prev;
+        .filter((p) => !prev.some((e) => isSamePermissionAssignment(e, p)));
+      return next.length > 0 ? [...prev, ...next] : prev;
     });
-
     setPermActionId('');
     setPermModuleId('');
     setPermScopes([]);
     setShowPermForm(false);
   };
 
-  const handleRemovePerm = (index) => {
-    setExtraPerms((prev) => prev.filter((_, i) => i !== index));
+  const handleRemovePerm = (index) => setExtraPerms((prev) => prev.filter((_, i) => i !== index));
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: null });
   };
 
   const handleSave = async () => {
@@ -267,78 +185,46 @@ export default function UserCreatePage() {
     if (!form.first_name) newErrors.first_name = 'First name is required';
     if (!form.last_name) newErrors.last_name = 'Last name is required';
     if (!inviteMode && !form.password) newErrors.password = 'Password is required';
-    if (inviteMode && deptScopesDept.length === 0) newErrors.deptScopes = 'Select at least one department.';
-    if (!inviteMode && !currentOrganisationId) newErrors.organisation = 'Active organisation is required';
-    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+    if (!roleCategoryId) newErrors.role_category_id = 'Role category is required';
+    if (deptScopesDept.length === 0) newErrors.deptScopes = 'Select at least one department.';
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      addToast('Please fix the highlighted fields', 'error');
+      return;
+    }
 
     setSaving(true);
     try {
       const resolvedJobTitle = jobTitleId
-        ? (jobTitles.find((t) => t.id === Number(jobTitleId))?.name || undefined)
-        : undefined;
+        ? (jobTitles.find((t) => String(t.id) === jobTitleId)?.name || form.job_title || undefined)
+        : (form.job_title || undefined);
+      const department_ids = deptScopesDept.map((s) => Number(s.scope_id));
 
-      if (inviteMode) {
-        const department_ids = deptScopesDept.map((s) => Number(s.scope_id));
-        await employeeService.createEmployee({
-          email: form.email,
-          first_name: form.first_name,
-          last_name: form.last_name,
-          phone: form.phone || undefined,
-          job_title: resolvedJobTitle || form.job_title || undefined,
-          employee_id: form.employee_id || undefined,
-          role_category_id: roleCategoryId ? Number(roleCategoryId) : undefined,
-          reports_to_user_id: reportsTo?.user_id || undefined,
-          date_of_joining: form.date_of_joining || undefined,
-          location: form.location || undefined,
-          bio: form.bio || undefined,
-          department_ids,
-          primary_department_id: primaryDeptId ? Number(primaryDeptId) : department_ids[0],
-          chat_blocked_user_ids: chatBlockedIds,
-        });
-        addToast(`Invitation sent to ${form.email}`, 'success');
-      } else {
-        const draftRoles = buildDraftRoleAssignments(allRoles, pickerRoleId, pickerScopes, currentOrganisationId);
-        const finalRoles = [...assignedRoles];
-        draftRoles.forEach((assignment) => {
-          if (!finalRoles.some((existing) => isSameRoleAssignment(existing, assignment))) {
-            finalRoles.push(assignment);
-          }
-        });
-
-        const draftPermissions = buildDraftPermissions(modules, permModuleId, permActionId, permScopes, currentOrganisationId);
-        const finalPermissions = [...extraPerms];
-        draftPermissions.forEach((permission) => {
-          if (!finalPermissions.some((existing) => isSamePermissionAssignment(existing, permission))) {
-            finalPermissions.push(permission);
-          }
-        });
-
-        await userService.createUser({
-          email: form.email,
-          password: form.password,
-          first_name: form.first_name,
-          last_name: form.last_name,
-          phone: form.phone || undefined,
-          scope_type: 'ORGANISATION',
-          scope_id: currentOrganisationId,
-          profile: {
-            job_title: resolvedJobTitle || undefined,
-            employee_id: form.employee_id || undefined,
-            date_of_joining: form.date_of_joining || undefined,
-            bio: form.bio || undefined,
-            location: form.location || undefined,
-            role_category_id: roleCategoryId ? Number(roleCategoryId) : undefined,
-            reports_to_user_id: reportsTo?.user_id || undefined,
-          },
-          initial_roles: finalRoles.length > 0
-            ? finalRoles.map((a) => ({ role_id: a.role_id, scope_type: a.scope_type, scope_id: a.scope_id }))
-            : undefined,
-          initial_permissions: finalPermissions.length > 0
-            ? finalPermissions.map((p) => ({ module_action_id: p.module_action_id, scope_type: p.scope_type, scope_id: p.scope_id }))
-            : undefined,
-        });
-        addToast('User created successfully', 'success');
-      }
+      await userService.createUser({
+        mode: inviteMode ? 'INVITE' : 'PASSWORD',
+        email: form.email,
+        password: inviteMode ? undefined : form.password,
+        first_name: form.first_name,
+        last_name: form.last_name,
+        phone: form.phone || undefined,
+        job_title: resolvedJobTitle || undefined,
+        employee_id: form.employee_id || undefined,
+        role_category_id: Number(roleCategoryId),
+        reports_to_user_id: reportsTo?.user_id || undefined,
+        date_of_joining: form.date_of_joining || undefined,
+        location: form.location || undefined,
+        bio: form.bio || undefined,
+        department_ids,
+        primary_department_id: primaryDeptId ? Number(primaryDeptId) : department_ids[0],
+        chat_blocked_user_ids: chatBlockedIds,
+        initial_roles: assignedRoles.length > 0
+          ? assignedRoles.map((a) => ({ role_id: a.role_id, scope_type: a.scope_type, scope_id: a.scope_id }))
+          : undefined,
+        initial_permissions: extraPerms.length > 0
+          ? extraPerms.map((p) => ({ module_action_id: p.module_action_id, scope_type: p.scope_type, scope_id: p.scope_id }))
+          : undefined,
+      });
+      addToast(inviteMode ? `Invitation sent to ${form.email}` : 'User created successfully', 'success');
       navigate('/users');
     } catch (err) {
       addToast(getErrorMessage(err, 'Failed'), 'error');
@@ -426,7 +312,9 @@ export default function UserCreatePage() {
               <Select
                 label="Role Category"
                 name="role_category"
+                required
                 value={roleCategoryId}
+                error={errors.role_category_id}
                 onChange={(e) => setRoleCategoryId(e.target.value)}
                 options={roleCategories.map((c) => ({ value: String(c.id), label: c.name }))}
                 placeholder="Select role category…"
@@ -455,47 +343,32 @@ export default function UserCreatePage() {
             </div>
           </div>
 
-          {/* ── Invite mode: Department + Chat ── */}
-          {inviteMode && (
-            <>
-              <div className="border-t border-gray-100 pt-5">
-                <h3 className="text-sm font-medium text-gray-700 mb-1">
-                  Organisation Assignment <span className="text-red-500">*</span>
-                </h3>
-                <p className="text-xs text-gray-500 mb-3">Select the department(s) this employee belongs to.</p>
-                <HierarchyScopeSelector value={deptScopes} onChange={setDeptScopes} />
-                {errors.deptScopes && <p className="mt-2 text-xs text-red-600">{errors.deptScopes}</p>}
-                {deptOptions.length > 1 && (
-                  <div className="mt-4">
-                    <Select
-                      label="Primary Department"
-                      name="primary_dept"
-                      value={primaryDeptId}
-                      onChange={(e) => setPrimaryDeptId(e.target.value)}
-                      options={deptOptions}
-                      placeholder="First selected (default)"
-                    />
-                  </div>
-                )}
-              </div>
-              <div className="border-t border-gray-100 pt-5">
-                <h3 className="text-sm font-medium text-gray-700 mb-1">Chat access</h3>
-                <p className="text-xs text-gray-500 mb-3">
-                  All active colleagues are reachable by default. Uncheck anyone this employee should NOT be able to find in chat.
-                </p>
-                <ChatAccessSelector
-                  candidates={chatCandidates}
-                  value={chatBlockedIds}
-                  onChange={setChatBlockedIds}
-                  loading={chatCandidatesLoading}
+          {/* ── Organisation Assignment ── */}
+          <div className="border-t border-gray-100 pt-5">
+            <h3 className="text-sm font-medium text-gray-700 mb-1">
+              Organisation Assignment <span className="text-red-500">*</span>
+            </h3>
+            <p className="text-xs text-gray-500 mb-3">Select the department(s) this user belongs to.</p>
+            <HierarchyScopeSelector value={deptScopes} onChange={setDeptScopes} />
+            {errors.deptScopes && <p className="mt-2 text-xs text-red-600">{errors.deptScopes}</p>}
+            {deptOptions.length > 1 && (
+              <div className="mt-4">
+                <Select
+                  label="Primary Department"
+                  name="primary_dept"
+                  value={primaryDeptId}
+                  onChange={(e) => setPrimaryDeptId(e.target.value)}
+                  options={deptOptions}
+                  placeholder="First selected (default)"
                 />
               </div>
-            </>
-          )}
+            )}
+          </div>
 
-          {/* ── Roles ── */}
-          {!inviteMode && <div className="border-t border-gray-100 pt-5">
-            <h3 className="text-sm font-medium text-gray-700 mb-3">Roles</h3>
+          {/* ── Additional Roles (optional, beyond the required Role attached at each department) ── */}
+          <div className="border-t border-gray-100 pt-5">
+            <h3 className="text-sm font-medium text-gray-700 mb-1">Additional Roles</h3>
+            <p className="text-xs text-gray-500 mb-3">Optional. Attach further roles at any scope. Manage more after creation from the Edit page.</p>
 
             {assignedRoles.length > 0 && (
               <div className="space-y-2 mb-3">
@@ -512,7 +385,7 @@ export default function UserCreatePage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400">{previewRoleIndex === i ? 'Hide' : 'View'} permissions</span>
-                      <button onClick={(e) => { e.stopPropagation(); handleRemoveRole(i); }}
+                      <button type="button" onClick={(e) => { e.stopPropagation(); handleRemoveRole(i); }}
                         className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -533,7 +406,7 @@ export default function UserCreatePage() {
             )}
 
             <div className="flex items-end gap-3">
-              <Select label="Role" name="role" value={pickerRoleId}
+              <Select label="Role" name="picker_role" value={pickerRoleId}
                 onChange={(e) => setPickerRoleId(e.target.value)}
                 options={roleOptions} placeholder="Select a role..." className="flex-1" />
               <Button variant="secondary" size="md" onClick={handleAddRole} disabled={!pickerRoleId}>Add</Button>
@@ -555,10 +428,24 @@ export default function UserCreatePage() {
                 )}
               </>
             )}
-          </div>}
+          </div>
+
+          {/* ── Chat access ── */}
+          <div className="border-t border-gray-100 pt-5">
+            <h3 className="text-sm font-medium text-gray-700 mb-1">Chat access</h3>
+            <p className="text-xs text-gray-500 mb-3">
+              All active colleagues are reachable by default. Uncheck anyone this user should NOT be able to find in chat.
+            </p>
+            <ChatAccessSelector
+              candidates={chatCandidates}
+              value={chatBlockedIds}
+              onChange={setChatBlockedIds}
+              loading={chatCandidatesLoading}
+            />
+          </div>
 
           {/* ── Extra Permissions ── */}
-          {!inviteMode && <div className="border-t border-gray-100 pt-5">
+          <div className="border-t border-gray-100 pt-5">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h3 className="text-sm font-medium text-gray-700">Extra Permissions</h3>
@@ -603,7 +490,7 @@ export default function UserCreatePage() {
                       <div className="text-sm font-medium text-gray-900">{p.action_label}</div>
                       <div className="text-xs text-gray-500">{p.module_name} · {formatScopeLabel(p.scope_label, p.scope_type, p.scope_id)}</div>
                     </div>
-                    <button onClick={() => handleRemovePerm(i)}
+                    <button type="button" onClick={() => handleRemovePerm(i)}
                       className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -613,7 +500,7 @@ export default function UserCreatePage() {
                 ))}
               </div>
             )}
-          </div>}
+          </div>
         </div>
 
         {/* ── Footer ── */}

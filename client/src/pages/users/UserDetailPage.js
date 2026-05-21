@@ -18,6 +18,7 @@ import { formatDate, formatDateTime, formatRelativeTime } from '../../utils/form
 import { findScopeLabel } from '../../utils/scopeLabel';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { useOrgTree } from '../../hooks/useOrgTree';
+import { useAuth } from '../../hooks/useAuth';
 
 const DEFAULT_ORGANISATION_ID = 1;
 
@@ -130,10 +131,14 @@ export default function UserDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { user: currentUser } = useAuth();
   const { currentOrganisationId } = useCurrentOrganisation();
   const { tree: orgTree } = useOrgTree();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const isViewedUserOwner = (user?.roleAssignments || []).some((a) => a.role?.code === 'OWNER');
+  const isViewingSelf = currentUser && user && String(currentUser.user_id) === String(user.user_id);
   const [tab, setTab] = useState('profile');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -323,7 +328,7 @@ export default function UserDetailPage() {
                 Resend Invite
               </Button>
             )}
-            {user.status === 'ACTIVE' && (
+            {user.status === 'ACTIVE' && !isViewedUserOwner && !isViewingSelf && (
               <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>Deactivate</Button>
             )}
           </div>

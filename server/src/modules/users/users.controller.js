@@ -26,6 +26,16 @@ const deactivate = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
+const reactivate = catchAsync(async (req, res) => {
+  const result = await usersService.reactivate(req.params.id, req.user.user_id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
+const permanentDelete = catchAsync(async (req, res) => {
+  const result = await usersService.permanentDelete(req.params.id, req.user.user_id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
 const assignRole = catchAsync(async (req, res) => {
   const assignment = await usersService.assignRole(req.params.id, req.body, req.user.user_id);
   res.status(201).json({ status: 'success', data: assignment });
@@ -75,6 +85,8 @@ module.exports = {
   create,
   update,
   deactivate,
+  reactivate,
+  permanentDelete,
   assignRole,
   unassignRole,
   assignDirectPermission,

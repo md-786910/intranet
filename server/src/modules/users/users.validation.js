@@ -38,28 +38,30 @@ const idParam = {
 
 const createUserSchema = {
   body: Joi.object({
+    mode: Joi.string().valid('PASSWORD', 'INVITE').default('PASSWORD'),
     email: Joi.string().email().required().lowercase().trim(),
-    password: passwordPattern.required(),
+    password: Joi.when('mode', {
+      is: 'PASSWORD',
+      then: passwordPattern.required(),
+      otherwise: Joi.any().strip(),
+    }),
     first_name: Joi.string().trim().min(1).max(100).required(),
     last_name: Joi.string().trim().min(1).max(100).required(),
     phone: Joi.string().trim().max(20).optional().allow('', null),
-    scope_type: scopeTypePattern.optional(),
-    scope_id: idPattern.optional(),
-    profile: Joi.object({
-      job_title: Joi.string().trim().max(255).optional().allow('', null),
-      bio: Joi.string().trim().max(2000).optional().allow('', null),
-      employee_id: Joi.string().trim().max(50).optional().allow('', null),
-      date_of_birth: Joi.date().iso().optional().allow(null),
-      date_of_joining: Joi.date().iso().optional().allow(null),
-      role_category_id: Joi.number().integer().positive().optional().allow(null),
-      reports_to_user_id: Joi.number().integer().positive().optional().allow(null),
-      location: Joi.string().trim().max(255).optional().allow('', null),
-    }).optional(),
-    initial_role: Joi.object({
-      role_id: idPattern.required(),
-      scope_type: scopeTypePattern.required(),
-      scope_id: idPattern.required(),
-    }).optional(),
+    job_title: Joi.string().trim().max(255).optional().allow('', null),
+    employee_id: Joi.string().trim().max(50).optional().allow('', null),
+    role_category_id: idPattern.required()
+      .messages({ 'any.required': 'Role category is required' }),
+    reports_to_user_id: idPattern.optional().allow(null),
+    date_of_joining: Joi.date().iso().optional().allow(null),
+    date_of_birth: Joi.date().iso().optional().allow(null),
+    location: Joi.string().trim().max(255).optional().allow('', null),
+    bio: Joi.string().trim().max(2000).optional().allow('', null),
+    role_id: idPattern.optional().allow(null),
+    department_ids: Joi.array().items(idPattern).min(1).required()
+      .messages({ 'array.min': 'At least one department is required' }),
+    primary_department_id: idPattern.optional(),
+    chat_blocked_user_ids: Joi.array().items(idPattern).optional(),
     initial_roles: Joi.array().items(
       Joi.object({
         role_id: idPattern.required(),
@@ -89,16 +91,11 @@ const updateUserSchema = {
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
     chat_blocked_user_ids: Joi.array().items(Joi.number().integer().positive()).optional(),
-    profile: Joi.object({
-      job_title: Joi.string().trim().max(255).optional().allow('', null),
-      bio: Joi.string().trim().max(2000).optional().allow('', null),
-      employee_id: Joi.string().trim().max(50).optional().allow('', null),
-      date_of_birth: Joi.date().iso().optional().allow(null),
-      date_of_joining: Joi.date().iso().optional().allow(null),
-      role_category_id: idPattern.optional().allow(null),
-      reports_to_user_id: idPattern.optional().allow(null),
-      location: Joi.string().trim().max(255).optional().allow('', null),
-    }).optional(),
+    job_title: Joi.string().trim().max(255).optional().allow('', null),
+    role_category_id: idPattern.optional().allow(null),
+    reports_to_user_id: idPattern.optional().allow(null),
+    date_of_joining: Joi.date().iso().optional().allow(null),
+    date_of_birth: Joi.date().iso().optional().allow(null),
   }),
 };
 
