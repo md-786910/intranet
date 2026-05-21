@@ -138,7 +138,7 @@ export default function ActivityLogPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const { isOwner } = useAuth();
-  const { page, limit, setPage } = usePagination();
+  const { page, limit, setPage, setLimit } = usePagination();
   const [entityFilter, setEntityFilter] = useState('');
   const [data, setData] = useState({ events: [], pagination: {} });
   const [loading, setLoading] = useState(true);
@@ -234,8 +234,9 @@ export default function ActivityLogPage() {
             page={data.pagination.page}
             totalPages={data.pagination.totalPages}
             total={data.pagination.total}
-            limit={data.pagination.limit}
+            limit={limit}
             onPageChange={setPage}
+            onLimitChange={setLimit}
           />
         </div>
       )}

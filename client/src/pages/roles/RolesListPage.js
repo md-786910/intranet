@@ -89,7 +89,7 @@ export default function RolesListPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const { currentOrganisationId } = useCurrentOrganisation();
-  const { page, limit, setPage } = usePagination();
+  const { page, limit, setPage, setLimit } = usePagination();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search);
   const [allRoles, setAllRoles] = useState([]);
@@ -243,7 +243,7 @@ export default function RolesListPage() {
             />
             {pagination.totalPages > 1 && (
               <Pagination page={pagination.page} totalPages={pagination.totalPages}
-                total={pagination.total} limit={pagination.limit} onPageChange={setPage} />
+                total={pagination.total} limit={limit} onPageChange={setPage} onLimitChange={setLimit} />
             )}
           </>
         )}

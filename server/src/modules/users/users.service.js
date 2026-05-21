@@ -194,6 +194,28 @@ const usersService = {
            AND _v.office_location_id = ${Number(query.office_location_id)}
       )`));
     }
+    if (query.role_category_id) {
+      andClauses.push(sequelize.literal(`EXISTS (
+        SELECT 1 FROM person_profile _pp
+         WHERE _pp.user_id = "UserAccount"."user_id"
+           AND _pp.role_category_id = ${Number(query.role_category_id)}
+      )`));
+    }
+    if (query.role_id) {
+      andClauses.push(sequelize.literal(`EXISTS (
+        SELECT 1 FROM user_role_assignment _ura
+         WHERE _ura.user_id = "UserAccount"."user_id"
+           AND _ura.role_id = ${Number(query.role_id)}
+      )`));
+    }
+    if (query.job_title) {
+      const escaped = query.job_title.replace(/'/g, "''");
+      andClauses.push(sequelize.literal(`EXISTS (
+        SELECT 1 FROM person_profile _pp
+         WHERE _pp.user_id = "UserAccount"."user_id"
+           AND _pp.job_title ILIKE '%${escaped}%'
+      )`));
+    }
     if (andClauses.length) where[Op.and] = andClauses;
 
     // PersonProfile: simple belongsTo-style JOIN, fine in main query.

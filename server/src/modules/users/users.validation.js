@@ -21,6 +21,9 @@ const listUsersSchema = {
     vertical_id: idPattern.optional(),
     sort_by: Joi.string().valid('name', 'status', 'created_at', 'profession').default('name'),
     sort_dir: Joi.string().valid('asc', 'desc').default('asc'),
+    role_category_id: idPattern.optional(),
+    role_id: idPattern.optional(),
+    job_title: Joi.string().trim().max(255).optional().allow(''),
     // kept for backward compat with any existing callers
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),

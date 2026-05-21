@@ -50,7 +50,7 @@ export default function NewsListPage() {
   const { hasPermission: canCreateNews } = usePermission('NEWS', 'CREATE');
   const { hasPermission: canDeleteNews } = usePermission('NEWS', 'DELETE');
   const { isOwner } = useAuth();
-  const { page, limit, setPage } = usePagination();
+  const { page, limit, setPage, setLimit } = usePagination();
   const [viewMode, setViewMode] = useState('active');
   const [search, setSearch] = useState('');
   const [statusTab, setStatusTab] = useState('ALL');
@@ -297,8 +297,9 @@ export default function NewsListPage() {
         page={data.pagination.page}
         totalPages={data.pagination.totalPages}
         total={data.pagination.total}
-        limit={data.pagination.limit}
+        limit={limit}
         onPageChange={setPage}
+        onLimitChange={setLimit}
       />
 
       <ConfirmDialog
