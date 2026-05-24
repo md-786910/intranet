@@ -12,6 +12,7 @@ import ReportsToPicker from '../employees/ReportsToPicker';
 import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
 import { roleCategoryService } from '../../services/roleCategoryService';
+import { jobTitleService } from '../../services/jobTitleService';
 import { useToast } from '../../hooks/useToast';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
@@ -103,6 +104,7 @@ export default function UserCreatePage() {
   const [reportsTo, setReportsTo] = useState(null);
   const [primaryDeptId, setPrimaryDeptId] = useState('');
   const [roleCategories, setRoleCategories] = useState([]);
+  const [jobTitles, setJobTitles] = useState([]);
   const [chatCandidates, setChatCandidates] = useState([]);
   const [chatCandidatesLoading, setChatCandidatesLoading] = useState(true);
   const [chatBlockedIds, setChatBlockedIds] = useState([]);
@@ -126,6 +128,7 @@ export default function UserCreatePage() {
     roleService.getRoles({ limit: 100 }).then((res) => setAllRoles(res.data?.data?.roles || [])).catch(() => {});
     roleService.getModules().then((res) => setModules(res.data?.data || [])).catch(() => {});
     roleCategoryService.list().then((res) => setRoleCategories(res.data?.data || [])).catch(() => {});
+    jobTitleService.list().then((res) => setJobTitles(res.data?.data || [])).catch(() => {});
     userService.listChatCandidates()
       .then((res) => setChatCandidates(res.data?.data || []))
       .catch(() => setChatCandidates([]))
@@ -136,6 +139,11 @@ export default function UserCreatePage() {
   const roleCategoryOptions = useMemo(
     () => roleCategories.map((c) => ({ value: String(c.id), label: c.name })),
     [roleCategories],
+  );
+
+  const jobTitleOptions = useMemo(
+    () => jobTitles.map((t) => ({ value: t.name, label: t.name })),
+    [jobTitles],
   );
 
   // Collect unique department-level scopes from all assigned roles
@@ -390,7 +398,8 @@ export default function UserCreatePage() {
           <div className="border-t border-gray-100 pt-5">
             <h3 className="text-sm font-semibold text-gray-800 mb-4">Profile</h3>
             <div className="grid grid-cols-2 gap-4">
-              <Input label="Job Title" name="job_title" value={form.job_title} onChange={handleChange} />
+              <Select label="Job Title" name="job_title" value={form.job_title}
+                onChange={handleChange} options={jobTitleOptions} placeholder="Select a job title" />
               <Input label="Employee ID" name="employee_id" value={form.employee_id} onChange={handleChange} />
             </div>
             <div className="grid grid-cols-2 gap-4 mt-4">
