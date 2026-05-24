@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { employeeService } from '../../services/employeeService';
+import { userService } from '../../services/userService';
 
 export default function ReportsToPicker({
   label, value, onChange, helpText, excludeUserId,
@@ -27,9 +27,9 @@ export default function ReportsToPicker({
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const res = await employeeService.listEmployees({ search: trimmed, limit: 20 });
+        const res = await userService.getUsers({ search: trimmed, limit: 20 });
         if (cancelled) return;
-        const list = res.data?.data?.employees || [];
+        const list = res.data?.data?.users || [];
         const filtered = excludeUserId ? list.filter((u) => u.user_id !== excludeUserId) : list;
         setResults(filtered);
       } catch {
@@ -44,8 +44,8 @@ export default function ReportsToPicker({
   const select = (user) => {
     onChange({
       user_id: user.user_id,
-      first_name: user.first_name,
-      last_name: user.last_name,
+      first_name: user.profile?.first_name || user.first_name,
+      last_name: user.profile?.last_name || user.last_name,
       email: user.email,
     });
     setOpen(false);
@@ -117,7 +117,7 @@ export default function ReportsToPicker({
                 onClick={() => select(u)}
                 className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-b-0"
               >
-                <div className="text-sm font-medium text-gray-900">{u.first_name} {u.last_name}</div>
+                <div className="text-sm font-medium text-gray-900">{u.profile?.full_name || `${u.first_name} ${u.last_name}`}</div>
                 <div className="text-xs text-gray-500">
                   {u.email}
                   {u.profile?.roleCategory?.name && (

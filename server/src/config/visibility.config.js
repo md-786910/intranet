@@ -97,7 +97,12 @@ module.exports = {
   //   windowDays  — ignore events older than this many days.
   recentActivity: {
     level: "DEPARTMENT",
-    kinds: ["NEWS_PUBLISHED", "DOCUMENT_PUBLISHED", "ANNOUNCEMENT_PUBLISHED", "MEMBER_JOINED"],
+    kinds: [
+      "NEWS_PUBLISHED",
+      "DOCUMENT_PUBLISHED",
+      "ANNOUNCEMENT_PUBLISHED",
+      "MEMBER_JOINED",
+    ],
     limit: 8,
     windowDays: 30,
   },

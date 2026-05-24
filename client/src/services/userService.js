@@ -13,4 +13,6 @@ export const userService = {
   assignPermission: (userId, data) => api.post(`/users/${userId}/permissions`, data),
   removePermission: (userId, permId) => api.delete(`/users/${userId}/permissions/${permId}`),
   importUsers: (data) => api.post('/users/import', data),
+  resendInvite: (id) => api.post(`/users/${id}/resend-invite`),
+  listChatCandidates: () => api.get('/users/chat-candidates'),
 };

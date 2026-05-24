@@ -136,6 +136,7 @@ export default function UserDetailPage() {
   const [tab, setTab] = useState('profile');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [resending, setResending] = useState(false);
 
   // Roles & modules
   const [allRoles, setAllRoles] = useState([]);
@@ -181,6 +182,17 @@ export default function UserDetailPage() {
     } catch (err) {
       addToast(err.response?.data?.message || 'Failed to deactivate', 'error');
     } finally { setDeleting(false); setDeleteOpen(false); }
+  };
+
+  const handleResendInvite = async () => {
+    setResending(true);
+    try {
+      await userService.resendInvite(id);
+      addToast('Invitation resent successfully', 'success');
+      fetchUser();
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to resend invitation', 'error');
+    } finally { setResending(false); }
   };
 
   const handleAssignRole = async () => {
@@ -331,6 +343,19 @@ export default function UserDetailPage() {
           {/* ═══ PROFILE ═══ */}
           {tab === 'profile' && (
             <div className="space-y-6">
+              {/* Invitation pending banner */}
+              {user.invitation_pending && (
+                <div className="flex items-center justify-between rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+                  <p className="text-xs text-amber-800">
+                    Invitation pending — user hasn't accepted yet.
+                    {user.invitation_expires_at && ` Expires ${new Date(user.invitation_expires_at).toLocaleDateString()}.`}
+                  </p>
+                  <Button variant="secondary" size="sm" onClick={handleResendInvite} loading={resending}>
+                    Resend Invite
+                  </Button>
+                </div>
+              )}
+
               {/* Identity strip */}
               <div className="flex items-center gap-4 pb-5 border-b border-gray-100">
                 <div className="inline-flex w-14 h-14 rounded-full bg-primary-100 text-primary-700 items-center justify-center text-lg font-semibold flex-shrink-0">
@@ -358,6 +383,17 @@ export default function UserDetailPage() {
                     <Field label="Job title" value={user.profile?.job_title} />
                     <Field label="Employee ID" value={user.profile?.employee_id} />
                     <Field label="Phone" value={user.phone} />
+                    <Field label="Role Category" value={user.profile?.roleCategory?.name} />
+                    <Field
+                      label="Reporting To"
+                      value={
+                        user.profile?.manager
+                          ? <button type="button" onClick={() => navigate(`/users/${user.profile.manager.user_id}`)} className="text-primary-600 hover:text-primary-700 hover:underline font-medium">
+                              {user.profile.manager.first_name} {user.profile.manager.last_name}
+                            </button>
+                          : null
+                      }
+                    />
                   </dl>
                 </section>
 

@@ -5,7 +5,7 @@ export const documentsService = {
   // and attaches a live doc_count per category.
   listCategories: () => api.get('/documents/categories', { params: { for_user: true } }),
   getCategory: (id) => api.get(`/documents/categories/${id}/info`),
-  listDocuments: (params) => api.get('/documents', { params }),
+  listDocuments: (params) => api.get('/documents', { params: { ...params, viewer: 1 } }),
   getDocument: (id) => api.get(`/documents/${id}`),
   recordView: (id) => api.post(`/documents/${id}/view`),
   recentlyViewed: (params) => api.get('/documents/recently-viewed', { params }),

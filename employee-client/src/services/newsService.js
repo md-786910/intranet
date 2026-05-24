@@ -10,7 +10,7 @@ const publicApi = axios.create({
 });
 
 export const newsService = {
-  getArticles: (params) => api.get('/news', { params }),
+  getArticles: (params) => api.get('/news', { params: { ...params, viewer: 1 } }),
   getArticle: (id) => api.get(`/news/${id}`),
 
   // Engagement

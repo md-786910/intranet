@@ -30,6 +30,7 @@ const menuItems = [
       { label: 'Organisation Tree', path: '/organisation', icon: ICONS.organisation, module: 'ADMIN', action: 'MANAGE_OFFICE_LOCATIONS' },
       { label: 'Users', path: '/users', icon: ICONS.users, module: 'ADMIN', action: 'MANAGE_USERS' },
       { label: 'Roles', path: '/roles', icon: ICONS.roles, module: 'ADMIN', action: 'MANAGE_ROLES' },
+      { label: 'Role Categories', path: '/role-categories', icon: ICONS.categories, module: 'ADMIN', action: 'MANAGE_EMPLOYEES' },
     ],
   },
   {
@@ -72,16 +73,7 @@ const menuItems = [
       },
     ],
   },
-  {
-    type: 'group',
-    label: 'Employee Management',
-    icon: ICONS.employees,
-    defaultOpen: false,
-    children: [
-      { label: 'Manage Employees', path: '/employees', icon: ICONS.employees, module: 'ADMIN', action: 'MANAGE_EMPLOYEES' },
-      { label: 'Role Categories', path: '/role-categories', icon: ICONS.roles, module: 'ADMIN', action: 'MANAGE_EMPLOYEES' },
-    ],
-  },
+  // Employee Management section removed — employees are now managed from Organisation → Users
   {
     type: 'group',
     label: 'Settings',

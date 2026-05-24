@@ -69,6 +69,16 @@ const importCsv = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
+const resendInvite = catchAsync(async (req, res) => {
+  const result = await usersService.resendInvite(req.params.id, req.user.user_id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
+const listChatCandidates = catchAsync(async (req, res) => {
+  const candidates = await usersService.listChatCandidates();
+  res.status(200).json({ status: 'success', data: candidates });
+});
+
 module.exports = {
   list,
   getById,
@@ -82,4 +92,6 @@ module.exports = {
   assignDepartment,
   removeDepartment,
   importCsv,
+  resendInvite,
+  listChatCandidates,
 };

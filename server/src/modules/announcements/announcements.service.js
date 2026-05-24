@@ -49,9 +49,10 @@ const announcementsService = {
   async list(query, userId) {
     const { AnnouncementItem, UserAccount, ContentAudienceRule, sequelize } = require('../../database/models');
     const { page, limit, offset } = parsePagination(query);
+    const forceViewer = query.viewer === 1 || query.viewer === '1' || query.viewer === true;
     const [managing, isGlobal] = await Promise.all([
-      canManage(userId),
-      permissionService.isGlobalManager(userId, AUTH_MODULE),
+      forceViewer ? Promise.resolve(false) : canManage(userId),
+      forceViewer ? Promise.resolve(false) : permissionService.isGlobalManager(userId, AUTH_MODULE),
     ]);
     const trash = managing && (query.trash === true || query.trash === 'true');
 

@@ -6,10 +6,13 @@ import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
 import Badge from '../../components/common/Badge';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
+import ChatAccessSelector from '../../components/common/ChatAccessSelector';
 import PermissionMatrix from '../../components/roles/PermissionMatrix';
 import { getPermLabel } from '../../components/roles/PermissionMatrix';
+import ReportsToPicker from '../employees/ReportsToPicker';
 import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
+import { roleCategoryService } from '../../services/roleCategoryService';
 import { useToast } from '../../hooks/useToast';
 import { useOrgTree } from '../../hooks/useOrgTree';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
@@ -22,6 +25,21 @@ const STATUS_OPTIONS = [
   { value: 'INACTIVE', label: 'Inactive' },
   { value: 'LOCKED', label: 'Locked' },
 ];
+
+function buildScopesFromMemberships(memberships = []) {
+  return memberships
+    .filter((m) => !String(m.membership_id || '').startsWith('derived-'))
+    .map((m) => {
+      const dept = m.department;
+      const verticalName = dept?.vertical?.name;
+      const officeName = dept?.vertical?.officeLocation?.name;
+      return {
+        scope_type: 'DEPARTMENT',
+        scope_id: dept?.id || m.department_id,
+        scope_label: `Department: ${dept?.name}${verticalName ? ` · ${verticalName}` : ''}${officeName ? ` · ${officeName}` : ''}`,
+      };
+    });
+}
 
 function extractPermissionIds(role) {
   if (!role?.permissions) return new Set();
@@ -87,10 +105,20 @@ export default function UserEditPage() {
   // Profile form
   const [form, setForm] = useState({
     first_name: '', last_name: '', phone: '', status: 'ACTIVE',
-    job_title: '', employee_id: '',
+    job_title: '', employee_id: '', role_category_id: '',
   });
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+  const [resending, setResending] = useState(false);
+
+  // Employee-specific state
+  const [reportsTo, setReportsTo] = useState(null);
+  const [empScopes, setEmpScopes] = useState([]);
+  const [primaryDeptId, setPrimaryDeptId] = useState('');
+  const [roleCategories, setRoleCategories] = useState([]);
+  const [chatCandidates, setChatCandidates] = useState([]);
+  const [chatCandidatesLoading, setChatCandidatesLoading] = useState(true);
+  const [chatBlockedIds, setChatBlockedIds] = useState([]);
 
   // Roles + modules
   const [allRoles, setAllRoles] = useState([]);
@@ -131,7 +159,18 @@ export default function UserEditPage() {
           first_name: u.first_name || '', last_name: u.last_name || '',
           phone: u.phone || '', status: u.status || 'ACTIVE',
           job_title: u.profile?.job_title || '', employee_id: u.profile?.employee_id || '',
+          role_category_id: u.profile?.role_category_id ? String(u.profile.role_category_id) : '',
         });
+        if (u.profile?.manager) {
+          setReportsTo({ user_id: u.profile.manager.user_id, first_name: u.profile.manager.first_name, last_name: u.profile.manager.last_name, email: u.profile.manager.email });
+        } else {
+          setReportsTo(null);
+        }
+        const scopes = buildScopesFromMemberships(u.departmentMemberships);
+        setEmpScopes(scopes);
+        const primary = (u.departmentMemberships || []).find((m) => m.is_primary && !String(m.membership_id || '').startsWith('derived-'));
+        if (primary) setPrimaryDeptId(String(primary.department?.id || primary.department_id));
+        setChatBlockedIds(Array.isArray(u.chat_blocked_user_ids) ? u.chat_blocked_user_ids : []);
       })
       .catch(() => addToast('Failed to load user', 'error'))
       .finally(() => setLoading(false));
@@ -142,6 +181,11 @@ export default function UserEditPage() {
   useEffect(() => {
     roleService.getRoles({ limit: 100 }).then((res) => setAllRoles(res.data?.data?.roles || [])).catch(() => {});
     roleService.getModules().then((res) => setModules(res.data?.data || [])).catch(() => {});
+    roleCategoryService.list().then((res) => setRoleCategories(res.data?.data || [])).catch(() => {});
+    userService.listChatCandidates()
+      .then((res) => setChatCandidates(res.data?.data || []))
+      .catch(() => setChatCandidates([]))
+      .finally(() => setChatCandidatesLoading(false));
   }, []);
 
   // ── Profile handlers ──
@@ -150,18 +194,58 @@ export default function UserEditPage() {
     if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: null });
   };
 
+  // ── Employee derived ──
+  const roleCategoryOptions = useMemo(
+    () => roleCategories.map((c) => ({ value: String(c.id), label: c.name })),
+    [roleCategories],
+  );
+
+  const departmentScopes = useMemo(
+    () => empScopes.filter((s) => s.scope_type === 'DEPARTMENT'),
+    [empScopes],
+  );
+
+  const departmentOptions = useMemo(
+    () => departmentScopes.map((s) => ({
+      value: String(s.scope_id),
+      label: s.scope_label?.replace(/^Department:\s*/, '') || String(s.scope_id),
+    })),
+    [departmentScopes],
+  );
+
+  useEffect(() => {
+    if (primaryDeptId && !departmentScopes.some((s) => String(s.scope_id) === primaryDeptId)) {
+      setPrimaryDeptId('');
+    }
+  }, [departmentScopes, primaryDeptId]);
+
+  const statusOptions = useMemo(() => {
+    if (user?.status === 'INVITED') {
+      return [{ value: 'INVITED', label: 'Invited (pending acceptance)' }, ...STATUS_OPTIONS];
+    }
+    return STATUS_OPTIONS;
+  }, [user?.status]);
+
   const handleSaveProfile = async () => {
     const newErrors = {};
     if (!form.first_name) newErrors.first_name = 'First name is required';
     if (!form.last_name) newErrors.last_name = 'Last name is required';
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
+    const department_ids = departmentScopes.map((s) => Number(s.scope_id));
+
     setSaving(true);
     try {
       await userService.updateUser(id, {
         first_name: form.first_name, last_name: form.last_name,
-        phone: form.phone || undefined, status: form.status,
+        phone: form.phone || undefined,
+        status: user?.status !== 'INVITED' ? form.status : undefined,
         profile: { job_title: form.job_title || undefined, employee_id: form.employee_id || undefined },
+        role_category_id: form.role_category_id ? Number(form.role_category_id) : null,
+        reports_to_user_id: reportsTo ? reportsTo.user_id : null,
+        department_ids: department_ids.length > 0 ? department_ids : undefined,
+        primary_department_id: primaryDeptId ? Number(primaryDeptId) : undefined,
+        chat_blocked_user_ids: chatBlockedIds,
       });
       addToast('Profile updated', 'success');
       fetchUser();
@@ -170,6 +254,18 @@ export default function UserEditPage() {
       const ve = extractValidationErrors(err);
       if (Object.keys(ve).length > 0) setErrors(ve);
     } finally { setSaving(false); }
+  };
+
+  const handleResendInvite = async () => {
+    setResending(true);
+    try {
+      await userService.resendInvite(id);
+      addToast('Invitation resent successfully', 'success');
+    } catch (err) {
+      addToast(getErrorMessage(err, 'Failed to resend invitation'), 'error');
+    } finally {
+      setResending(false);
+    }
   };
 
   // ── Role handlers ──
@@ -338,6 +434,8 @@ export default function UserEditPage() {
     { key: 'departments', label: `Departments (${user.departmentMemberships?.length || 0})` },
   ];
 
+  const isInvited = user.status === 'INVITED';
+
   return (
     <div>
       <PageHeader title={`Edit: ${user.first_name} ${user.last_name}`} subtitle={user.email} backTo={`/users/${id}`} />
@@ -358,6 +456,17 @@ export default function UserEditPage() {
           {/* ═══ PROFILE TAB ═══ */}
           {tab === 'profile' && (
             <div className="space-y-5">
+              {isInvited && (
+                <div className="flex items-center justify-between rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+                  <p className="text-xs text-amber-800">
+                    Invitation pending — user has not yet accepted. Status will change to Active once accepted.
+                    {user.invitation_expires_at && ` Expires ${new Date(user.invitation_expires_at).toLocaleDateString()}.`}
+                  </p>
+                  <Button variant="secondary" size="sm" onClick={handleResendInvite} loading={resending}>
+                    Resend Invite
+                  </Button>
+                </div>
+              )}
               <Input
                 label="Email"
                 name="email"
@@ -375,7 +484,7 @@ export default function UserEditPage() {
                 <Input label="Phone" name="phone" value={form.phone} onChange={handleChange}
                   placeholder="e.g. +91 98765 43210" />
                 <Select label="Status" name="status" value={form.status}
-                  onChange={handleChange} options={STATUS_OPTIONS} />
+                  onChange={handleChange} options={statusOptions} disabled={isInvited} />
               </div>
               <div className="border-t border-gray-100 pt-5">
                 <h3 className="text-sm font-medium text-gray-700 mb-3">Profile</h3>
@@ -385,6 +494,35 @@ export default function UserEditPage() {
                   <Input label="Employee ID" name="employee_id" value={form.employee_id} onChange={handleChange}
                     placeholder="e.g. EMP-00123" />
                 </div>
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <Select label="Role Category" name="role_category_id" value={form.role_category_id}
+                    onChange={handleChange} options={roleCategoryOptions} placeholder="Select a category" />
+                  <ReportsToPicker label="Reporting To" value={reportsTo} onChange={setReportsTo}
+                    excludeUserId={Number(id)} helpText="Search by name or email." />
+                </div>
+              </div>
+
+              {/* ── Organisation Assignment ── */}
+              <div className="border-t border-gray-100 pt-5">
+                <h3 className="text-sm font-medium text-gray-700 mb-1">Organisation Assignment</h3>
+                <p className="text-xs text-gray-500 mb-3">Assign this user to departments. Sets Employee role and controls content access.</p>
+                <HierarchyScopeSelector value={empScopes} onChange={setEmpScopes} />
+                {errors.scopes && <p className="mt-2 text-xs text-red-600">{errors.scopes}</p>}
+                {departmentOptions.length > 1 && (
+                  <div className="mt-4">
+                    <Select label="Primary Department" name="primary_department" value={primaryDeptId}
+                      onChange={(e) => setPrimaryDeptId(e.target.value)}
+                      options={departmentOptions} placeholder="First selected (default)" />
+                  </div>
+                )}
+              </div>
+
+              {/* ── Chat Access ── */}
+              <div className="border-t border-gray-100 pt-5">
+                <h3 className="text-sm font-medium text-gray-700 mb-1">Chat Access</h3>
+                <p className="text-xs text-gray-500 mb-3">Uncheck anyone this user should not be able to find in chat — the block is bidirectional.</p>
+                <ChatAccessSelector candidates={chatCandidates} value={chatBlockedIds}
+                  onChange={setChatBlockedIds} loading={chatCandidatesLoading} excludeUserId={Number(id)} />
               </div>
 
               {/* Roles & org hierarchy — full width tree picker. */}

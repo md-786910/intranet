@@ -36,6 +36,8 @@ const loadEntityScope = (modelName, entityIdParam = 'id') => async (req, res, ne
       if (!req.body.scope_id && !req.body.owning_scope_id) {
         req.body.scope_id = entity.owning_scope_id;
       }
+      // Mark that scope was resolved from an existing entity (used by authorize.js bidirectional fallback)
+      req.entityScope = { scopeType: entity.owning_scope_type, scopeId: entity.owning_scope_id };
     }
 
     return next();

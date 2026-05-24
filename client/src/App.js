@@ -49,19 +49,24 @@ import CategoriesPage from './pages/categories/CategoriesPage';
 import ActivityLogPage from './pages/activity/ActivityLogPage';
 import QuickLinksPage from './pages/quick-links/QuickLinksPage';
 
+const EMPLOYEE_APP_URL = process.env.REACT_APP_EMPLOYEE_APP_URL || 'http://localhost:3001';
+
 function HomeRedirect() {
   const { hasPermission } = useContext(PermissionContext);
 
+  // Admin-only permissions — stay in admin panel
   if (hasPermission('ADMIN', 'VIEW_ANALYTICS')) return <Navigate to="/dashboard" replace />;
-  if (hasPermission('NEWS', 'VIEW')) return <Navigate to="/news" replace />;
-  if (hasPermission('DOCUMENTS', 'VIEW')) return <Navigate to="/documents" replace />;
-  if (hasPermission('PUSH', 'VIEW')) return <Navigate to="/push" replace />;
-  if (hasPermission('ADMIN', 'MANAGE_EMPLOYEES')) return <Navigate to="/employees" replace />;
   if (hasPermission('ADMIN', 'MANAGE_USERS')) return <Navigate to="/users" replace />;
   if (hasPermission('ADMIN', 'MANAGE_ROLES')) return <Navigate to="/roles" replace />;
   if (hasPermission('ADMIN', 'MANAGE_OFFICE_LOCATIONS')) return <Navigate to="/organisation" replace />;
+  // Content managers need EDIT or CREATE — VIEW alone is an employee-level permission
+  if (hasPermission('NEWS', 'EDIT') || hasPermission('NEWS', 'CREATE')) return <Navigate to="/news" replace />;
+  if (hasPermission('DOCUMENTS', 'EDIT') || hasPermission('DOCUMENTS', 'CREATE')) return <Navigate to="/documents" replace />;
+  if (hasPermission('PUSH', 'VIEW')) return <Navigate to="/push" replace />;
 
-  return <Navigate to="/login" replace />;
+  // No admin permissions — send to employee portal
+  window.location.replace(EMPLOYEE_APP_URL);
+  return null;
 }
 
 function App() {

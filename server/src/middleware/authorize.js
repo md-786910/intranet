@@ -95,6 +95,31 @@ const authorize = (moduleCode, actionCode) => {
           }
         }
 
+        // Bidirectional fallback for content mutation routes:
+        // If the article's owning_scope is an ancestor of the user's assigned scope,
+        // the user still has authority over it (e.g., dept-level editor can manage org-level content).
+        // Only apply when req.entityScope is set (i.e., loadEntityScope ran — not creation routes).
+        if (req.entityScope) {
+          const scopeService = require('../services/scope.service');
+          const assignments = await permissionService.getUserAssignmentsWithPermission(
+            req.user.user_id,
+            moduleCode,
+            actionCode,
+          );
+          for (const assignment of assignments) {
+            const articleIsAncestor = await scopeService.isAncestorOf(
+              scopeType,
+              parseInt(scopeId, 10),
+              assignment.scope_type,
+              assignment.scope_id,
+            );
+            if (articleIsAncestor) {
+              req.authorizedScope = { scopeType, scopeId: parseInt(scopeId, 10) };
+              return next();
+            }
+          }
+        }
+
         logger.warn(
           `Permission denied: user=${req.user.user_id} action=${moduleCode}:${actionCode} scope=${scopeType}:${scopeId}`,
         );

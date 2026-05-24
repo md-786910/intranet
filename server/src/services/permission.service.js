@@ -371,9 +371,44 @@ const permissionService = {
   /**
    * Invalidate all permission caches for a user.
    */
+  /**
+   * Returns all (scope_type, scope_id) pairs where the user has a role that
+   * grants the given module:action. Used for bidirectional scope matching in
+   * the authorize middleware (content hierarchy access).
+   */
+  async getUserAssignmentsWithPermission(userId, moduleCode, actionCode) {
+    try {
+      const { sequelize } = require('../database/models');
+      const rows = await sequelize.query(`
+        SELECT DISTINCT ura.scope_type, ura.scope_id
+        FROM user_role_assignment ura
+        JOIN role_permission rp ON rp.role_id = ura.role_id AND rp.effect = 'ALLOW'
+        JOIN module_action ma ON ma.module_action_id = rp.module_action_id AND ma.action_code = :actionCode
+        JOIN module m ON m.module_id = ma.module_id AND m.code = :moduleCode
+        WHERE ura.user_id = :userId
+          AND (ura.starts_at IS NULL OR ura.starts_at <= NOW())
+          AND (ura.ends_at IS NULL OR ura.ends_at > NOW())
+        UNION
+        SELECT DISTINCT up.scope_type, up.scope_id
+        FROM user_permission up
+        JOIN module_action ma ON ma.module_action_id = up.module_action_id AND ma.action_code = :actionCode
+        JOIN module m ON m.module_id = ma.module_id AND m.code = :moduleCode
+        WHERE up.user_id = :userId AND up.effect = 'ALLOW'
+      `, {
+        replacements: { userId, moduleCode, actionCode },
+        type: QueryTypes.SELECT,
+      });
+      return rows;
+    } catch (err) {
+      logger.error('getUserAssignmentsWithPermission error:', err.message);
+      return [];
+    }
+  },
+
   async invalidateUserCache(userId) {
     await cacheService.deletePattern(`perm:${userId}:*`);
     await cacheService.deletePattern(`perms:${userId}:*`);
+    await cacheService.deletePattern(`scope:read:${userId}:*`);
   },
 };
 

@@ -15,8 +15,10 @@ const listUsersSchema = {
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(20),
     search: Joi.string().trim().max(255).optional().allow(''),
-    status: Joi.string().valid('ACTIVE', 'INACTIVE', 'LOCKED').optional(),
+    status: Joi.string().valid('ACTIVE', 'INACTIVE', 'LOCKED', 'INVITED').optional(),
     department_id: idPattern.optional(),
+    office_location_id: idPattern.optional(),
+    vertical_id: idPattern.optional(),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
   }),
@@ -31,7 +33,7 @@ const idParam = {
 const createUserSchema = {
   body: Joi.object({
     email: Joi.string().email().required().lowercase().trim(),
-    password: passwordPattern.required(),
+    password: passwordPattern.optional().allow('', null),
     first_name: Joi.string().trim().min(1).max(100).required(),
     last_name: Joi.string().trim().min(1).max(100).required(),
     phone: Joi.string().trim().max(20).optional().allow('', null),
@@ -63,6 +65,12 @@ const createUserSchema = {
         scope_id: idPattern.required(),
       })
     ).optional(),
+    // Employee-specific fields
+    role_category_id: idPattern.optional(),
+    reports_to_user_id: idPattern.optional().allow(null),
+    department_ids: Joi.array().items(idPattern).min(1).optional(),
+    primary_department_id: idPattern.optional().allow(null),
+    chat_blocked_user_ids: Joi.array().items(idPattern).optional(),
   }),
 };
 
@@ -74,7 +82,7 @@ const updateUserSchema = {
     first_name: Joi.string().trim().min(1).max(100).optional(),
     last_name: Joi.string().trim().min(1).max(100).optional(),
     phone: Joi.string().trim().max(20).optional().allow('', null),
-    status: Joi.string().valid('ACTIVE', 'INACTIVE', 'LOCKED').optional(),
+    status: Joi.string().valid('ACTIVE', 'INACTIVE', 'LOCKED', 'INVITED').optional(),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
     profile: Joi.object({
@@ -84,6 +92,12 @@ const updateUserSchema = {
       date_of_birth: Joi.date().iso().optional().allow(null),
       date_of_joining: Joi.date().iso().optional().allow(null),
     }).optional(),
+    // Employee-specific fields
+    role_category_id: idPattern.optional().allow(null),
+    reports_to_user_id: idPattern.optional().allow(null),
+    department_ids: Joi.array().items(idPattern).min(1).optional(),
+    primary_department_id: idPattern.optional().allow(null),
+    chat_blocked_user_ids: Joi.array().items(idPattern).optional(),
   }),
 };
 

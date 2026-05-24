@@ -73,7 +73,13 @@ async function getReadableScopeKeys(userId, moduleCode) {
       }
     });
 
-    // Expand: ORGANISATION → all offices under it
+    // Capture original assignment scopes before downward expansion
+    const assignedOrgIds = new Set(orgIds);
+    const assignedOfficeIds = new Set(officeIds);
+    const assignedVerticalIds = new Set(verticalIds);
+    const assignedDeptIds = new Set(departmentIds);
+
+    // Downward expansion: ORGANISATION → all offices under it
     if (orgIds.size > 0) {
       const offices = await OfficeLocation.findAll({
         where: { organisation_id: { [Op.in]: [...orgIds] } },
@@ -99,6 +105,35 @@ async function getReadableScopeKeys(userId, moduleCode) {
       });
       departments.forEach((d) => departmentIds.add(d.id));
     }
+
+    // Upward expansion from original assignments: dept → vertical → office → org
+    // This ensures a dept-level editor can also see content published at ancestor
+    // scope levels (e.g. org-wide articles published by a global manager).
+    if (assignedDeptIds.size > 0) {
+      const depts = await Department.findAll({
+        where: { id: { [Op.in]: [...assignedDeptIds] } },
+        attributes: ['id', 'vertical_id'],
+      });
+      depts.forEach((d) => { if (d.vertical_id) assignedVerticalIds.add(d.vertical_id); });
+    }
+    if (assignedVerticalIds.size > 0) {
+      const verts = await Vertical.findAll({
+        where: { id: { [Op.in]: [...assignedVerticalIds] } },
+        attributes: ['id', 'office_location_id'],
+      });
+      verts.forEach((v) => { if (v.office_location_id) assignedOfficeIds.add(v.office_location_id); });
+    }
+    if (assignedOfficeIds.size > 0) {
+      const offices = await OfficeLocation.findAll({
+        where: { id: { [Op.in]: [...assignedOfficeIds] } },
+        attributes: ['id', 'organisation_id'],
+      });
+      offices.forEach((o) => { if (o.organisation_id) assignedOrgIds.add(o.organisation_id); });
+    }
+    // Merge ancestors back into the main sets
+    assignedOrgIds.forEach((id) => orgIds.add(id));
+    assignedOfficeIds.forEach((id) => officeIds.add(id));
+    assignedVerticalIds.forEach((id) => verticalIds.add(id));
 
     const keys = [
       ...[...orgIds].map((id) => ({ type: 'ORGANISATION', id })),

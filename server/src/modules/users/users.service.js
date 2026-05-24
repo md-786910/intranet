@@ -1,4 +1,6 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const { Op } = require('sequelize');
 const ApiError = require('../../utils/ApiError');
 const auditService = require('../../services/audit.service');
 const cacheService = require('../../services/cache.service');
@@ -8,6 +10,121 @@ const organisationContextService = require('../../services/organisation-context.
 const logger = require('../../config/logger');
 const { DEFAULT_TENANT_ID } = require('../../utils/constants');
 const { parsePagination, buildPagination } = require('../../utils/pagination');
+const { sha256, generateToken } = require('../../utils/crypto');
+
+const INVITATION_TTL_DAYS = 7;
+
+async function resolveEmployeeRoleId() {
+  const { Role } = require('../../database/models');
+  const role = await Role.findOne({ where: { code: 'EMPLOYEE', tenant_id: DEFAULT_TENANT_ID } });
+  if (!role) throw ApiError.internal('EMPLOYEE role is not seeded');
+  return role.role_id;
+}
+
+async function validateDepartmentsExist(departmentIds) {
+  const { Department } = require('../../database/models');
+  const rows = await Department.findAll({ where: { id: departmentIds }, attributes: ['id'] });
+  if (rows.length !== new Set(departmentIds).size) {
+    throw ApiError.badRequest('One or more department_ids are invalid');
+  }
+}
+
+async function validateRoleCategoryExists(roleCategoryId) {
+  if (!roleCategoryId) return;
+  const { RoleCategory } = require('../../database/models');
+  const row = await RoleCategory.findOne({ where: { id: roleCategoryId, tenant_id: DEFAULT_TENANT_ID }, attributes: ['id'] });
+  if (!row) throw ApiError.badRequest('role_category_id is invalid');
+}
+
+async function validateReportsTo({ reportsToUserId, selfUserId }) {
+  if (!reportsToUserId) return;
+  if (selfUserId && Number(reportsToUserId) === Number(selfUserId)) {
+    throw ApiError.badRequest('A user cannot report to themselves');
+  }
+  const { UserAccount, PersonProfile } = require('../../database/models');
+  const manager = await UserAccount.findOne({ where: { user_id: reportsToUserId }, attributes: ['user_id'] });
+  if (!manager) throw ApiError.badRequest('reports_to_user_id is invalid');
+  if (!selfUserId) return;
+  let cursor = reportsToUserId;
+  for (let i = 0; i < 50 && cursor; i += 1) {
+    if (Number(cursor) === Number(selfUserId)) {
+      throw ApiError.badRequest('Reporting chain would create a cycle');
+    }
+    // eslint-disable-next-line no-await-in-loop
+    const profile = await PersonProfile.findOne({ where: { user_id: cursor }, attributes: ['reports_to_user_id'] });
+    cursor = profile ? profile.reports_to_user_id : null;
+  }
+}
+
+async function syncDepartmentMemberships({ userId, departmentIds, primaryDepartmentId, transaction }) {
+  const { DepartmentMembership } = require('../../database/models');
+  const existing = await DepartmentMembership.findAll({ where: { user_id: userId }, transaction });
+  const existingIds = new Set(existing.map((m) => Number(m.department_id)));
+  const desiredIds = new Set(departmentIds.map(Number));
+
+  for (const membership of existing) {
+    if (!desiredIds.has(Number(membership.department_id))) await membership.destroy({ transaction });
+  }
+  for (const departmentId of desiredIds) {
+    if (!existingIds.has(departmentId)) {
+      await DepartmentMembership.create({ user_id: userId, department_id: departmentId, is_primary: false }, { transaction });
+    }
+  }
+
+  const primaryId = primaryDepartmentId || [...desiredIds][0];
+  await DepartmentMembership.update({ is_primary: false }, { where: { user_id: userId }, transaction });
+  await DepartmentMembership.update({ is_primary: true }, { where: { user_id: userId, department_id: primaryId }, transaction });
+}
+
+async function syncEmployeeRoleAssignments({ userId, roleId, departmentIds, actorUserId, transaction }) {
+  const { UserRoleAssignment } = require('../../database/models');
+  await UserRoleAssignment.destroy({ where: { user_id: userId, role_id: roleId, scope_type: 'DEPARTMENT' }, transaction });
+  for (const departmentId of new Set(departmentIds.map(Number))) {
+    await UserRoleAssignment.create({
+      user_id: userId, role_id: roleId, scope_type: 'DEPARTMENT', scope_id: departmentId, assigned_by: actorUserId || null,
+    }, { transaction });
+  }
+}
+
+async function syncChatBlocks({ userId, blockedIds, actorUserId, transaction }) {
+  const { ChatBlock } = require('../../database/models');
+  const desired = Array.from(new Set((blockedIds || []).map(Number).filter((id) => Number.isInteger(id) && id > 0 && id !== Number(userId))));
+  const existing = await ChatBlock.findAll({ where: { user_id: userId }, attributes: ['blocked_user_id'], transaction });
+  const existingIds = existing.map((row) => row.blocked_user_id);
+  const desiredSet = new Set(desired);
+  const existingSet = new Set(existingIds);
+  const toAdd = desired.filter((id) => !existingSet.has(id));
+  const toRemove = existingIds.filter((id) => !desiredSet.has(id));
+
+  for (const otherId of toAdd) {
+    await ChatBlock.bulkCreate([
+      { user_id: userId, blocked_user_id: otherId, created_by: actorUserId || null },
+      { user_id: otherId, blocked_user_id: userId, created_by: actorUserId || null },
+    ], { transaction, ignoreDuplicates: true });
+  }
+  if (toRemove.length > 0) {
+    await ChatBlock.destroy({
+      where: { [Op.or]: [{ user_id: userId, blocked_user_id: toRemove }, { user_id: toRemove, blocked_user_id: userId }] },
+      transaction,
+    });
+  }
+}
+
+async function createInvitationForUser({ user, invitedByUserId, transaction }) {
+  const { EmployeeInvitation } = require('../../database/models');
+  const rawToken = generateToken(32);
+  const tokenHash = sha256(rawToken);
+  const expiresAt = new Date(Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000);
+  await EmployeeInvitation.create({
+    tenant_id: DEFAULT_TENANT_ID,
+    user_id: user.user_id,
+    email: user.email,
+    token_hash: tokenHash,
+    expires_at: expiresAt,
+    invited_by_user_id: invitedByUserId || null,
+  }, { transaction });
+  return { rawToken, expiresAt };
+}
 
 const SCOPE_LABEL_FALLBACK = 'Organisation-wide';
 
@@ -151,64 +268,100 @@ function buildDepartmentPath(department) {
 
 const usersService = {
   async list(query) {
-    const { UserAccount, PersonProfile, DepartmentMembership, sequelize } = require('../../database/models');
-    const { Op } = require('sequelize');
+    const { QueryTypes } = require('sequelize');
+    const {
+      UserAccount, PersonProfile, DepartmentMembership, Department, Vertical, OfficeLocation,
+      RoleCategory, sequelize,
+    } = require('../../database/models');
     const { page, limit, offset } = parsePagination(query);
 
-    const where = { deleted_at: null };
-    if (query.status) where.status = query.status;
+    const conditions = ['ua.deleted_at IS NULL'];
+    const replacements = { limit, offset };
+
+    if (query.status) {
+      conditions.push('ua.status = :status');
+      replacements.status = query.status;
+    }
     if (query.search) {
-      where[Op.or] = [
-        { email: { [Op.iLike]: `%${query.search}%` } },
-        { first_name: { [Op.iLike]: `%${query.search}%` } },
-        { last_name: { [Op.iLike]: `%${query.search}%` } },
-      ];
+      conditions.push('(ua.email ILIKE :search OR ua.first_name ILIKE :search OR ua.last_name ILIKE :search)');
+      replacements.search = `%${query.search}%`;
     }
 
-    // Hide pure members (invited via /employees flow with only EMPLOYEE role).
-    // Promoted members (any non-EMPLOYEE role assigned) reappear here.
-    where[Op.and] = [
-      sequelize.literal(`(
-        NOT EXISTS (
-          SELECT 1 FROM employee_invitation ei
-           WHERE ei.user_id = "UserAccount"."user_id"
-        )
-        OR EXISTS (
-          SELECT 1 FROM user_role_assignment ura
-            JOIN role r ON r.role_id = ura.role_id
-           WHERE ura.user_id = "UserAccount"."user_id"
-             AND r.code <> 'EMPLOYEE'
-        )
-      )`),
-    ];
-
-    const include = [
-      { model: PersonProfile, as: 'profile', required: false },
-    ];
-
-    // Filter by department if specified
-    if (query.department_id) {
-      include.push({
-        model: DepartmentMembership,
-        as: 'departmentMemberships',
-        where: { department_id: query.department_id },
-        required: true,
-      });
+    if (query.department_id || query.vertical_id || query.office_location_id) {
+      let orgExists = 'EXISTS (SELECT 1 FROM department_membership dm'
+        + ' JOIN department d ON d.id = dm.department_id'
+        + ' JOIN vertical v ON v.id = d.vertical_id'
+        + ' JOIN office_location ol ON ol.id = v.office_location_id'
+        + ' WHERE dm.user_id = ua.user_id';
+      if (query.department_id) {
+        orgExists += ' AND d.id = :departmentId';
+        replacements.departmentId = query.department_id;
+      }
+      if (query.vertical_id) {
+        orgExists += ' AND v.id = :verticalId';
+        replacements.verticalId = query.vertical_id;
+      }
+      if (query.office_location_id) {
+        orgExists += ' AND ol.id = :officeLocationId';
+        replacements.officeLocationId = query.office_location_id;
+      }
+      orgExists += ')';
+      conditions.push(orgExists);
     }
 
-    const { rows, count } = await UserAccount.findAndCountAll({
-      where,
-      limit,
-      offset,
-      include,
+    const whereClause = conditions.join(' AND ');
+
+    const [{ count }] = await sequelize.query(
+      `SELECT COUNT(*)::int AS count FROM user_account ua WHERE ${whereClause}`,
+      { replacements, type: QueryTypes.SELECT },
+    );
+
+    const idRows = await sequelize.query(
+      `SELECT ua.user_id FROM user_account ua WHERE ${whereClause}
+         ORDER BY ua.first_name ASC, ua.last_name ASC
+         LIMIT :limit OFFSET :offset`,
+      { replacements, type: QueryTypes.SELECT },
+    );
+    const userIds = idRows.map((row) => row.user_id);
+
+    if (userIds.length === 0) {
+      return { users: [], pagination: buildPagination(page, limit, count) };
+    }
+
+    const rows = await UserAccount.findAll({
+      where: { user_id: userIds },
+      include: [
+        {
+          model: PersonProfile,
+          as: 'profile',
+          required: false,
+          include: [
+            { model: RoleCategory, as: 'roleCategory', attributes: ['id', 'name', 'rank'], required: false },
+          ],
+        },
+        {
+          model: DepartmentMembership,
+          as: 'departmentMemberships',
+          required: false,
+          include: [{
+            model: Department,
+            as: 'department',
+            attributes: ['id', 'name'],
+            required: false,
+            include: [{
+              model: Vertical,
+              as: 'vertical',
+              attributes: ['id', 'name'],
+              required: false,
+              include: [{ model: OfficeLocation, as: 'officeLocation', attributes: ['id', 'name'], required: false }],
+            }],
+          }],
+        },
+      ],
       order: [['first_name', 'ASC'], ['last_name', 'ASC']],
-      distinct: true,
     });
 
-    return {
-      users: rows,
-      pagination: buildPagination(page, limit, count),
-    };
+    return { users: rows, pagination: buildPagination(page, limit, count) };
   },
 
   async getById(id) {
@@ -217,6 +370,7 @@ const usersService = {
       PersonProfile,
       UserRoleAssignment,
       Role,
+      RoleCategory,
       DepartmentMembership,
       Department,
       Vertical,
@@ -225,12 +379,22 @@ const usersService = {
       UserPermission,
       ModuleAction,
       Module,
+      EmployeeInvitation,
+      ChatBlock,
     } = require('../../database/models');
 
     const user = await UserAccount.findByPk(id, {
       attributes: { exclude: ['password_hash'] },
       include: [
-        { model: PersonProfile, as: 'profile', required: false },
+        {
+          model: PersonProfile,
+          as: 'profile',
+          required: false,
+          include: [
+            { model: RoleCategory, as: 'roleCategory', attributes: ['id', 'name', 'rank'], required: false },
+            { model: UserAccount, as: 'manager', attributes: ['user_id', 'first_name', 'last_name', 'email'], required: false },
+          ],
+        },
         {
           model: UserRoleAssignment,
           as: 'roleAssignments',
@@ -257,11 +421,7 @@ const usersService = {
                       as: 'officeLocation',
                       attributes: ['id', 'name'],
                       include: [
-                        {
-                          model: Organisation,
-                          as: 'organisation',
-                          attributes: ['id', 'name'],
-                        },
+                        { model: Organisation, as: 'organisation', attributes: ['id', 'name'] },
                       ],
                     },
                   ],
@@ -277,11 +437,7 @@ const usersService = {
             model: ModuleAction,
             as: 'moduleAction',
             attributes: ['module_action_id', 'action_code', 'name'],
-            include: [{
-              model: Module,
-              as: 'module',
-              attributes: ['module_id', 'code', 'name'],
-            }],
+            include: [{ model: Module, as: 'module', attributes: ['module_id', 'code', 'name'] }],
           }],
         },
       ],
@@ -290,13 +446,11 @@ const usersService = {
     if (!user) throw ApiError.notFound('User not found');
 
     const scopedDepartmentIds = new Set();
-
     (user.roleAssignments || []).forEach((assignment) => {
       if (assignment.scope_type === 'DEPARTMENT' && assignment.scope_id) {
         scopedDepartmentIds.add(Number(assignment.scope_id));
       }
     });
-
     (user.directPermissions || []).forEach((permission) => {
       if (permission.scope_type === 'DEPARTMENT' && permission.scope_id) {
         scopedDepartmentIds.add(Number(permission.scope_id));
@@ -310,36 +464,21 @@ const usersService = {
       source: membership.is_primary ? 'Primary membership' : 'Membership',
     }));
 
-    const existingDepartmentIds = new Set(existingMemberships.map((membership) => Number(membership.department_id)));
-    const derivedDepartmentIds = [...scopedDepartmentIds].filter((departmentId) => !existingDepartmentIds.has(departmentId));
+    const existingDepartmentIds = new Set(existingMemberships.map((m) => Number(m.department_id)));
+    const derivedDepartmentIds = [...scopedDepartmentIds].filter((dId) => !existingDepartmentIds.has(dId));
 
     if (derivedDepartmentIds.length > 0) {
       const derivedDepartments = await Department.findAll({
         where: { id: derivedDepartmentIds },
-        include: [
-          {
-            model: Vertical,
-            as: 'vertical',
-            attributes: ['id', 'name'],
-            include: [
-              {
-                model: OfficeLocation,
-                as: 'officeLocation',
-                attributes: ['id', 'name'],
-                include: [
-                  {
-                    model: Organisation,
-                    as: 'organisation',
-                    attributes: ['id', 'name'],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
+        include: [{
+          model: Vertical, as: 'vertical', attributes: ['id', 'name'],
+          include: [{
+            model: OfficeLocation, as: 'officeLocation', attributes: ['id', 'name'],
+            include: [{ model: Organisation, as: 'organisation', attributes: ['id', 'name'] }],
+          }],
+        }],
         order: [['name', 'ASC']],
       });
-
       derivedDepartments.forEach((department) => {
         existingMemberships.push({
           membership_id: `derived-${department.id}`,
@@ -353,8 +492,20 @@ const usersService = {
       });
     }
 
+    // Invitation status
+    const activeInvitation = await EmployeeInvitation.findOne({
+      where: { user_id: id, accepted_at: null, expires_at: { [Op.gt]: new Date() } },
+      order: [['created_at', 'DESC']],
+    });
+
+    // Chat blocklist
+    const blocks = await ChatBlock.findAll({ where: { user_id: id }, attributes: ['blocked_user_id'] });
+
     const userData = user.toJSON();
     userData.departmentMemberships = existingMemberships;
+    userData.invitation_pending = Boolean(activeInvitation);
+    userData.invitation_expires_at = activeInvitation?.expires_at || null;
+    userData.chat_blocked_user_ids = blocks.map((b) => b.blocked_user_id);
     return userData;
   },
 
@@ -369,20 +520,27 @@ const usersService = {
     } = require('../../database/models');
     const transaction = await sequelize.transaction();
 
-    // Capture the plaintext password BEFORE bcrypt so we can include it in
-    // the welcome email after commit. It never leaves this local variable.
-    const plainPassword = data.password;
+    const plainPassword = data.password && data.password.trim() ? data.password.trim() : null;
+    // No password = invitation flow (employee-style)
+    const isInviteFlow = !plainPassword && Array.isArray(data.department_ids) && data.department_ids.length > 0;
 
     try {
-      // Check email uniqueness
       const existing = await UserAccount.findOne({
         where: { email: data.email.toLowerCase() },
         transaction,
       });
       if (existing) throw ApiError.conflict('Email already in use');
 
+      if (Array.isArray(data.department_ids) && data.department_ids.length > 0) {
+        await validateDepartmentsExist(data.department_ids);
+      }
+      if (data.role_category_id) await validateRoleCategoryExists(data.role_category_id);
+      if (data.reports_to_user_id) await validateReportsTo({ reportsToUserId: data.reports_to_user_id, selfUserId: null });
+
       const rounds = parseInt(process.env.BCRYPT_ROUNDS, 10) || 12;
-      const passwordHash = await bcrypt.hash(plainPassword, rounds);
+      const passwordHash = isInviteFlow
+        ? await bcrypt.hash(crypto.randomBytes(32).toString('hex'), rounds)
+        : await bcrypt.hash(plainPassword, rounds);
 
       const user = await UserAccount.create({
         email: data.email.toLowerCase(),
@@ -390,66 +548,68 @@ const usersService = {
         first_name: data.first_name,
         last_name: data.last_name,
         phone: data.phone || null,
-        status: 'ACTIVE',
+        status: isInviteFlow ? 'INVITED' : 'ACTIVE',
       }, { transaction });
 
-      // Create profile if provided
-      if (data.profile) {
-        await PersonProfile.create({
-          user_id: user.user_id,
-          ...data.profile,
-        }, { transaction });
-      } else {
-        await PersonProfile.create({ user_id: user.user_id }, { transaction });
-      }
+      // Build profile fields from both data.profile and top-level employee fields
+      const profileData = {
+        ...(data.profile || {}),
+        job_title: data.profile?.job_title || null,
+        employee_id: data.profile?.employee_id || null,
+        role_category_id: data.role_category_id || null,
+        reports_to_user_id: data.reports_to_user_id || null,
+      };
+      await PersonProfile.create({ user_id: user.user_id, ...profileData }, { transaction });
 
-      // Create initial role assignment(s) if provided
-      const rolesToAssign = data.initial_roles
-        || (data.initial_role ? [data.initial_role] : []);
-
-      for (const role of rolesToAssign) {
-        await UserRoleAssignment.create({
-          user_id: user.user_id,
-          role_id: role.role_id,
-          scope_type: role.scope_type || 'ORGANISATION',
-          scope_id: role.scope_id,
-          assigned_by: actorUserId,
-        }, { transaction });
-      }
-
-      const initialDepartmentIds = [
-        ...new Set(
-          rolesToAssign
-            .filter((role) => role.scope_type === 'DEPARTMENT' && role.scope_id)
-            .map((role) => Number(role.scope_id))
-            .concat(
-              (data.initial_permissions || [])
-                .filter((permission) => permission.scope_type === 'DEPARTMENT' && permission.scope_id)
-                .map((permission) => Number(permission.scope_id))
-            )
-        ),
-      ];
-
-      for (const departmentId of initialDepartmentIds) {
-        await DepartmentMembership.findOrCreate({
-          where: { user_id: user.user_id, department_id: departmentId },
-          defaults: { user_id: user.user_id, department_id: departmentId, is_primary: false },
+      // Employee-style: sync department memberships + EMPLOYEE role assignments
+      if (Array.isArray(data.department_ids) && data.department_ids.length > 0) {
+        await syncDepartmentMemberships({
+          userId: user.user_id,
+          departmentIds: data.department_ids,
+          primaryDepartmentId: data.primary_department_id,
           transaction,
+        });
+        const roleId = await resolveEmployeeRoleId();
+        await syncEmployeeRoleAssignments({
+          userId: user.user_id, roleId, departmentIds: data.department_ids, actorUserId, transaction,
         });
       }
 
-      // Create initial direct permissions if provided
+      if (Array.isArray(data.chat_blocked_user_ids)) {
+        await syncChatBlocks({ userId: user.user_id, blockedIds: data.chat_blocked_user_ids, actorUserId, transaction });
+      }
+
+      // Additional role assignments from initial_roles / initial_role
+      const rolesToAssign = data.initial_roles || (data.initial_role ? [data.initial_role] : []);
+      for (const role of rolesToAssign) {
+        await UserRoleAssignment.create({
+          user_id: user.user_id, role_id: role.role_id,
+          scope_type: role.scope_type || 'ORGANISATION', scope_id: role.scope_id, assigned_by: actorUserId,
+        }, { transaction });
+        if (role.scope_type === 'DEPARTMENT' && role.scope_id) {
+          await DepartmentMembership.findOrCreate({
+            where: { user_id: user.user_id, department_id: Number(role.scope_id) },
+            defaults: { user_id: user.user_id, department_id: Number(role.scope_id), is_primary: false },
+            transaction,
+          });
+        }
+      }
+
       if (data.initial_permissions && data.initial_permissions.length > 0) {
         for (const perm of data.initial_permissions) {
           await UserPermission.create({
-            user_id: user.user_id,
-            module_action_id: perm.module_action_id,
-            effect: 'ALLOW',
-            scope_type: perm.scope_type || 'ORGANISATION',
-            scope_id: perm.scope_id,
-            assigned_by: actorUserId,
+            user_id: user.user_id, module_action_id: perm.module_action_id,
+            effect: 'ALLOW', scope_type: perm.scope_type || 'ORGANISATION', scope_id: perm.scope_id, assigned_by: actorUserId,
           }, { transaction });
         }
+      }
+
+      let inviteToken = null;
+      let inviteExpiresAt = null;
+      if (isInviteFlow) {
+        const inv = await createInvitationForUser({ user, invitedByUserId: actorUserId, transaction });
+        inviteToken = inv.rawToken;
+        inviteExpiresAt = inv.expiresAt;
       }
 
       await auditService.log({
@@ -457,21 +617,22 @@ const usersService = {
         action: 'USER_CREATED',
         resource_type: 'UserAccount',
         resource_id: user.user_id,
-        details: { email: user.email },
+        details: { email: user.email, invite_flow: isInviteFlow },
       });
 
       await transaction.commit();
 
-      // Fire-and-forget welcome email. Runs outside the transaction so a
-      // flaky SMTP can't roll back a successfully created user.
-      sendWelcomeEmailForNewUser({
-        newUser: user,
-        plainPassword,
-        rolesToAssign,
-        actorUserId,
-      }).catch((err) => {
-        logger.warn(`welcome email failed for ${user.email}: ${err.message}`);
-      });
+      if (isInviteFlow) {
+        const inviter = actorUserId
+          ? await UserAccount.findByPk(actorUserId, { attributes: ['first_name', 'last_name'] })
+          : null;
+        const inviterName = inviter ? `${inviter.first_name} ${inviter.last_name}`.trim() : 'An administrator';
+        emailService.sendEmployeeInvitation({ to: user.email, firstName: user.first_name, inviterName, token: inviteToken, expiresAt: inviteExpiresAt })
+          .catch((err) => logger.warn(`invite email failed for ${user.email}: ${err.message}`));
+      } else {
+        sendWelcomeEmailForNewUser({ newUser: user, plainPassword, rolesToAssign, actorUserId })
+          .catch((err) => logger.warn(`welcome email failed for ${user.email}: ${err.message}`));
+      }
 
       return this.getById(user.user_id);
     } catch (error) {
@@ -488,22 +649,45 @@ const usersService = {
       const user = await UserAccount.findByPk(id, { transaction });
       if (!user) throw ApiError.notFound('User not found');
 
-      // Update user fields
       const userFields = ['first_name', 'last_name', 'phone', 'status'];
       userFields.forEach((field) => {
         if (data[field] !== undefined) user[field] = data[field];
       });
       await user.save({ transaction });
 
-      // Update profile if provided
-      if (data.profile) {
+      // Merge profile fields from data.profile and top-level employee fields
+      const profilePatch = { ...(data.profile || {}) };
+      if (data.job_title !== undefined) profilePatch.job_title = data.job_title || null;
+      if (data.employee_id !== undefined) profilePatch.employee_id = data.employee_id || null;
+      if (data.role_category_id !== undefined) profilePatch.role_category_id = data.role_category_id || null;
+      if (data.reports_to_user_id !== undefined) profilePatch.reports_to_user_id = data.reports_to_user_id || null;
+
+      if (Object.keys(profilePatch).length > 0) {
+        if (profilePatch.role_category_id) await validateRoleCategoryExists(profilePatch.role_category_id);
+        if (profilePatch.reports_to_user_id) await validateReportsTo({ reportsToUserId: profilePatch.reports_to_user_id, selfUserId: id });
         let profile = await PersonProfile.findOne({ where: { user_id: id }, transaction });
         if (profile) {
-          await profile.update(data.profile, { transaction });
+          await profile.update(profilePatch, { transaction });
         } else {
-          await PersonProfile.create({ user_id: id, ...data.profile }, { transaction });
+          await PersonProfile.create({ user_id: id, ...profilePatch }, { transaction });
         }
       }
+
+      if (Array.isArray(data.department_ids) && data.department_ids.length > 0) {
+        await validateDepartmentsExist(data.department_ids);
+        await syncDepartmentMemberships({
+          userId: id, departmentIds: data.department_ids, primaryDepartmentId: data.primary_department_id, transaction,
+        });
+        const roleId = await resolveEmployeeRoleId();
+        await syncEmployeeRoleAssignments({ userId: id, roleId, departmentIds: data.department_ids, actorUserId, transaction });
+      }
+
+      if (Array.isArray(data.chat_blocked_user_ids)) {
+        await syncChatBlocks({ userId: id, blockedIds: data.chat_blocked_user_ids, actorUserId, transaction });
+      }
+
+      await cacheService.deletePattern(`bh:perm:${id}:*`);
+      await cacheService.deletePattern(`bh:perms:${id}:*`);
 
       await auditService.log({
         user_id: actorUserId,
@@ -707,6 +891,68 @@ const usersService = {
 
     await membership.destroy();
     return { message: 'Removed from department successfully' };
+  },
+
+  async resendInvite(id, actorUserId) {
+    const { UserAccount, EmployeeInvitation, sequelize } = require('../../database/models');
+
+    const user = await UserAccount.findByPk(id);
+    if (!user) throw ApiError.notFound('User not found');
+    if (user.status !== 'INVITED') throw ApiError.badRequest('User has already accepted their invitation');
+
+    const transaction = await sequelize.transaction();
+    let rawToken;
+    let expiresAt;
+    try {
+      await EmployeeInvitation.update(
+        { accepted_at: null, expires_at: new Date() },
+        { where: { user_id: id, accepted_at: null, expires_at: { [Op.gt]: new Date() } }, transaction },
+      );
+      const result = await createInvitationForUser({ user, invitedByUserId: actorUserId, transaction });
+      rawToken = result.rawToken;
+      expiresAt = result.expiresAt;
+
+      await auditService.log({
+        user_id: actorUserId, action: 'USER_INVITE_RESENT', resource_type: 'UserAccount', resource_id: id,
+      });
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+
+    const inviter = actorUserId
+      ? await UserAccount.findByPk(actorUserId, { attributes: ['first_name', 'last_name'] })
+      : null;
+    const inviterName = inviter ? `${inviter.first_name} ${inviter.last_name}`.trim() : 'An administrator';
+    await emailService.sendEmployeeInvitation({ to: user.email, firstName: user.first_name, inviterName, token: rawToken, expiresAt });
+    return { message: 'Invitation resent successfully' };
+  },
+
+  async listChatCandidates() {
+    const { UserAccount, DepartmentMembership, Department } = require('../../database/models');
+    const users = await UserAccount.findAll({
+      where: { status: 'ACTIVE', deleted_at: null },
+      attributes: ['user_id', 'first_name', 'last_name', 'email'],
+      include: [{
+        model: DepartmentMembership,
+        as: 'departmentMemberships',
+        required: false,
+        include: [{ model: Department, as: 'department', attributes: ['id', 'name'], required: false }],
+      }],
+      order: [['first_name', 'ASC'], ['last_name', 'ASC']],
+    });
+
+    return users.map((u) => {
+      const primary = (u.departmentMemberships || []).find((m) => m.is_primary) || (u.departmentMemberships || [])[0];
+      return {
+        user_id: u.user_id,
+        first_name: u.first_name,
+        last_name: u.last_name,
+        email: u.email,
+        primary_department_name: primary?.department?.name || null,
+      };
+    });
   },
 
   async importCsv(rows, actorUserId) {

@@ -16,6 +16,13 @@ router.post(
   controller.importCsv
 );
 
+// GET /api/v1/users/chat-candidates — must be before /:id
+router.get(
+  '/chat-candidates',
+  authorize('ADMIN', 'MANAGE_USERS'),
+  controller.listChatCandidates
+);
+
 // GET /api/v1/users
 router.get(
   '/',
@@ -106,6 +113,15 @@ router.delete(
   '/:id/departments/:deptId',
   authorize('ADMIN', 'MANAGE_DEPARTMENTS'),
   controller.removeDepartment
+);
+
+// POST /api/v1/users/:id/resend-invite
+router.post(
+  '/:id/resend-invite',
+  authorize('ADMIN', 'MANAGE_USERS'),
+  validate(schemas.idParam),
+  auditLogger('USER_INVITE_RESENT'),
+  controller.resendInvite
 );
 
 module.exports = router;

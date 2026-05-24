@@ -614,7 +614,7 @@ const orgService = {
        ) primary_dm ON TRUE
        LEFT JOIN department d ON d.id = primary_dm.department_id
        WHERE ua.deleted_at IS NULL
-         AND EXISTS (SELECT 1 FROM employee_invitation ei WHERE ei.user_id = ua.user_id)
+         AND EXISTS (SELECT 1 FROM department_membership dm WHERE dm.user_id = ua.user_id)
        ORDER BY rc.rank NULLS LAST, ua.first_name, ua.last_name`,
       { type: QueryTypes.SELECT },
     );

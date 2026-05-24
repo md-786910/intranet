@@ -104,9 +104,10 @@ const newsService = {
     const { NewsItem, UserAccount, ContentAudienceRule, Category } = require('../../database/models');
     const { Op } = require('sequelize');
     const { page, limit, offset } = parsePagination(query);
+    const forceViewer = query.viewer === 1 || query.viewer === '1' || query.viewer === true;
     const [managing, isGlobal] = await Promise.all([
-      canManageNews(userId),
-      permissionService.isGlobalManager(userId, 'NEWS'),
+      forceViewer ? Promise.resolve(false) : canManageNews(userId),
+      forceViewer ? Promise.resolve(false) : permissionService.isGlobalManager(userId, 'NEWS'),
     ]);
     const trash = managing && (query.trash === true || query.trash === 'true');
 
