@@ -287,6 +287,17 @@ const usersService = {
       replacements.search = `%${query.search}%`;
     }
 
+    if (query.role_category_rank_lte) {
+      conditions.push(
+        'EXISTS ('
+        + 'SELECT 1 FROM person_profile pp2 '
+        + 'JOIN role_category rc2 ON rc2.id = pp2.role_category_id '
+        + 'WHERE pp2.user_id = ua.user_id AND rc2.rank <= :roleCategoryRankLte'
+        + ')',
+      );
+      replacements.roleCategoryRankLte = Number(query.role_category_rank_lte);
+    }
+
     if (query.department_id || query.vertical_id || query.office_location_id) {
       let orgExists = 'EXISTS (SELECT 1 FROM department_membership dm'
         + ' JOIN department d ON d.id = dm.department_id'

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { userService } from '../../services/userService';
 
 export default function ReportsToPicker({
-  label, value, onChange, helpText, excludeUserId,
+  label, value, onChange, helpText, excludeUserId, roleCategoryRank,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -27,7 +27,9 @@ export default function ReportsToPicker({
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const res = await userService.getUsers({ search: trimmed, limit: 20 });
+        const params = { search: trimmed, limit: 30 };
+        if (roleCategoryRank) params.role_category_rank_lte = roleCategoryRank;
+        const res = await userService.getUsers(params);
         if (cancelled) return;
         const list = res.data?.data?.users || [];
         const filtered = excludeUserId ? list.filter((u) => u.user_id !== excludeUserId) : list;
@@ -39,7 +41,7 @@ export default function ReportsToPicker({
       }
     }, 200);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [query, open, excludeUserId]);
+  }, [query, open, excludeUserId, roleCategoryRank]);
 
   const select = (user) => {
     onChange({

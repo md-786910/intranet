@@ -146,6 +146,12 @@ export default function UserCreatePage() {
     [jobTitles],
   );
 
+  const selectedCategoryRank = useMemo(() => {
+    if (!form.role_category_id) return null;
+    const cat = roleCategories.find((c) => String(c.id) === form.role_category_id);
+    return cat?.rank ?? null;
+  }, [form.role_category_id, roleCategories]);
+
   // Collect unique department-level scopes from all assigned roles
   const departmentScopes = useMemo(() => {
     const seen = new Set();
@@ -201,7 +207,10 @@ export default function UserCreatePage() {
 
   // ── Handlers ──
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const next = { ...form, [e.target.name]: e.target.value };
+    // Clear manager when role category changes — the previous pick may no longer be valid
+    if (e.target.name === 'role_category_id') setReportsTo(null);
+    setForm(next);
     if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: null });
   };
 
@@ -406,6 +415,7 @@ export default function UserCreatePage() {
               <Select label="Role Category" name="role_category_id" value={form.role_category_id}
                 onChange={handleChange} options={roleCategoryOptions} placeholder="Select a category" />
               <ReportsToPicker label="Reporting To" value={reportsTo} onChange={setReportsTo}
+                roleCategoryRank={selectedCategoryRank}
                 helpText="Search by name or email." />
             </div>
           </div>

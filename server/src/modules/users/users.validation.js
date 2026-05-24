@@ -21,6 +21,7 @@ const listUsersSchema = {
     vertical_id: idPattern.optional(),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
+    role_category_rank_lte: Joi.number().integer().min(1).optional(),
   }),
 };
 

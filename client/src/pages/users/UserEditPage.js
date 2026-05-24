@@ -193,6 +193,7 @@ export default function UserEditPage() {
 
   // ── Profile handlers ──
   const handleChange = (e) => {
+    if (e.target.name === 'role_category_id') setReportsTo(null);
     setForm({ ...form, [e.target.name]: e.target.value });
     if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: null });
   };
@@ -207,6 +208,12 @@ export default function UserEditPage() {
     () => jobTitles.map((t) => ({ value: t.name, label: t.name })),
     [jobTitles],
   );
+
+  const selectedCategoryRank = useMemo(() => {
+    if (!form.role_category_id) return null;
+    const cat = roleCategories.find((c) => String(c.id) === form.role_category_id);
+    return cat?.rank ?? null;
+  }, [form.role_category_id, roleCategories]);
 
   const departmentScopes = useMemo(
     () => empScopes.filter((s) => s.scope_type === 'DEPARTMENT'),
@@ -506,7 +513,8 @@ export default function UserEditPage() {
                   <Select label="Role Category" name="role_category_id" value={form.role_category_id}
                     onChange={handleChange} options={roleCategoryOptions} placeholder="Select a category" />
                   <ReportsToPicker label="Reporting To" value={reportsTo} onChange={setReportsTo}
-                    excludeUserId={Number(id)} helpText="Search by name or email." />
+                    excludeUserId={Number(id)} roleCategoryRank={selectedCategoryRank}
+                    helpText="Search by name or email." />
                 </div>
               </div>
 
