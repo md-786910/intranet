@@ -18,6 +18,7 @@ export const newsService = {
   unlikeArticle: (id) => api.delete(`/news/${id}/like`),
   listComments: (id, params) => api.get(`/news/${id}/comments`, { params }),
   addComment: (id, body) => api.post(`/news/${id}/comments`, { body }),
+  updateComment: (id, commentId, body) => api.put(`/news/${id}/comments/${commentId}`, { body }),
   deleteComment: (id, commentId) => api.delete(`/news/${id}/comments/${commentId}`),
   shareArticle: (id, channel) => api.post(`/news/${id}/share`, { channel }),
   saveArticle: (id) => api.post(`/news/${id}/save`),

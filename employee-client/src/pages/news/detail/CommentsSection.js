@@ -24,11 +24,14 @@ const CommentsSection = forwardRef(function CommentsSection({ articleId, current
   const composerRef = useRef(null);
   const sectionRef = useRef(null);
 
+  // Edit state
+  const [editingId, setEditingId] = useState(null);
+  const [editBody, setEditBody] = useState('');
+  const [saving, setSaving] = useState(false);
+
   useImperativeHandle(ref, () => ({
     focusComposer: () => {
       setComposerOpen(true);
-      // Wait for the composer to mount, then scroll it into view smoothly
-      // and focus it so the user can start typing immediately.
       setTimeout(() => {
         composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         composerRef.current?.focus({ preventScroll: true });
@@ -78,6 +81,28 @@ const CommentsSection = forwardRef(function CommentsSection({ articleId, current
     } finally {
       setPosting(false);
     }
+  };
+
+  const handleEdit = async (commentId) => {
+    const trimmed = editBody.trim();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    try {
+      const res = await newsService.updateComment(articleId, commentId, trimmed);
+      const { comment } = res.data?.data || {};
+      if (comment) setComments((prev) => prev.map((c) => (c.id === commentId ? comment : c)));
+      setEditingId(null);
+      setEditBody('');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update comment.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditBody('');
   };
 
   const handleDelete = async (commentId) => {
@@ -169,6 +194,9 @@ const CommentsSection = forwardRef(function CommentsSection({ articleId, current
         <ul className="divide-y divide-outline-variant/40">
           {comments.map((c) => {
             const isMine = currentUserId && c.author?.user_id === currentUserId;
+            const isEdited = c.updated_at && c.created_at && c.updated_at !== c.created_at;
+            const isEditingThis = editingId === c.id;
+
             return (
               <li key={c.id} className="flex gap-2.5 py-2.5 first:pt-0 last:pb-0 group">
                 <Avatar
@@ -182,23 +210,79 @@ const CommentsSection = forwardRef(function CommentsSection({ articleId, current
                     <span className="font-semibold text-[13px] text-on-background truncate">
                       {authorName(c.author)}
                     </span>
-                    <span className="text-[11px] text-on-surface-variant whitespace-nowrap" title={new Date(c.created_at).toLocaleString()}>
-                      {formatRelative(c.created_at)}
-                    </span>
-                    {isMine && (
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(c.id)}
-                        className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-on-surface-variant hover:text-error"
-                        aria-label="Delete comment"
+                    {c.created_at && (
+                      <span
+                        className="text-[11px] text-on-surface-variant whitespace-nowrap"
+                        title={new Date(c.created_at).toLocaleString()}
                       >
-                        <MaterialIcon name="close" className="text-sm" />
-                      </button>
+                        {formatRelative(c.created_at)}
+                      </span>
+                    )}
+                    {isEdited && (
+                      <span className="text-[11px] text-on-surface-variant italic whitespace-nowrap">
+                        (edited)
+                      </span>
+                    )}
+                    {isMine && !isEditingThis && (
+                      <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => { setEditingId(c.id); setEditBody(c.body); }}
+                          className="text-on-surface-variant hover:text-primary transition-colors"
+                          aria-label="Edit comment"
+                        >
+                          <MaterialIcon name="edit" className="text-sm" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(c.id)}
+                          className="text-on-surface-variant hover:text-error transition-colors"
+                          aria-label="Delete comment"
+                        >
+                          <MaterialIcon name="close" className="text-sm" />
+                        </button>
+                      </div>
                     )}
                   </div>
-                  <p className="text-[13px] text-on-background mt-0.5 leading-snug whitespace-pre-wrap break-words">
-                    {c.body}
-                  </p>
+
+                  {isEditingThis ? (
+                    <div className="mt-1">
+                      <textarea
+                        // eslint-disable-next-line jsx-a11y/no-autofocus
+                        autoFocus
+                        value={editBody}
+                        onChange={(e) => setEditBody(e.target.value)}
+                        onKeyDown={(e) => {
+                          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleEdit(c.id);
+                          if (e.key === 'Escape') cancelEdit();
+                        }}
+                        rows={2}
+                        maxLength={2000}
+                        className="w-full px-2 py-1.5 text-sm border border-outline-variant rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                      <div className="flex justify-end gap-1.5 mt-1">
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          className="px-2.5 py-1 rounded-md text-[11px] font-semibold text-on-surface-variant hover:bg-surface-container transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(c.id)}
+                          disabled={!editBody.trim() || saving}
+                          className="px-3 py-1 rounded-md bg-primary text-on-primary font-semibold text-[11px] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                        >
+                          {saving ? 'Saving…' : 'Save'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[13px] text-on-background mt-0.5 leading-snug whitespace-pre-wrap break-words">
+                      {c.body}
+                    </p>
+                  )}
                 </div>
               </li>
             );

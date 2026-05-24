@@ -21,6 +21,16 @@ const addComment = catchAsync(async (req, res) => {
   res.status(201).json({ status: 'success', data });
 });
 
+const updateComment = catchAsync(async (req, res) => {
+  const data = await service.updateComment(
+    Number(req.params.id),
+    Number(req.params.commentId),
+    req.user.user_id,
+    req.body.body,
+  );
+  res.status(200).json({ status: 'success', data });
+});
+
 const deleteComment = catchAsync(async (req, res) => {
   const data = await service.deleteComment(
     Number(req.params.id),
@@ -85,6 +95,7 @@ module.exports = {
   unlike,
   listComments,
   addComment,
+  updateComment,
   deleteComment,
   share,
   save,
