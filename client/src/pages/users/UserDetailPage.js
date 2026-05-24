@@ -125,6 +125,35 @@ function DirectPermissionRow({ perm, onRemove, removing, scopeLabel }) {
   );
 }
 
+function OrgNode({ person, isSelf, onClick }) {
+  const initials = `${(person.first_name || '').charAt(0)}${(person.last_name || '').charAt(0)}`.toUpperCase() || '?';
+  return (
+    <div
+      onClick={onClick}
+      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors w-full ${
+        isSelf
+          ? 'bg-primary-50 border border-primary-200 ring-1 ring-primary-300'
+          : onClick ? 'cursor-pointer hover:bg-gray-50 border border-gray-200' : 'border border-gray-200'
+      }`}
+    >
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${
+        isSelf ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
+      }`}>
+        {initials}
+      </div>
+      <div className="min-w-0">
+        <div className={`text-sm font-medium truncate ${isSelf ? 'text-primary-700' : 'text-gray-900'}`}>
+          {person.first_name} {person.last_name}
+          {isSelf && <span className="ml-1.5 text-xs font-normal text-primary-500">(you)</span>}
+        </div>
+        <div className="text-xs text-gray-500 truncate">
+          {[person.role_category?.name, person.job_title].filter(Boolean).join(' · ') || 'No role assigned'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function UserDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -158,6 +187,9 @@ export default function UserDetailPage() {
   const [addingPerm, setAddingPerm] = useState(false);
   const [removingPerm, setRemovingPerm] = useState(null);
 
+  const [orgChain, setOrgChain] = useState(null);
+  const [orgChainLoading, setOrgChainLoading] = useState(false);
+
   const fetchUser = useCallback(() => {
     setLoading(true);
     userService.getUser(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
@@ -172,6 +204,16 @@ export default function UserDetailPage() {
     roleService.getRoles({ limit: 100 }).then((res) => setAllRoles(res.data?.data?.roles || [])).catch(() => {});
     roleService.getModules().then((res) => setModules(res.data?.data || [])).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!user || tab !== 'profile') return;
+    setOrgChainLoading(true);
+    userService.getOrgChain(id)
+      .then((res) => setOrgChain(res.data?.data || null))
+      .catch(() => {})
+      .finally(() => setOrgChainLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, tab, id]);
 
   const handleDeactivate = async () => {
     setDeleting(true);
@@ -437,6 +479,80 @@ export default function UserDetailPage() {
                   </dl>
                 </section>
               </div>
+
+              {/* Org Position — breadcrumb path(s) through the tree */}
+              {user.departmentMemberships?.length > 0 && (
+                <section className="rounded-lg border border-gray-200 bg-gray-50/40 px-5 py-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Organisation Position</h3>
+                  <div className="flex flex-col gap-2">
+                    {[...user.departmentMemberships]
+                      .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
+                      .map((m) => {
+                        const dept = m.department;
+                        const crumbs = [
+                          dept?.vertical?.officeLocation?.organisation?.name,
+                          dept?.vertical?.officeLocation?.name,
+                          dept?.vertical?.name,
+                          dept?.name,
+                        ].filter(Boolean);
+                        return (
+                          <div key={m.membership_id || m.department_id} className="flex items-center gap-2 flex-wrap">
+                            {crumbs.map((crumb, i) => (
+                              <React.Fragment key={i}>
+                                {i > 0 && (
+                                  <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                                  </svg>
+                                )}
+                                <span className={`text-sm ${i === crumbs.length - 1 ? 'font-semibold text-gray-900' : 'text-gray-500'}`}>
+                                  {crumb}
+                                </span>
+                              </React.Fragment>
+                            ))}
+                            {m.is_primary && (
+                              <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </section>
+              )}
+
+              {/* Org Hierarchy */}
+              {orgChainLoading ? (
+                <div className="rounded-lg border border-gray-200 bg-gray-50/40 p-5 flex justify-center">
+                  <div className="w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : orgChain && (orgChain.ancestors.length > 0 || orgChain.direct_reports.length > 0) ? (
+                <section className="rounded-lg border border-gray-200 bg-gray-50/40 px-5 py-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-4">Org Hierarchy</h3>
+                  <div className="flex flex-col items-start max-w-sm">
+                    {orgChain.ancestors.map((person) => (
+                      <React.Fragment key={person.user_id}>
+                        <OrgNode person={person} isSelf={false} onClick={() => navigate(`/users/${person.user_id}`)} />
+                        <div className="ml-7 w-px h-4 bg-gray-300 flex-shrink-0" />
+                      </React.Fragment>
+                    ))}
+                    <OrgNode person={orgChain.self} isSelf />
+                    {orgChain.direct_reports.length > 0 && (
+                      <>
+                        <div className="ml-7 w-px h-4 bg-gray-300 flex-shrink-0" />
+                        <p className="text-xs text-gray-500 font-medium ml-1 mb-2">
+                          Direct reports ({orgChain.direct_reports.length})
+                        </p>
+                        <div className="flex flex-col gap-1.5 w-full pl-4 border-l-2 border-gray-200">
+                          {orgChain.direct_reports.map((person) => (
+                            <OrgNode key={person.user_id} person={person} isSelf={false} onClick={() => navigate(`/users/${person.user_id}`)} />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </section>
+              ) : null}
             </div>
           )}
 

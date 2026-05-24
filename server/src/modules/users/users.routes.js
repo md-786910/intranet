@@ -31,6 +31,14 @@ router.get(
   controller.list
 );
 
+// GET /api/v1/users/:id/org-chain — must be before /:id catch-all
+router.get(
+  '/:id/org-chain',
+  authorize('ADMIN', 'MANAGE_USERS'),
+  validate(schemas.idParam),
+  controller.getOrgChain
+);
+
 // GET /api/v1/users/:id
 router.get(
   '/:id',

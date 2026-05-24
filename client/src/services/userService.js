@@ -15,4 +15,5 @@ export const userService = {
   importUsers: (data) => api.post('/users/import', data),
   resendInvite: (id) => api.post(`/users/${id}/resend-invite`),
   listChatCandidates: () => api.get('/users/chat-candidates'),
+  getOrgChain: (id) => api.get(`/users/${id}/org-chain`),
 };

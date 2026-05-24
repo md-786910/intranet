@@ -1022,6 +1022,80 @@ const usersService = {
 
     return results;
   },
+
+  async getOrgChain(userId) {
+    const { sequelize } = require('../../database/models');
+    const { QueryTypes } = require('sequelize');
+
+    const fetchNode = async (uid) => {
+      const rows = await sequelize.query(
+        `SELECT ua.user_id, ua.first_name, ua.last_name, ua.avatar_url,
+                pp.job_title, rc.id AS rc_id, rc.name AS rc_name, rc.rank AS rc_rank
+         FROM user_account ua
+         LEFT JOIN person_profile pp ON pp.user_id = ua.user_id
+         LEFT JOIN role_category rc ON rc.id = pp.role_category_id
+         WHERE ua.user_id = :uid AND ua.deleted_at IS NULL`,
+        { replacements: { uid }, type: QueryTypes.SELECT },
+      );
+      if (!rows.length) return null;
+      const r = rows[0];
+      return {
+        user_id: r.user_id,
+        first_name: r.first_name,
+        last_name: r.last_name,
+        avatar_url: r.avatar_url || null,
+        job_title: r.job_title || null,
+        role_category: r.rc_id ? { id: r.rc_id, name: r.rc_name, rank: r.rc_rank } : null,
+      };
+    };
+
+    const ancestors = [];
+    const visited = new Set([userId]);
+
+    const managerRows = await sequelize.query(
+      `SELECT pp.reports_to_user_id FROM person_profile pp WHERE pp.user_id = :uid`,
+      { replacements: { uid: userId }, type: QueryTypes.SELECT },
+    );
+    let currentId = managerRows[0]?.reports_to_user_id ?? null;
+
+    while (currentId && !visited.has(currentId) && ancestors.length < 20) {
+      visited.add(currentId);
+      // eslint-disable-next-line no-await-in-loop
+      const node = await fetchNode(currentId);
+      if (!node) break;
+      ancestors.unshift(node);
+      // eslint-disable-next-line no-await-in-loop
+      const nextRows = await sequelize.query(
+        `SELECT pp.reports_to_user_id FROM person_profile pp WHERE pp.user_id = :uid`,
+        { replacements: { uid: currentId }, type: QueryTypes.SELECT },
+      );
+      currentId = nextRows[0]?.reports_to_user_id ?? null;
+    }
+
+    const self = await fetchNode(userId);
+
+    const reportRows = await sequelize.query(
+      `SELECT ua.user_id, ua.first_name, ua.last_name, ua.avatar_url,
+              pp.job_title, rc.id AS rc_id, rc.name AS rc_name, rc.rank AS rc_rank
+       FROM user_account ua
+       LEFT JOIN person_profile pp ON pp.user_id = ua.user_id
+       LEFT JOIN role_category rc ON rc.id = pp.role_category_id
+       WHERE pp.reports_to_user_id = :userId AND ua.deleted_at IS NULL
+       ORDER BY rc.rank NULLS LAST, ua.first_name, ua.last_name`,
+      { replacements: { userId }, type: QueryTypes.SELECT },
+    );
+
+    const direct_reports = reportRows.map((r) => ({
+      user_id: r.user_id,
+      first_name: r.first_name,
+      last_name: r.last_name,
+      avatar_url: r.avatar_url || null,
+      job_title: r.job_title || null,
+      role_category: r.rc_id ? { id: r.rc_id, name: r.rc_name, rank: r.rc_rank } : null,
+    }));
+
+    return { ancestors, self, direct_reports };
+  },
 };
 
 module.exports = usersService;

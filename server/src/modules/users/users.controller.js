@@ -79,6 +79,11 @@ const listChatCandidates = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: candidates });
 });
 
+const getOrgChain = catchAsync(async (req, res) => {
+  const data = await usersService.getOrgChain(Number(req.params.id));
+  res.status(200).json({ status: 'success', data });
+});
+
 module.exports = {
   list,
   getById,
@@ -94,4 +99,5 @@ module.exports = {
   importCsv,
   resendInvite,
   listChatCandidates,
+  getOrgChain,
 };
