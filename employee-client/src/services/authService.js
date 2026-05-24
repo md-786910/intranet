@@ -16,4 +16,6 @@ export const authService = {
     api.post(`/auth/invitations/${token}/accept`, { password }),
 
   updateProfile: (data) => api.put('/auth/profile', data),
+
+  getMe: () => api.get('/auth/me'),
 };

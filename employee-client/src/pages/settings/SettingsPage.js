@@ -12,6 +12,63 @@ const HIERARCHY_LEVELS = [
   { key: 'department', label: 'Department', icon: 'groups', accent: 'emerald' },
 ];
 
+const SCOPE_PRIORITY = ['ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'];
+
+const ROLE_COLORS = [
+  { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-100', dot: 'bg-indigo-500' },
+  { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-100', dot: 'bg-violet-500' },
+  { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-100', dot: 'bg-sky-500' },
+  { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100', dot: 'bg-emerald-500' },
+];
+
+function RolesSection({ roleAssignments, loading }) {
+  if (loading) {
+    return (
+      <div className="mt-6 pt-6 border-t border-zinc-100">
+        <div className="flex items-center gap-2 mb-4">
+          <MaterialIcon name="admin_panel_settings" className="text-zinc-400 text-[18px]" />
+          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Roles & Permissions</h3>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[1, 2].map((i) => <div key={i} className="h-8 w-32 bg-zinc-100 rounded-full animate-pulse" />)}
+        </div>
+      </div>
+    );
+  }
+
+  if (!roleAssignments || roleAssignments.length === 0) return null;
+
+  const sorted = [...roleAssignments].sort(
+    (a, b) => SCOPE_PRIORITY.indexOf(a.scope_type) - SCOPE_PRIORITY.indexOf(b.scope_type),
+  );
+
+  return (
+    <div className="mt-6 pt-6 border-t border-zinc-100">
+      <div className="flex items-center gap-2 mb-4">
+        <MaterialIcon name="admin_panel_settings" className="text-zinc-400 text-[18px]" />
+        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Roles & Permissions</h3>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {sorted.map((a, idx) => {
+          const color = ROLE_COLORS[idx % ROLE_COLORS.length];
+          return (
+            <div
+              key={a.assignment_id}
+              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${color.bg} ${color.border}`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${color.dot}`} />
+              <span className={`text-xs font-bold ${color.text}`}>{a.role?.name || 'Unknown'}</span>
+              {a.scope_label && (
+                <span className="text-[10px] text-zinc-400 font-medium">· {a.scope_label}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const ACCENT_STYLES = {
   indigo: { iconBg: 'bg-indigo-50', iconText: 'text-indigo-600', dot: 'bg-indigo-500' },
   sky: { iconBg: 'bg-sky-50', iconText: 'text-sky-600', dot: 'bg-sky-500' },
@@ -107,6 +164,10 @@ export default function SettingsPage() {
   const [hierarchy, setHierarchy] = useState(null);
   const [hierarchyLoading, setHierarchyLoading] = useState(true);
 
+  // Role assignments
+  const [roleAssignments, setRoleAssignments] = useState([]);
+  const [rolesLoading, setRolesLoading] = useState(true);
+
   useEffect(() => {
     let mounted = true;
     setHierarchyLoading(true);
@@ -119,6 +180,21 @@ export default function SettingsPage() {
       })
       .finally(() => {
         if (mounted) setHierarchyLoading(false);
+      });
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    authService.getMe()
+      .then((res) => {
+        if (mounted) setRoleAssignments(res.data?.data?.role_assignments || []);
+      })
+      .catch(() => {
+        if (mounted) setRoleAssignments([]);
+      })
+      .finally(() => {
+        if (mounted) setRolesLoading(false);
       });
     return () => { mounted = false; };
   }, []);
@@ -237,6 +313,7 @@ export default function SettingsPage() {
 
           <div className="p-8 bg-gradient-to-b from-zinc-50/40 to-white">
             <HierarchyChart hierarchy={hierarchy} loading={hierarchyLoading} />
+            <RolesSection roleAssignments={roleAssignments} loading={rolesLoading} />
           </div>
         </div>
 
