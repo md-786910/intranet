@@ -15,7 +15,7 @@ const DEFAULT_ORGANISATION_ID = 1;
 export default function PushListPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
-  const { page, limit, setPage } = usePagination();
+  const { page, limit, setPage, setLimit } = usePagination();
   const [data, setData] = useState({ campaigns: [], pagination: {} });
   const [loading, setLoading] = useState(true);
 
@@ -69,6 +69,7 @@ export default function PushListPage() {
         total={data.pagination.total}
         limit={data.pagination.limit}
         onPageChange={setPage}
+        onLimitChange={(val) => { setLimit(val); setPage(1); }}
       />
     </div>
   );

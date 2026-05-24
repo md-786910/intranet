@@ -71,7 +71,7 @@ function OrgCell({ memberships }) {
 export default function EmployeesListPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
-  const { page, limit, setPage } = usePagination();
+  const { page, limit, setPage, setLimit } = usePagination();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [officeId, setOfficeId] = useState('');
@@ -185,6 +185,7 @@ export default function EmployeesListPage() {
         total={data.pagination.total}
         limit={data.pagination.limit}
         onPageChange={setPage}
+        onLimitChange={(val) => { setLimit(val); setPage(1); }}
       />
     </div>
   );

@@ -44,7 +44,7 @@ export default function DocumentsListPage() {
   const { hasPermission: canCreateDocuments } = usePermission('DOCUMENTS', 'CREATE');
   const { hasPermission: canDeleteDocuments } = usePermission('DOCUMENTS', 'DELETE');
   const { isOwner } = useAuth();
-  const { page, limit, setPage } = usePagination();
+  const { page, limit, setPage, setLimit } = usePagination();
   const [viewMode, setViewMode] = useState('active');
   const [search, setSearch] = useState('');
   const [statusTab, setStatusTab] = useState('ALL');
@@ -290,6 +290,7 @@ export default function DocumentsListPage() {
         total={data.pagination.total}
         limit={data.pagination.limit}
         onPageChange={setPage}
+        onLimitChange={(val) => { setLimit(val); setPage(1); }}
       />
 
       <ConfirmDialog

@@ -61,7 +61,7 @@ export default function CategoriesPage() {
   const [editing, setEditing] = useState(null); // { mode: 'create' | 'edit', initial }
   const [activityCategory, setActivityCategory] = useState(null);
   const [allCategories, setAllCategories] = useState([]); // for parent dropdown
-  const { page, limit, setPage } = usePagination();
+  const { page, limit, setPage, setLimit } = usePagination();
   const skipFetchRef = useRef(false);
 
   const isTrash = viewMode === 'trash';
@@ -352,6 +352,7 @@ export default function CategoriesPage() {
         total={data.pagination.total}
         limit={data.pagination.limit}
         onPageChange={setPage}
+        onLimitChange={(val) => { setLimit(val); setPage(1); }}
       />
 
       <CategoryFormModal

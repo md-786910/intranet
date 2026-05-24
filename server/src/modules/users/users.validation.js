@@ -22,6 +22,8 @@ const listUsersSchema = {
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
     role_category_rank_lte: Joi.number().integer().min(1).optional(),
+    sort_by: Joi.string().valid('name', 'job_title', 'permission', 'created_at').optional(),
+    sort_dir: Joi.string().valid('asc', 'desc').optional(),
   }),
 };
 

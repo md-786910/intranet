@@ -36,7 +36,7 @@ export default function MediaGalleryPage() {
   const canAccess = canCreateDocs || canCreateNews;
   const canDelete = canDeleteDocs || canDeleteNews;
 
-  const { page, limit, setPage } = usePagination();
+  const { page, limit, setPage, setLimit } = usePagination();
   const [viewMode, setViewMode] = useState('active');
   const [search, setSearch] = useState('');
   const [mimePrefix, setMimePrefix] = useState('');
@@ -329,6 +329,7 @@ export default function MediaGalleryPage() {
         total={data.pagination.total}
         limit={data.pagination.limit}
         onPageChange={setPage}
+        onLimitChange={(val) => { setLimit(val); setPage(1); }}
       />
 
       <ConfirmDialog

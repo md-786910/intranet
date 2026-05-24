@@ -271,9 +271,13 @@ const usersService = {
     const { QueryTypes } = require('sequelize');
     const {
       UserAccount, PersonProfile, DepartmentMembership, Department, Vertical, OfficeLocation,
-      RoleCategory, sequelize,
+      RoleCategory, UserRoleAssignment, Role, sequelize,
     } = require('../../database/models');
     const { page, limit, offset } = parsePagination(query);
+
+    const ALLOWED_SORTS = ['name', 'job_title', 'permission', 'created_at'];
+    const sortBy  = ALLOWED_SORTS.includes(query.sort_by) ? query.sort_by : 'created_at';
+    const sortDir = query.sort_dir === 'asc' ? 'ASC' : 'DESC';
 
     const conditions = ['ua.deleted_at IS NULL'];
     const replacements = { limit, offset };
@@ -322,14 +326,35 @@ const usersService = {
 
     const whereClause = conditions.join(' AND ');
 
+    // Build ORDER BY and optional extra JOIN for the raw ID query
+    let extraJoin = '';
+    let orderClause;
+    const PERM_SUBQUERY = `(SELECT r.name FROM user_role_assignment ura
+      JOIN role r ON r.role_id = ura.role_id
+      WHERE ura.user_id = ua.user_id
+      ORDER BY CASE ura.scope_type
+        WHEN 'ORGANISATION' THEN 1 WHEN 'OFFICE_LOCATION' THEN 2
+        WHEN 'VERTICAL' THEN 3 ELSE 4 END
+      LIMIT 1)`;
+    if (sortBy === 'name') {
+      orderClause = `LOWER(ua.first_name) ${sortDir}, LOWER(ua.last_name) ${sortDir}`;
+    } else if (sortBy === 'job_title') {
+      extraJoin = 'LEFT JOIN person_profile pp ON pp.user_id = ua.user_id';
+      orderClause = `LOWER(pp.job_title) ${sortDir} NULLS LAST`;
+    } else if (sortBy === 'permission') {
+      orderClause = `LOWER(${PERM_SUBQUERY}) ${sortDir} NULLS LAST`;
+    } else {
+      orderClause = `ua.created_at ${sortDir}`;
+    }
+
     const [{ count }] = await sequelize.query(
       `SELECT COUNT(*)::int AS count FROM user_account ua WHERE ${whereClause}`,
       { replacements, type: QueryTypes.SELECT },
     );
 
     const idRows = await sequelize.query(
-      `SELECT ua.user_id FROM user_account ua WHERE ${whereClause}
-         ORDER BY ua.first_name ASC, ua.last_name ASC
+      `SELECT ua.user_id FROM user_account ua ${extraJoin} WHERE ${whereClause}
+         ORDER BY ${orderClause}
          LIMIT :limit OFFSET :offset`,
       { replacements, type: QueryTypes.SELECT },
     );
@@ -338,6 +363,11 @@ const usersService = {
     if (userIds.length === 0) {
       return { users: [], pagination: buildPagination(page, limit, count) };
     }
+
+    // Preserve the exact order from the ID query using CASE WHEN position mapping
+    const positionOrder = sequelize.literal(
+      `CASE "UserAccount"."user_id" ${userIds.map((id, i) => `WHEN ${id} THEN ${i}`).join(' ')} END`,
+    );
 
     const rows = await UserAccount.findAll({
       where: { user_id: userIds },
@@ -368,8 +398,15 @@ const usersService = {
             }],
           }],
         },
+        {
+          model: UserRoleAssignment,
+          as: 'roleAssignments',
+          required: false,
+          attributes: ['scope_type', 'scope_id'],
+          include: [{ model: Role, as: 'role', attributes: ['role_id', 'name', 'code'] }],
+        },
       ],
-      order: [['first_name', 'ASC'], ['last_name', 'ASC']],
+      order: [positionOrder],
     });
 
     return { users: rows, pagination: buildPagination(page, limit, count) };
