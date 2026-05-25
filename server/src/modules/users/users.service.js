@@ -758,7 +758,9 @@ const usersService = {
     const user = await UserAccount.findByPk(id);
     if (!user) throw ApiError.notFound('User not found');
 
-    await user.update({ status: 'INACTIVE', deleted_at: new Date() });
+    // Only suspend access — do NOT set deleted_at so the user remains
+    // visible in the admin list under the "Inactive" filter.
+    await user.update({ status: 'INACTIVE' });
 
     // Revoke all tokens
     await tokenService.revokeAllUserTokens(id);
@@ -773,6 +775,49 @@ const usersService = {
     });
 
     return { message: 'User deactivated successfully' };
+  },
+
+  async reactivate(id, actorUserId) {
+    const { UserAccount } = require('../../database/models');
+
+    // Use unscoped so we can find users that may have deleted_at set (legacy data)
+    const user = await UserAccount.unscoped().findByPk(id);
+    if (!user) throw ApiError.notFound('User not found');
+
+    await user.update({ status: 'ACTIVE', deleted_at: null });
+
+    await auditService.log({
+      user_id: actorUserId,
+      action: 'USER_REACTIVATED',
+      resource_type: 'UserAccount',
+      resource_id: id,
+    });
+
+    return { message: 'User reactivated successfully' };
+  },
+
+  async permanentDelete(id, actorUserId) {
+    const { UserAccount } = require('../../database/models');
+
+    // Use unscoped to find even previously soft-deleted users
+    const user = await UserAccount.unscoped().findByPk(id);
+    if (!user) throw ApiError.notFound('User not found');
+
+    // Set deleted_at — this hides the user from all list queries permanently
+    await user.update({ status: 'INACTIVE', deleted_at: new Date() });
+
+    await tokenService.revokeAllUserTokens(id);
+    await cacheService.deletePattern(`bh:perm:${id}:*`);
+    await cacheService.deletePattern(`bh:perms:${id}:*`);
+
+    await auditService.log({
+      user_id: actorUserId,
+      action: 'USER_PERMANENTLY_DELETED',
+      resource_type: 'UserAccount',
+      resource_id: id,
+    });
+
+    return { message: 'User permanently deleted' };
   },
 
   async assignRole(userId, data, actorUserId) {

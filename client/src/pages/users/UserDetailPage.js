@@ -205,6 +205,10 @@ export default function UserDetailPage() {
   const [tab, setTab] = useState('profile');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
+  const [permDeleteOpen, setPermDeleteOpen] = useState(false);
+  const [permDeleting, setPermDeleting] = useState(false);
   const [resending, setResending] = useState(false);
 
   // Roles & modules
@@ -264,6 +268,28 @@ export default function UserDetailPage() {
     } catch (err) {
       addToast(err.response?.data?.message || 'Failed to deactivate', 'error');
     } finally { setDeleting(false); setDeleteOpen(false); }
+  };
+
+  const handleReactivate = async () => {
+    setReactivating(true);
+    try {
+      await userService.reactivateUser(id);
+      addToast('User reactivated successfully', 'success');
+      fetchUser();
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to reactivate', 'error');
+    } finally { setReactivating(false); setReactivateOpen(false); }
+  };
+
+  const handlePermanentDelete = async () => {
+    setPermDeleting(true);
+    try {
+      await userService.permanentDeleteUser(id);
+      addToast('User permanently deleted', 'success');
+      navigate('/users');
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to permanently delete', 'error');
+    } finally { setPermDeleting(false); setPermDeleteOpen(false); }
   };
 
   const handleResendInvite = async () => {
@@ -398,10 +424,23 @@ export default function UserDetailPage() {
         subtitle={user.email}
         backTo="/users"
         actions={
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" onClick={() => navigate(`/users/${id}/edit`)}>Edit</Button>
+          <div className="flex gap-2 items-center">
+            {user.status === 'ACTIVE' && (
+              <Button variant="secondary" size="sm" onClick={() => navigate(`/users/${id}/edit`)}>Edit</Button>
+            )}
             {user.status === 'ACTIVE' && (
               <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>Deactivate</Button>
+            )}
+            {user.status === 'INACTIVE' && (
+              <>
+                <span className="text-xs text-gray-400 font-medium px-1">Inactive user</span>
+                <Button variant="secondary" size="sm" onClick={() => setReactivateOpen(true)} loading={reactivating}>
+                  Reactivate
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => setPermDeleteOpen(true)}>
+                  Permanently Delete
+                </Button>
+              </>
             )}
           </div>
         }
@@ -735,9 +774,20 @@ export default function UserDetailPage() {
         </div>
       </div>
 
+      {/* Deactivate */}
       <ConfirmDialog isOpen={deleteOpen} onCancel={() => setDeleteOpen(false)} onConfirm={handleDeactivate}
         loading={deleting} title="Deactivate User"
-        message={`Deactivate "${user.first_name} ${user.last_name}"? They will lose access immediately.`} />
+        message={`Deactivate "${user.first_name} ${user.last_name}"? They will lose access immediately but can be reactivated later.`} />
+
+      {/* Reactivate */}
+      <ConfirmDialog isOpen={reactivateOpen} onCancel={() => setReactivateOpen(false)} onConfirm={handleReactivate}
+        loading={reactivating} title="Reactivate User"
+        message={`Reactivate "${user.first_name} ${user.last_name}"? They will regain access to the platform immediately.`} />
+
+      {/* Permanent Delete */}
+      <ConfirmDialog isOpen={permDeleteOpen} onCancel={() => setPermDeleteOpen(false)} onConfirm={handlePermanentDelete}
+        loading={permDeleting} title="Permanently Delete User"
+        message={`Permanently delete "${user.first_name} ${user.last_name}"? This cannot be undone — they will be removed from all lists and cannot be reactivated.`} />
     </div>
   );
 }
