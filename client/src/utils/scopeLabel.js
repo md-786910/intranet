@@ -31,3 +31,44 @@ export function findScopeLabel(tree, scopeType, scopeId) {
 
   return null;
 }
+
+// Returns an ordered array of path segments (top → bottom) for breadcrumb rendering.
+// e.g. [{ type:'Org', name:'BrightNow' }, { type:'Office', name:'Delhi' }, ...]
+export function findScopePath(tree, scopeType, scopeId) {
+  const orgNode = tree?.[0];
+  if (!orgNode || !scopeType || !scopeId) return null;
+
+  if (scopeType === 'ORGANISATION' && orgNode.id === Number(scopeId)) {
+    return [{ type: 'Org', name: orgNode.name }];
+  }
+
+  for (const office of orgNode.children || []) {
+    if (scopeType === 'OFFICE_LOCATION' && office.id === Number(scopeId)) {
+      return [
+        { type: 'Org',    name: orgNode.name },
+        { type: 'Office', name: office.name  },
+      ];
+    }
+    for (const vertical of office.children || []) {
+      if (scopeType === 'VERTICAL' && vertical.id === Number(scopeId)) {
+        return [
+          { type: 'Org',      name: orgNode.name  },
+          { type: 'Office',   name: office.name   },
+          { type: 'Vertical', name: vertical.name },
+        ];
+      }
+      for (const department of vertical.children || []) {
+        if (scopeType === 'DEPARTMENT' && department.id === Number(scopeId)) {
+          return [
+            { type: 'Org',        name: orgNode.name     },
+            { type: 'Office',     name: office.name      },
+            { type: 'Vertical',   name: vertical.name    },
+            { type: 'Department', name: department.name  },
+          ];
+        }
+      }
+    }
+  }
+
+  return null;
+}

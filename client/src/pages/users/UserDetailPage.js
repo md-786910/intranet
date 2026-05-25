@@ -14,7 +14,7 @@ import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate, formatDateTime, formatRelativeTime } from '../../utils/formatters';
-import { findScopeLabel } from '../../utils/scopeLabel';
+import { findScopeLabel, findScopePath } from '../../utils/scopeLabel';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { useOrgTree } from '../../hooks/useOrgTree';
 
@@ -52,35 +52,75 @@ function extractPermissionIds(role) {
   );
 }
 
+// ── Scope Breadcrumb ──
+function ScopeBreadcrumb({ path }) {
+  if (!path || path.length === 0) return null;
+  return (
+    <div className="flex items-center flex-wrap gap-0.5 mt-1.5">
+      {path.map((seg, i) => (
+        <span key={i} className="flex items-center gap-0.5">
+          {i > 0 && (
+            <svg className="w-3 h-3 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          )}
+          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+            i === path.length - 1
+              ? 'bg-primary-50 text-primary-700'
+              : 'text-gray-500'
+          }`}>
+            {seg.name}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ── Role Assignment Card ──
-function RoleCard({ assignment, allRoles, modules, onRemove, removing }) {
+function RoleCard({ assignment, allRoles, modules, onRemove, removing, orgTree }) {
   const [showPerms, setShowPerms] = useState(false);
   const role = allRoles.find((r) => r.role_id === assignment.role_id || r.role_id === assignment.role?.role_id);
   const permissionIds = useMemo(() => extractPermissionIds(role), [role]);
   const permCount = permissionIds.size;
+  const scopePath = useMemo(
+    () => findScopePath(orgTree, assignment.scope_type, assignment.scope_id),
+    [orgTree, assignment.scope_type, assignment.scope_id]
+  );
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between p-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between p-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium text-gray-900">
               {assignment.role?.name || role?.name || 'Unknown Role'}
             </span>
             {(assignment.role?.is_system || role?.is_system) && (
               <Badge variant="info" size="sm">System</Badge>
             )}
+            {permCount > 0 && (
+              <span className="text-xs text-gray-400 font-normal">
+                {permCount} permission{permCount !== 1 ? 's' : ''}
+              </span>
+            )}
           </div>
-          <div className="text-xs text-gray-500 mt-0.5">
-            {assignment.scope_type.replace(/_/g, ' ')} #{assignment.scope_id}
-            {permCount > 0 && ` · ${permCount} permission${permCount !== 1 ? 's' : ''}`}
-          </div>
+
+          {/* Org breadcrumb path */}
+          {scopePath ? (
+            <ScopeBreadcrumb path={scopePath} />
+          ) : (
+            <p className="text-xs text-gray-400 mt-1">
+              {assignment.scope_type.replace(/_/g, ' ')} #{assignment.scope_id}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+
+        <div className="flex items-center gap-2 flex-shrink-0 ml-4">
           {modules.length > 0 && permCount > 0 && (
             <button onClick={() => setShowPerms(!showPerms)}
               className="text-xs font-medium text-primary-600 hover:text-primary-800 transition-colors">
-              {showPerms ? 'Hide permissions' : 'View permissions'}
+              {showPerms ? 'Hide' : 'Permissions'}
             </button>
           )}
           {!assignment.role?.is_system && !role?.is_system && (
@@ -605,7 +645,8 @@ export default function UserDetailPage() {
                 <div className="space-y-3">
                   {user.roleAssignments.map((a) => (
                     <RoleCard key={a.assignment_id} assignment={a} allRoles={allRoles}
-                      modules={modules} onRemove={handleRemoveRole} removing={removing} />
+                      modules={modules} onRemove={handleRemoveRole} removing={removing}
+                      orgTree={orgTree} />
                   ))}
                 </div>
               )}
