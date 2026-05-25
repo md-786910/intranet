@@ -18,13 +18,6 @@ const PERMISSION_LABELS = {
     DELETE: { label: 'Delete documents', desc: 'Remove documents from the system' },
     PUBLISH: { label: 'Publish documents', desc: 'Make documents visible to targeted users' },
   },
-  PUSH: {
-    _name: 'Push Notifications',
-    VIEW: { label: 'View campaigns', desc: 'View push notification campaigns' },
-    CREATE: { label: 'Create campaigns', desc: 'Create new push campaigns' },
-    SEND: { label: 'Send campaigns', desc: 'Send push notifications to users' },
-    CANCEL: { label: 'Cancel campaigns', desc: 'Cancel scheduled campaigns' },
-  },
   DIRECTORY: {
     _name: 'Directory',
     VIEW: { label: 'View directory', desc: 'Browse the employee directory' },

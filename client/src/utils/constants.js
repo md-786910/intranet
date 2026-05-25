@@ -25,13 +25,6 @@ export const CONTENT_STATUS = {
   ARCHIVED: 'ARCHIVED',
 };
 
-export const PUSH_STATUS = {
-  DRAFT: 'DRAFT',
-  SCHEDULED: 'SCHEDULED',
-  SENT: 'SENT',
-  CANCELLED: 'CANCELLED',
-};
-
 export const STATUS_VARIANTS = {
   ACTIVE: 'success',
   INACTIVE: 'warning',

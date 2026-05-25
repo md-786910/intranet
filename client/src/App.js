@@ -41,9 +41,6 @@ import DocumentsListPage from './pages/documents/DocumentsListPage';
 import DocumentCreatePage from './pages/documents/DocumentCreatePage';
 import DocumentDetailPage from './pages/documents/DocumentDetailPage';
 import DocumentEditPage from './pages/documents/DocumentEditPage';
-import PushListPage from './pages/push/PushListPage';
-import PushCreatePage from './pages/push/PushCreatePage';
-import PushDetailPage from './pages/push/PushDetailPage';
 import AnalyticsPage from './pages/analytics/AnalyticsPage';
 import MediaGalleryPage from './pages/media/MediaGalleryPage';
 import CategoriesPage from './pages/categories/CategoriesPage';
@@ -63,8 +60,6 @@ function HomeRedirect() {
   // Content managers need EDIT or CREATE — VIEW alone is an employee-level permission
   if (hasPermission('NEWS', 'EDIT') || hasPermission('NEWS', 'CREATE')) return <Navigate to="/news" replace />;
   if (hasPermission('DOCUMENTS', 'EDIT') || hasPermission('DOCUMENTS', 'CREATE')) return <Navigate to="/documents" replace />;
-  if (hasPermission('PUSH', 'VIEW')) return <Navigate to="/push" replace />;
-
   // No admin permissions — send to employee portal
   window.location.replace(EMPLOYEE_APP_URL);
   return null;
@@ -134,11 +129,6 @@ function App() {
                 <Route path="/documents/create" element={<DocumentCreatePage />} />
                 <Route path="/documents/:id" element={<DocumentDetailPage />} />
                 <Route path="/documents/:id/edit" element={<DocumentEditPage />} />
-
-                {/* Push */}
-                <Route path="/push" element={<PushListPage />} />
-                <Route path="/push/create" element={<PushCreatePage />} />
-                <Route path="/push/:id" element={<PushDetailPage />} />
 
                 {/* Media */}
                 <Route path="/media" element={<MediaGalleryPage />} />
