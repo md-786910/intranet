@@ -6,6 +6,7 @@ import { PermissionProvider } from './contexts/PermissionContext';
 import { PermissionContext } from './contexts/PermissionContext';
 import { ToastProvider } from './contexts/ToastContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import { useAuth } from './hooks/useAuth';
 import AdminLayout from './components/layout/AdminLayout';
 
 // Auth
@@ -47,10 +48,25 @@ import CategoriesPage from './pages/categories/CategoriesPage';
 import ActivityLogPage from './pages/activity/ActivityLogPage';
 import QuickLinksPage from './pages/quick-links/QuickLinksPage';
 
-const EMPLOYEE_APP_URL = process.env.REACT_APP_EMPLOYEE_APP_URL || 'http://localhost:3001';
+const EMPLOYEE_APP_URL = process.env.REACT_APP_EMPLOYEE_APP_URL || 'https://employee.brightnow.online';
 
 function HomeRedirect() {
   const { hasPermission } = useContext(PermissionContext);
+  const { isLoading, isAuthenticated } = useAuth();
+
+  // Wait for auth bootstrap to finish before making any routing decision.
+  // Without this guard, permissions are empty on every page refresh and the
+  // user is immediately bounced to the employee portal.
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  // Not authenticated — send to login
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   // Admin-only permissions — stay in admin panel
   if (hasPermission('ADMIN', 'VIEW_ANALYTICS')) return <Navigate to="/dashboard" replace />;
