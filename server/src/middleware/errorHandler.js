@@ -61,7 +61,11 @@ const errorHandler = (err, req, res, next) => {
   }
 
   const statusCode = error.statusCode || 500;
-  const isOperational = error.isOperational !== undefined ? error.isOperational : false;
+  // Treat plain errors that carry a statusCode (e.g. wrapped Graph errors) as operational
+  // so their message is shown to the caller rather than "Internal server error".
+  const isOperational = error.isOperational !== undefined
+    ? error.isOperational
+    : (error.statusCode !== undefined && error.statusCode < 500);
 
   // Log the error
   if (statusCode >= 500 || !isOperational) {

@@ -38,6 +38,7 @@ const notificationsRoutes = require("./modules/notifications/notifications.route
 const activityRoutes = require("./modules/activity/activity.routes");
 const homeActivityRoutes = require("./modules/home-activity/home-activity.routes");
 const searchRoutes = require("./modules/search/search.routes");
+const azureAdRoutes = require("./modules/azure-ad/azure-ad.routes");
 
 const app = express();
 
@@ -99,6 +100,7 @@ app.use("/api/v1/notifications", notificationsRoutes);
 app.use("/api/v1/activity", activityRoutes);
 app.use("/api/v1/home", homeActivityRoutes);
 app.use("/api/v1/search", searchRoutes);
+app.use("/api/v1/azure-ad", azureAdRoutes);
 
 // Serve uploaded files. Strip frame-blocking headers so the client (running on a
 // different dev origin) can preview PDFs / CSVs / text in an iframe. Helmet's

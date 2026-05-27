@@ -47,6 +47,8 @@ import MediaGalleryPage from './pages/media/MediaGalleryPage';
 import CategoriesPage from './pages/categories/CategoriesPage';
 import ActivityLogPage from './pages/activity/ActivityLogPage';
 import QuickLinksPage from './pages/quick-links/QuickLinksPage';
+import ActiveDirectoryPage from './pages/active-directory/ActiveDirectoryPage';
+import ActiveDirectoryUserDetailPage from './pages/active-directory/ActiveDirectoryUserDetailPage';
 
 const EMPLOYEE_APP_URL = process.env.REACT_APP_EMPLOYEE_APP_URL || 'https://employee.brightnow.online';
 
@@ -104,6 +106,10 @@ function App() {
               >
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/organisation" element={<OrganisationPage />} />
+
+                {/* Active Directory */}
+                <Route path="/active-directory" element={<ActiveDirectoryPage />} />
+                <Route path="/active-directory/:id" element={<ActiveDirectoryUserDetailPage />} />
 
                 {/* Users */}
                 <Route path="/users" element={<UsersListPage />} />
