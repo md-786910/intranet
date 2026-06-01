@@ -42,6 +42,8 @@ function EnabledBadge({ enabled }) {
 function Field({ label, value, mono = false }) {
   const display = value === null || value === undefined || value === '' ? (
     <span className="text-gray-300">—</span>
+  ) : React.isValidElement(value) ? (
+    value
   ) : (
     <span className={`${mono ? 'font-mono text-xs' : ''} break-all`}>{String(value)}</span>
   );
