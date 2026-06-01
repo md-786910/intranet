@@ -23,4 +23,7 @@ router.get('/users/:id/direct-reports', controller.getUserDirectReports);
 // ── Org hierarchy ─────────────────────────────────────────────────────────────
 router.get('/org-tree/roots',  controller.getOrgTreeRoots);
 
+// ── Cache management ──────────────────────────────────────────────────────────
+router.delete('/cache', controller.clearCache);
+
 module.exports = router;

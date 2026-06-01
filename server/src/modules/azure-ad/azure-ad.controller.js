@@ -76,4 +76,10 @@ const testConnection = catchAsync(async (req, res) => {
   }
 });
 
-module.exports = { listUsers, getUser, getUserDirectReports, getOrgTreeRoots, getDepartments, testConnection };
+// DELETE /azure-ad/cache
+const clearCache = catchAsync(async (req, res) => {
+  await service.clearCache();
+  res.json({ status: 'success', message: 'Active Directory cache cleared' });
+});
+
+module.exports = { listUsers, getUser, getUserDirectReports, getOrgTreeRoots, getDepartments, testConnection, clearCache };

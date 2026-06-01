@@ -92,6 +92,7 @@ const menuItems = [
     children: [
       { label: 'Quick Links', path: '/quick-links', icon: ICONS.categories, module: 'ADMIN', action: 'MANAGE_EMPLOYEES' },
       { label: 'Analytics', path: '/analytics', icon: ICONS.analytics, module: 'ADMIN', action: 'VIEW_ANALYTICS' },
+      { label: 'Configuration', path: '/settings', icon: ICONS.settings, module: 'ADMIN', action: 'MANAGE_USERS' },
     ],
   },
 ];

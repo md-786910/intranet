@@ -134,7 +134,7 @@ function ChildrenRow({ nodes, depth, pathIds, autoExpand }) {
   );
 }
 
-export default function AzureOrgChart({ user, depth = 0, pathIds = new Set(), autoExpand = true }) {
+export default function AzureOrgChart({ user, depth = 0, pathIds = new Set(), autoExpand = false }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState(null);

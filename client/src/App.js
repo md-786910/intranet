@@ -49,6 +49,7 @@ import ActivityLogPage from './pages/activity/ActivityLogPage';
 import QuickLinksPage from './pages/quick-links/QuickLinksPage';
 import ActiveDirectoryPage from './pages/active-directory/ActiveDirectoryPage';
 import ActiveDirectoryUserDetailPage from './pages/active-directory/ActiveDirectoryUserDetailPage';
+import SettingsPage from './pages/settings/SettingsPage';
 
 const EMPLOYEE_APP_URL = process.env.REACT_APP_EMPLOYEE_APP_URL || 'https://employee.brightnow.online';
 
@@ -164,6 +165,9 @@ function App() {
 
                 {/* Analytics */}
                 <Route path="/analytics" element={<AnalyticsPage />} />
+
+                {/* Settings */}
+                <Route path="/settings" element={<SettingsPage />} />
               </Route>
 
               {/* Default redirect */}

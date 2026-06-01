@@ -8,7 +8,7 @@ import { azureAdService } from '../../services/azureAdService';
 import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
-import AzureOrgChart from '../../components/azure-ad/AzureOrgChart';
+import OrgHierarchyView from '../../components/azure-ad/OrgHierarchyView';
 
 // ── Avatar helper ─────────────────────────────────────────────────────────────
 const AVATAR_COLORS = [
@@ -59,6 +59,7 @@ const COLUMNS = [
   },
   { key: 'jobTitle',   label: 'Job Title',   render: (row) => row.jobTitle   || <span className="text-gray-300">—</span> },
   { key: 'department', label: 'Department',  render: (row) => row.department || <span className="text-gray-300">—</span> },
+  { key: '_managerName', label: 'Reporting Manager', render: (row) => row._managerName || <span className="text-gray-300">—</span> },
   { key: 'officeLocation', label: 'Office',  render: (row) => row.officeLocation || <span className="text-gray-300">—</span> },
   { key: 'accountEnabled', label: 'Status',  render: (row) => <EnabledBadge enabled={row.accountEnabled} /> },
 ];
@@ -113,12 +114,7 @@ export default function ActiveDirectoryPage() {
   // Filters
   const [search, setSearch]         = useState('');
   const [department, setDepartment] = useState('');
-  const [statusFilter, setStatus]   = useState('');
   const debouncedSearch             = useDebounce(search, 300);
-
-  // Tree state
-  const [roots, setRoots]         = useState([]);
-  const [treeLoading, setTreeLoading] = useState(false);
 
   // Departments for filter
   const [departments, setDepartments] = useState([]);
@@ -135,7 +131,6 @@ export default function ActiveDirectoryPage() {
     setLoading(true);
     try {
       const params = { page, limit, search: debouncedSearch, department };
-      if (statusFilter !== '') params.accountEnabled = statusFilter;
       const res = await azureAdService.getUsers(params);
       const payload = res.data?.data || {};
       setUsers(payload.items || []);
@@ -145,25 +140,14 @@ export default function ActiveDirectoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, debouncedSearch, department, statusFilter, showToast]);
+  }, [page, limit, debouncedSearch, department, showToast]);
 
   useEffect(() => {
     if (view === 'list') fetchUsers();
   }, [fetchUsers, view]);
 
   // Reset page on filter change
-  useEffect(() => { resetPage(); }, [debouncedSearch, department, statusFilter, resetPage]);
-
-  // ── Fetch org tree roots ──
-  useEffect(() => {
-    if (view !== 'tree') return;
-    if (roots.length > 0) return; // already loaded
-    setTreeLoading(true);
-    azureAdService.getOrgTreeRoots()
-      .then((res) => setRoots(res.data?.data || []))
-      .catch(() => showToast('Failed to load org hierarchy', 'error'))
-      .finally(() => setTreeLoading(false));
-  }, [view, roots.length, showToast]);
+  useEffect(() => { resetPage(); }, [debouncedSearch, department, resetPage]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -206,17 +190,6 @@ export default function ActiveDirectoryPage() {
               ))}
             </select>
 
-            {/* Status */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatus(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500 min-w-[130px]"
-            >
-              <option value="">All Statuses</option>
-              <option value="true">Enabled</option>
-              <option value="false">Disabled</option>
-            </select>
-
             {/* Count badge */}
             {!loading && (
               <span className="text-sm text-gray-400 ml-auto">
@@ -245,31 +218,7 @@ export default function ActiveDirectoryPage() {
       )}
 
       {/* ── TREE VIEW ── */}
-      {view === 'tree' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-            <p className="text-sm font-medium text-gray-700">Reporting Hierarchy</p>
-            <p className="text-xs text-gray-400">Click a card to view profile · +/− to expand direct reports</p>
-          </div>
-
-          {treeLoading ? (
-            <div className="p-8 flex justify-center">
-              <svg className="animate-spin w-6 h-6 text-primary-500" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-            </div>
-          ) : roots.length === 0 ? (
-            <div className="p-8 text-center text-gray-400 text-sm">No users found</div>
-          ) : (
-            <div className="py-6 px-6 overflow-x-auto flex gap-8 justify-center flex-wrap">
-              {roots.map((user) => (
-                <AzureOrgChart key={user.id} user={user} depth={0} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {view === 'tree' && <OrgHierarchyView />}
     </div>
   );
 }

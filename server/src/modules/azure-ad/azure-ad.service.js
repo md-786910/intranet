@@ -8,9 +8,9 @@ const cacheService = require('../../services/cache.service');
 const logger = require('../../config/logger');
 
 // ── TTLs ──────────────────────────────────────────────────────────────────────
-const TTL_LIST   = 300;   // 5 min  – user list / search results
-const TTL_DETAIL = 300;   // 5 min  – individual user + manager
-const TTL_TREE   = 600;   // 10 min – org tree flat list
+const TTL_LIST   = 86400;  // 24 h – user list / search results
+const TTL_DETAIL = 86400;  // 24 h – individual user + manager
+const TTL_TREE   = 86400;  // 24 h – org tree flat list
 
 // ── Lazy-initialised Graph client ─────────────────────────────────────────────
 let _client = null;
@@ -101,15 +101,23 @@ async function fetchAllPages(initialRequest) {
 
 // ── Fetch & cache the full flat user list (used for list view + departments) ──
 async function getAllUsersFlat() {
-  const cacheKey = 'ad:all-users:v2';
+  const cacheKey = 'ad:all-users:v3';
   const cached = await cacheService.get(cacheKey);
   if (cached) {
     try { return JSON.parse(cached); } catch (_) {}
   }
 
-  const users = await fetchAllPages(
-    `/users?$select=${LIST_SELECT}&$top=999&$orderby=displayName`
+  const raw = await fetchAllPages(
+    `/users?$select=${LIST_SELECT}&$expand=manager($select=id,displayName)&$top=999&$orderby=displayName`
   );
+
+  // Keep only enabled accounts, then flatten manager into a simple string field
+  const users = raw
+    .filter((u) => u.accountEnabled !== false)
+    .map(({ manager, ...u }) => ({
+      ...u,
+      _managerName: manager?.displayName || null,
+    }));
 
   await cacheService.set(cacheKey, JSON.stringify(users), TTL_TREE);
   return users;
@@ -181,9 +189,10 @@ async function getUserDirectReports(id) {
     try { return JSON.parse(cached); } catch (_) {}
   }
 
-  const reports = await fetchAllPages(
+  const raw = await fetchAllPages(
     `/users/${id}/directReports?$select=${LIST_SELECT}`
   );
+  const reports = raw.filter((u) => u.accountEnabled !== false);
 
   await cacheService.set(cacheKey, JSON.stringify(reports), TTL_LIST);
   return reports;
@@ -193,23 +202,32 @@ async function getUserDirectReports(id) {
 // Uses $expand=manager to fetch each user's manager ID in a single paged request,
 // then computes roots locally. Avoids the unreliable NOT(manager/id ne null) filter.
 async function getOrgTreeRoots() {
-  const cacheKey = 'ad:org-roots:v3';
+  const cacheKey = 'ad:org-roots:v4';
   const cached = await cacheService.get(cacheKey);
   if (cached) {
     try { return JSON.parse(cached); } catch (_) {}
   }
 
-  // Fetch all users with their manager's ID expanded inline
-  const allUsers = await fetchAllPages(
+  // Fetch all users with their manager's ID expanded inline; exclude disabled accounts
+  const allUsers = (await fetchAllPages(
     `/users?$select=${LIST_SELECT}&$expand=manager($select=id)&$top=999&$orderby=displayName`
-  );
+  )).filter((u) => u.accountEnabled !== false);
 
   const allUserIds = new Set(allUsers.map((u) => u.id));
 
-  // Root = no manager, OR manager is external (not one of our org's users)
+  // Build set of user IDs that have at least one person reporting to them
+  const managerIds = new Set(
+    allUsers.filter((u) => u.manager?.id).map((u) => u.manager.id)
+  );
+
+  // Root = no internal manager AND has at least one direct report
+  // (excludes leaf accounts: test users, meeting rooms, admin accounts with no reports)
   const roots = allUsers
-    .filter((u) => !u.manager?.id || !allUserIds.has(u.manager.id))
-    .map(({ manager, ...rest }) => rest); // strip the expanded manager object before caching
+    .filter((u) =>
+      (!u.manager?.id || !allUserIds.has(u.manager.id)) &&
+      managerIds.has(u.id)
+    )
+    .map(({ manager, ...rest }) => rest); // strip expanded manager before caching
 
   await cacheService.set(cacheKey, JSON.stringify(roots), TTL_TREE);
   return roots;
@@ -232,10 +250,15 @@ async function getDepartments() {
   return depts;
 }
 
+async function clearCache() {
+  await cacheService.deletePattern('bh:ad:*');
+}
+
 module.exports = {
   listUsers,
   getUser,
   getUserDirectReports,
   getOrgTreeRoots,
   getDepartments,
+  clearCache,
 };

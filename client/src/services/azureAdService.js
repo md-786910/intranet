@@ -15,4 +15,7 @@ export const azureAdService = {
 
   /** Distinct department names for the filter dropdown */
   getDepartments: () => api.get('/azure-ad/departments'),
+
+  /** Clear all Azure AD Redis cache keys */
+  clearCache: () => api.delete('/azure-ad/cache'),
 };
