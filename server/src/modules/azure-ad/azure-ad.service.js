@@ -99,9 +99,9 @@ async function fetchAllPages(initialRequest) {
   return results;
 }
 
-// ── Fetch & cache the full flat user list (used for list view + org tree) ─────
+// ── Fetch & cache the full flat user list (used for list view + departments) ──
 async function getAllUsersFlat() {
-  const cacheKey = 'ad:all-users';
+  const cacheKey = 'ad:all-users:v2';
   const cached = await cacheService.get(cacheKey);
   if (cached) {
     try { return JSON.parse(cached); } catch (_) {}
@@ -189,30 +189,27 @@ async function getUserDirectReports(id) {
   return reports;
 }
 
-// ── 4. getOrgTreeRoots — users with no manager (top of hierarchy) ─────────────
+// ── 4. getOrgTreeRoots — users whose manager is not in this org ───────────────
+// Uses $expand=manager to fetch each user's manager ID in a single paged request,
+// then computes roots locally. Avoids the unreliable NOT(manager/id ne null) filter.
 async function getOrgTreeRoots() {
-  const cacheKey = 'ad:org-roots';
+  const cacheKey = 'ad:org-roots:v3';
   const cached = await cacheService.get(cacheKey);
   if (cached) {
     try { return JSON.parse(cached); } catch (_) {}
   }
 
-  let roots;
-  try {
-    // ConsistencyLevel: eventual + $count required for NOT() filter
-    const client = getGraphClient();
-    const response = await client
-      .api(`/users?$filter=NOT(manager/id ne null)&$select=${LIST_SELECT}&$count=true&$top=999`)
-      .header('ConsistencyLevel', 'eventual')
-      .get();
-    roots = response.value || [];
-  } catch (err) {
-    // If it's a permission / auth error — surface it immediately, don't silently fallback
-    if (err.statusCode === 401 || err.statusCode === 403 || err.statusCode === 502) throw wrapGraphError(err);
-    logger.warn('Graph NOT(manager) filter failed, falling back to full user list:', err.message);
-    // Fallback: return all users (frontend expands from any node)
-    roots = await getAllUsersFlat();
-  }
+  // Fetch all users with their manager's ID expanded inline
+  const allUsers = await fetchAllPages(
+    `/users?$select=${LIST_SELECT}&$expand=manager($select=id)&$top=999&$orderby=displayName`
+  );
+
+  const allUserIds = new Set(allUsers.map((u) => u.id));
+
+  // Root = no manager, OR manager is external (not one of our org's users)
+  const roots = allUsers
+    .filter((u) => !u.manager?.id || !allUserIds.has(u.manager.id))
+    .map(({ manager, ...rest }) => rest); // strip the expanded manager object before caching
 
   await cacheService.set(cacheKey, JSON.stringify(roots), TTL_TREE);
   return roots;

@@ -179,7 +179,7 @@ export default function ActiveDirectoryUserDetailPage() {
   // ── Loading skeleton ──
   if (loading) {
     return (
-      <div className="p-6 max-w-screen-lg mx-auto">
+      <div>
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-200 rounded w-48" />
           <div className="h-24 bg-gray-100 rounded-xl" />
@@ -202,7 +202,7 @@ export default function ActiveDirectoryUserDetailPage() {
 
   // ── Render ──
   return (
-    <div className="p-6 max-w-screen-lg mx-auto space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title={user.displayName}
         subtitle={user.jobTitle || user.userPrincipalName}

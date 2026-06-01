@@ -8,7 +8,7 @@ import { azureAdService } from '../../services/azureAdService';
 import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
-import AzureOrgTreeNode from '../../components/azure-ad/AzureOrgTreeNode';
+import AzureOrgChart from '../../components/azure-ad/AzureOrgChart';
 
 // ── Avatar helper ─────────────────────────────────────────────────────────────
 const AVATAR_COLORS = [
@@ -168,7 +168,7 @@ export default function ActiveDirectoryPage() {
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
-    <div className="p-6 max-w-screen-xl mx-auto space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="Active Directory"
         subtitle="Microsoft Entra ID — all users"
@@ -249,7 +249,7 @@ export default function ActiveDirectoryPage() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
             <p className="text-sm font-medium text-gray-700">Reporting Hierarchy</p>
-            <p className="text-xs text-gray-400">Click a node to view profile · expand arrow to see direct reports</p>
+            <p className="text-xs text-gray-400">Click a card to view profile · +/− to expand direct reports</p>
           </div>
 
           {treeLoading ? (
@@ -262,9 +262,9 @@ export default function ActiveDirectoryPage() {
           ) : roots.length === 0 ? (
             <div className="p-8 text-center text-gray-400 text-sm">No users found</div>
           ) : (
-            <div className="py-2 divide-y divide-gray-50">
+            <div className="py-6 px-6 overflow-x-auto flex gap-8 justify-center flex-wrap">
               {roots.map((user) => (
-                <AzureOrgTreeNode key={user.id} user={user} depth={0} />
+                <AzureOrgChart key={user.id} user={user} depth={0} />
               ))}
             </div>
           )}
