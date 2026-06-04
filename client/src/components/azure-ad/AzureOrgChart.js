@@ -24,7 +24,7 @@ function OrgCard({ user, depth, onNavigate }) {
 
   return (
     <div
-      className="bg-white rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow w-52 shrink-0"
+      className="bg-white rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow w-44 shrink-0"
       style={{ borderTop: `3px solid ${color}` }}
       onClick={() => onNavigate(user.id)}
     >
@@ -124,7 +124,7 @@ function ChildrenRow({ nodes, depth, pathIds, autoExpand }) {
 
       <ul className="flex list-none m-0 p-0 gap-0">
         {nodes.map((child) => (
-          <li key={child.id} className="flex flex-col items-center px-3">
+          <li key={child.id} className="flex flex-col items-center px-2">
             <div className="w-0.5 bg-gray-300" style={{ height: 14 }} />
             <AzureOrgChart user={child} depth={depth} pathIds={pathIds} autoExpand={autoExpand} />
           </li>
@@ -177,7 +177,7 @@ export default function AzureOrgChart({ user, depth = 0, pathIds = new Set(), au
 
   if (hasCycle) {
     return (
-      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 text-xs text-gray-400 w-52">
+      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 text-xs text-gray-400 w-44">
         <span>↺</span>
         <span className="truncate">{user.displayName}</span>
         <span className="shrink-0 text-gray-300">(cycle)</span>
@@ -217,7 +217,7 @@ export default function AzureOrgChart({ user, depth = 0, pathIds = new Set(), au
       {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
 
       {expanded && children && (
-        <ChildrenRow nodes={children} depth={depth + 1} pathIds={nextPathIds} autoExpand={autoExpand} />
+        <ChildrenRow nodes={children} depth={depth + 1} pathIds={nextPathIds} autoExpand={depth === 0 ? autoExpand : false} />
       )}
     </div>
   );

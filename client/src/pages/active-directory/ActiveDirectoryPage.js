@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Table from '../../components/common/Table';
 import Pagination from '../../components/common/Pagination';
@@ -100,11 +100,13 @@ function ViewToggle({ view, onChange }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ActiveDirectoryPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { addToast: showToast } = useToast();
   const { page, limit, setPage, setLimit, resetPage } = usePagination({ initialPage: 1, initialLimit: 50 });
 
-  // View mode
-  const [view, setView] = useState('list');
+  // View mode — persisted in URL (?view=list|tree)
+  const view = searchParams.get('view') === 'tree' ? 'tree' : 'list';
+  const setView = (v) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('view', v); return next; }, { replace: true });
 
   // List state
   const [users, setUsers]       = useState([]);
@@ -218,7 +220,11 @@ export default function ActiveDirectoryPage() {
       )}
 
       {/* ── TREE VIEW ── */}
-      {view === 'tree' && <OrgHierarchyView />}
+      {view === 'tree' && (
+        <div className="w-full min-w-0">
+          <OrgHierarchyView />
+        </div>
+      )}
     </div>
   );
 }
