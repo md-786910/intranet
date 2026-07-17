@@ -32,9 +32,11 @@ function countByType(nodes) {
 }
 
 const TYPE_STATS = [
+  { type: 'COMPANY', label: 'Companies', color: 'bg-blue-50 text-blue-700' },
   { type: 'OFFICE_LOCATION', label: 'Offices', color: 'bg-emerald-50 text-emerald-700' },
-  { type: 'VERTICAL', label: 'Verticals', color: 'bg-amber-50 text-amber-700' },
+  { type: 'VERTICAL', label: 'Verticals', color: 'bg-violet-50 text-violet-700' },
   { type: 'DEPARTMENT', label: 'Departments', color: 'bg-gray-100 text-gray-600' },
+  { type: 'ADMIN_UNIT', label: 'Admin Units', color: 'bg-amber-50 text-amber-700' },
 ];
 
 export default function OrgTreeView({

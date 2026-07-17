@@ -1,10 +1,50 @@
-// Scope types for polymorphic hierarchy references
+// Scope types for polymorphic hierarchy references.
+// Legacy 4-level values are retained (existing rows/enums); GROUP/COMPANY/ADMIN_UNIT
+// are the new generic org_node types. scope_id now points at an org_node.id.
 const SCOPE_TYPES = {
   ORGANISATION: 'ORGANISATION',
   OFFICE_LOCATION: 'OFFICE_LOCATION',
   VERTICAL: 'VERTICAL',
   DEPARTMENT: 'DEPARTMENT',
+  GROUP: 'GROUP',
+  COMPANY: 'COMPANY',
+  ADMIN_UNIT: 'ADMIN_UNIT',
 };
+
+// Generic org_node types. The tree is a single self-referential table; the
+// node_type labels a row's role in the tree, kind splits the two branches.
+const NODE_TYPES = {
+  GROUP: 'GROUP',
+  COMPANY: 'COMPANY',
+  OFFICE_LOCATION: 'OFFICE_LOCATION',
+  VERTICAL: 'VERTICAL',
+  DEPARTMENT: 'DEPARTMENT',
+  ADMIN_UNIT: 'ADMIN_UNIT',
+};
+
+const NODE_KIND = {
+  OPERATIONAL: 'OPERATIONAL',
+  ADMINISTRATIVE: 'ADMINISTRATIVE',
+};
+
+// MEMBER is not a node — it's a node_membership row. It appears in the allowed
+// list purely to control where the "Add Member" affordance is offered.
+const MEMBER = 'MEMBER';
+
+// Which child node_types may be created under each node_type. Single source of
+// truth shared by API validation and (mirrored on) the frontend add menu.
+const ALLOWED_CHILDREN = {
+  GROUP: ['COMPANY', 'VERTICAL', 'DEPARTMENT', MEMBER],
+  COMPANY: ['OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT', MEMBER],
+  ADMIN_UNIT: ['VERTICAL', 'DEPARTMENT', MEMBER],
+  OFFICE_LOCATION: ['VERTICAL', 'DEPARTMENT', MEMBER],
+  VERTICAL: ['DEPARTMENT', MEMBER],
+  DEPARTMENT: [MEMBER],
+};
+
+// Node types that can hold members (a node_membership can attach here).
+const MEMBER_BEARING_NODE_TYPES = Object.keys(ALLOWED_CHILDREN)
+  .filter((t) => ALLOWED_CHILDREN[t].includes(MEMBER));
 
 // User account statuses
 const USER_STATUS = {
@@ -79,6 +119,11 @@ const DEFAULT_ORGANISATION_ID = 1;
 
 module.exports = {
   SCOPE_TYPES,
+  NODE_TYPES,
+  NODE_KIND,
+  MEMBER,
+  ALLOWED_CHILDREN,
+  MEMBER_BEARING_NODE_TYPES,
   USER_STATUS,
   ORG_STATUS,
   PERMISSION_EFFECT,

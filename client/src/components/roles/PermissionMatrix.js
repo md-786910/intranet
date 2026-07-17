@@ -65,7 +65,9 @@ function getModuleName(moduleCode, moduleName) {
 }
 
 function ModuleCard({ mod, selectedPermissions, onChange, disabled }) {
-  const [expanded, setExpanded] = useState(true);
+  // Read-only previews (disabled) start collapsed so the section stays compact;
+  // editable matrices start expanded so the checkboxes are visible.
+  const [expanded, setExpanded] = useState(!disabled);
 
   const selectedCount = mod.actions.filter(a => selectedPermissions.has(a.module_action_id)).length;
   const allSelected = mod.actions.length > 0 && selectedCount === mod.actions.length;

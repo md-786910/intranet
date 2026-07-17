@@ -35,12 +35,7 @@ async function getReadableScopeKeys(userId, moduleCode) {
       return null;
     }
 
-    const {
-      UserRoleAssignment,
-      OfficeLocation,
-      Vertical,
-      Department,
-    } = require('../database/models');
+    const { UserRoleAssignment, OrgNode } = require('../database/models');
 
     const assignments = await UserRoleAssignment.findAll({
       where: {
@@ -50,7 +45,7 @@ async function getReadableScopeKeys(userId, moduleCode) {
           { [Op.or]: [{ ends_at: null }, { ends_at: { [Op.gt]: new Date() } }] },
         ],
       },
-      attributes: ['scope_type', 'scope_id'],
+      attributes: ['scope_id'],
     });
 
     if (assignments.length === 0) {
@@ -58,89 +53,38 @@ async function getReadableScopeKeys(userId, moduleCode) {
       return [];
     }
 
-    const orgIds = new Set();
-    const officeIds = new Set();
-    const verticalIds = new Set();
-    const departmentIds = new Set();
+    const scopeIds = [...new Set(assignments.map((a) => Number(a.scope_id)).filter(Boolean))];
+    const nodeIds = new Set();
 
-    assignments.forEach((a) => {
-      switch (a.scope_type) {
-        case 'ORGANISATION': orgIds.add(a.scope_id); break;
-        case 'OFFICE_LOCATION': officeIds.add(a.scope_id); break;
-        case 'VERTICAL': verticalIds.add(a.scope_id); break;
-        case 'DEPARTMENT': departmentIds.add(a.scope_id); break;
-        default: break;
+    // Load the assignment nodes with their materialized paths.
+    const assignmentNodes = await OrgNode.findAll({
+      where: { id: { [Op.in]: scopeIds } },
+      attributes: ['id', 'path'],
+    });
+
+    const descendantPrefixes = [];
+    assignmentNodes.forEach((n) => {
+      nodeIds.add(Number(n.id));
+      if (n.path) {
+        // Upward: every ancestor id encoded in the path.
+        n.path.split('/').filter(Boolean).forEach((id) => nodeIds.add(Number(id)));
+        // Downward prefix: any node whose path starts with this node's path.
+        descendantPrefixes.push({ path: { [Op.like]: `${n.path}%` } });
       }
     });
 
-    // Capture original assignment scopes before downward expansion
-    const assignedOrgIds = new Set(orgIds);
-    const assignedOfficeIds = new Set(officeIds);
-    const assignedVerticalIds = new Set(verticalIds);
-    const assignedDeptIds = new Set(departmentIds);
-
-    // Downward expansion: ORGANISATION → all offices under it
-    if (orgIds.size > 0) {
-      const offices = await OfficeLocation.findAll({
-        where: { organisation_id: { [Op.in]: [...orgIds] } },
+    // Downward: all descendants of any assignment node (subtree).
+    if (descendantPrefixes.length > 0) {
+      const descendants = await OrgNode.findAll({
+        where: { [Op.or]: descendantPrefixes },
         attributes: ['id'],
       });
-      offices.forEach((o) => officeIds.add(o.id));
+      descendants.forEach((d) => nodeIds.add(Number(d.id)));
     }
 
-    // OFFICE_LOCATION → all verticals under it
-    if (officeIds.size > 0) {
-      const verticals = await Vertical.findAll({
-        where: { office_location_id: { [Op.in]: [...officeIds] } },
-        attributes: ['id'],
-      });
-      verticals.forEach((v) => verticalIds.add(v.id));
-    }
-
-    // VERTICAL → all departments under it
-    if (verticalIds.size > 0) {
-      const departments = await Department.findAll({
-        where: { vertical_id: { [Op.in]: [...verticalIds] } },
-        attributes: ['id'],
-      });
-      departments.forEach((d) => departmentIds.add(d.id));
-    }
-
-    // Upward expansion from original assignments: dept → vertical → office → org
-    // This ensures a dept-level editor can also see content published at ancestor
-    // scope levels (e.g. org-wide articles published by a global manager).
-    if (assignedDeptIds.size > 0) {
-      const depts = await Department.findAll({
-        where: { id: { [Op.in]: [...assignedDeptIds] } },
-        attributes: ['id', 'vertical_id'],
-      });
-      depts.forEach((d) => { if (d.vertical_id) assignedVerticalIds.add(d.vertical_id); });
-    }
-    if (assignedVerticalIds.size > 0) {
-      const verts = await Vertical.findAll({
-        where: { id: { [Op.in]: [...assignedVerticalIds] } },
-        attributes: ['id', 'office_location_id'],
-      });
-      verts.forEach((v) => { if (v.office_location_id) assignedOfficeIds.add(v.office_location_id); });
-    }
-    if (assignedOfficeIds.size > 0) {
-      const offices = await OfficeLocation.findAll({
-        where: { id: { [Op.in]: [...assignedOfficeIds] } },
-        attributes: ['id', 'organisation_id'],
-      });
-      offices.forEach((o) => { if (o.organisation_id) assignedOrgIds.add(o.organisation_id); });
-    }
-    // Merge ancestors back into the main sets
-    assignedOrgIds.forEach((id) => orgIds.add(id));
-    assignedOfficeIds.forEach((id) => officeIds.add(id));
-    assignedVerticalIds.forEach((id) => verticalIds.add(id));
-
-    const keys = [
-      ...[...orgIds].map((id) => ({ type: 'ORGANISATION', id })),
-      ...[...officeIds].map((id) => ({ type: 'OFFICE_LOCATION', id })),
-      ...[...verticalIds].map((id) => ({ type: 'VERTICAL', id })),
-      ...[...departmentIds].map((id) => ({ type: 'DEPARTMENT', id })),
-    ];
+    // Keys are org_node ids (globally unique) — matched against content
+    // owning_scope_id regardless of the legacy owning_scope_type label.
+    const keys = [...nodeIds];
 
     await cacheService.set(cacheKey, JSON.stringify(keys), CACHE_TTL);
     return keys;
@@ -184,9 +128,8 @@ async function getCollaboratorUserIds(userId, moduleCodes = ['NEWS', 'DOCUMENTS'
     const seen = new Set();
     const keys = [];
     allKeysArrays.forEach((arr) => {
-      (arr || []).forEach((k) => {
-        const sig = `${k.type}:${k.id}`;
-        if (!seen.has(sig)) { seen.add(sig); keys.push(k); }
+      (arr || []).forEach((id) => {
+        if (!seen.has(id)) { seen.add(id); keys.push(id); }
       });
     });
 
@@ -198,10 +141,9 @@ async function getCollaboratorUserIds(userId, moduleCodes = ['NEWS', 'DOCUMENTS'
     }
 
     const { UserRoleAssignment } = require('../database/models');
-    const orConditions = keys.map((k) => ({ scope_type: k.type, scope_id: k.id }));
     const peers = await UserRoleAssignment.findAll({
       where: {
-        [Op.or]: orConditions,
+        scope_id: { [Op.in]: keys },
         [Op.and]: [
           { [Op.or]: [{ starts_at: null }, { starts_at: { [Op.lte]: new Date() } }] },
           { [Op.or]: [{ ends_at: null }, { ends_at: { [Op.gt]: new Date() } }] },
@@ -223,17 +165,15 @@ async function getCollaboratorUserIds(userId, moduleCodes = ['NEWS', 'DOCUMENTS'
 }
 
 /**
- * Converts a readable-scope-keys array into a Sequelize Op.or condition
- * matching `(owning_scope_type, owning_scope_id)` pairs. Returns null if
+ * Converts a readable-scope-keys array (org_node ids) into a Sequelize Op.or
+ * condition matching content by `owning_scope_id`. Node ids are globally
+ * unique so the legacy `owning_scope_type` label is not needed. Returns null if
  * keys is null (global access) or empty (no access).
  */
 function buildOwningScopeOrCondition(keys) {
   if (keys === null) return null;
   if (!Array.isArray(keys) || keys.length === 0) return [];
-  return keys.map((k) => ({
-    owning_scope_type: k.type,
-    owning_scope_id: k.id,
-  }));
+  return keys.map((id) => ({ owning_scope_id: id }));
 }
 
 module.exports = {

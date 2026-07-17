@@ -25,6 +25,46 @@ router.get('/:id/children', validate(schemas.idParam), controller.getChildren);
 
 router.get('/:id/subtree', validate(schemas.idParam), controller.getSubtree);
 
+// ── Generic nodes (operational + administrative) ──
+
+router.post(
+  '/nodes',
+  authorize('ADMIN', 'MANAGE_OFFICE_LOCATIONS'),
+  validate(schemas.createNodeSchema),
+  auditLogger('ORG_UNIT_CREATED'),
+  controller.createNode
+);
+
+router.put(
+  '/nodes/:id',
+  authorize('ADMIN', 'MANAGE_OFFICE_LOCATIONS'),
+  validate(schemas.updateNodeSchema),
+  auditLogger('ORG_UNIT_UPDATED'),
+  controller.updateNode
+);
+
+router.delete(
+  '/nodes/:id',
+  authorize('ADMIN', 'MANAGE_OFFICE_LOCATIONS'),
+  validate(schemas.idParam),
+  auditLogger('ORG_UNIT_DELETED'),
+  controller.deleteNode
+);
+
+router.post(
+  '/nodes/:id/members',
+  authorize('ADMIN', 'MANAGE_OFFICE_LOCATIONS'),
+  validate(schemas.addMemberSchema),
+  controller.addNodeMember
+);
+
+router.delete(
+  '/nodes/:id/members/:userId',
+  authorize('ADMIN', 'MANAGE_OFFICE_LOCATIONS'),
+  validate(schemas.memberParam),
+  controller.removeNodeMember
+);
+
 // ── Office Locations ──
 
 router.post(

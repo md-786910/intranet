@@ -1,39 +1,88 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import Select from './Select';
-import MultiSelect from './MultiSelect';
 import { useOrgTree } from '../../hooks/useOrgTree';
-import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
+import { NODE_TYPE_LABELS } from '../../utils/constants';
 
-const SCOPE_LABELS = {
-  ORGANISATION: 'Organisation',
-  OFFICE_LOCATION: 'Office Location',
-  VERTICAL: 'Vertical',
-  DEPARTMENT: 'Department',
-};
-
-function sortByLabel(items) {
-  return [...items].sort((left, right) => left.label.localeCompare(right.label));
-}
-
-function haveSameValues(left, right) {
-  if (left.length !== right.length) return false;
-  return left.every((value, index) => value === right[index]);
-}
+// Recursive checkbox tree over the generic org_node tree. Selecting a node
+// emits a scope { scope_type, scope_id, scope_label } where scope_type is the
+// node's type and scope_id is its id. Works at any depth (operational +
+// administrative branches). Leaving everything unchecked assigns at the root.
 
 function haveSameScopes(left, right) {
   if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
-  const normalize = (scopes) => [...scopes].map((scope) => `${scope.scope_type}:${scope.scope_id}:${scope.scope_label}`).sort();
-  const leftNormalized = normalize(left);
-  const rightNormalized = normalize(right);
-  return leftNormalized.every((value, index) => value === rightNormalized[index]);
+  const normalize = (scopes) => [...scopes].map((s) => `${s.scope_type}:${s.scope_id}`).sort();
+  const l = normalize(left);
+  const r = normalize(right);
+  return l.every((v, i) => v === r[i]);
 }
 
-function buildScope(type, node, label) {
-  return {
-    scope_type: type,
-    scope_id: node.id,
-    scope_label: `${SCOPE_LABELS[type]}: ${label}`,
+function flatten(node, acc = []) {
+  if (!node) return acc;
+  acc.push(node);
+  (node.children || []).forEach((c) => flatten(c, acc));
+  return acc;
+}
+
+// Map of node id -> array of ancestor names (root-first, INCLUDING the root
+// group name) so every node's full parent context is visible — a node placed
+// directly under the root still shows the root/company name.
+function buildPaths(root) {
+  const map = new Map();
+  const walk = (node, trail) => {
+    map.set(String(node.id), trail);
+    const nextTrail = [...trail, node.name];
+    (node.children || []).forEach((c) => walk(c, nextTrail));
   };
+  if (root) walk(root, []);
+  return map;
+}
+
+function TreeRows({ node, depth, selectedIds, toggle, disabled, pathById }) {
+  const isRoot = depth === 0;
+  return (
+    <>
+      <div
+        className="flex items-start gap-2 py-1.5"
+        style={{ paddingLeft: `${depth * 18}px` }}
+      >
+        {isRoot ? (
+          <span className="text-xs text-gray-400 w-4" />
+        ) : (
+          <input
+            type="checkbox"
+            checked={selectedIds.includes(String(node.id))}
+            onChange={() => toggle(node)}
+            disabled={disabled}
+            className="mt-0.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+        )}
+        <span className="min-w-0">
+          <span className="flex items-center gap-2">
+            <span className="text-sm text-gray-800">{node.name}</span>
+            <span className="text-[10px] uppercase tracking-wide text-gray-400">
+              {NODE_TYPE_LABELS[node.type] || node.type}
+            </span>
+          </span>
+          {/* Parent path so it's clear which company/vertical this node sits under */}
+          {!isRoot && (pathById.get(String(node.id)) || []).length > 0 && (
+            <span className="block text-[11px] text-gray-400 truncate">
+              {(pathById.get(String(node.id)) || []).join(' › ')}
+            </span>
+          )}
+        </span>
+      </div>
+      {(node.children || []).map((child) => (
+        <TreeRows
+          key={child.id}
+          node={child}
+          depth={depth + 1}
+          selectedIds={selectedIds}
+          toggle={toggle}
+          disabled={disabled}
+          pathById={pathById}
+        />
+      ))}
+    </>
+  );
 }
 
 export default function HierarchyScopeSelector({
@@ -43,168 +92,61 @@ export default function HierarchyScopeSelector({
   className = '',
 }) {
   const { tree, loading, error, refetch } = useOrgTree();
-  const { currentOrganisationId } = useCurrentOrganisation();
-  const [selectedOfficeIds, setSelectedOfficeIds] = useState([]);
-  const [selectedVerticalIds, setSelectedVerticalIds] = useState([]);
-  const [selectedDepartmentIds, setSelectedDepartmentIds] = useState([]);
-  const [hasHydratedFromValue, setHasHydratedFromValue] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [hasHydrated, setHasHydrated] = useState(false);
 
-  const orgNode = tree[0] || null;
+  const rootNode = tree[0] || null;
+  const allNodes = useMemo(() => (rootNode ? flatten(rootNode) : []), [rootNode]);
+  const nodeById = useMemo(() => {
+    const m = new Map();
+    allNodes.forEach((n) => m.set(String(n.id), n));
+    return m;
+  }, [allNodes]);
+  const pathById = useMemo(() => buildPaths(rootNode), [rootNode]);
 
-  const officeOptions = useMemo(
-    () => sortByLabel((orgNode?.children || []).map((office) => ({
-      value: String(office.id),
-      label: office.name,
-      description: office.code || office.city || '',
-    }))),
-    [orgNode],
-  );
+  // Full breadcrumb for a node id, e.g. "BTX › Austria › Product › HR".
+  const fullPath = (id) => {
+    const node = nodeById.get(String(id));
+    if (!node) return '';
+    return [...(pathById.get(String(id)) || []), node.name].join(' › ');
+  };
 
-  const selectedOffices = useMemo(
-    () => (orgNode?.children || []).filter((office) => selectedOfficeIds.includes(String(office.id))),
-    [orgNode, selectedOfficeIds],
-  );
+  const toggle = (node) => {
+    const id = String(node.id);
+    setSelectedIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  };
 
-  const verticalOptions = useMemo(
-    () => sortByLabel(
-      selectedOffices.flatMap((office) =>
-        (office.children || []).map((vertical) => ({
-          value: String(vertical.id),
-          label: vertical.name,
-          description: office.name,
-        })),
-      ),
-    ),
-    [selectedOffices],
-  );
-
-  const selectedVerticals = useMemo(
-    () => selectedOffices.flatMap((office) =>
-      (office.children || []).filter((vertical) => selectedVerticalIds.includes(String(vertical.id))).map((vertical) => ({
-        ...vertical,
-        officeName: office.name,
-      })),
-    ),
-    [selectedOffices, selectedVerticalIds],
-  );
-
-  const departmentOptions = useMemo(
-    () => sortByLabel(
-      selectedVerticals.flatMap((vertical) =>
-        (vertical.children || []).map((department) => ({
-          value: String(department.id),
-          label: department.name,
-          description: `${vertical.name} · ${vertical.officeName}`,
-        })),
-      ),
-    ),
-    [selectedVerticals],
-  );
-
-  useEffect(() => {
-    const validVerticalIds = new Set(verticalOptions.map((option) => option.value));
-    setSelectedVerticalIds((current) => {
-      const next = current.filter((id) => validVerticalIds.has(id));
-      return haveSameValues(current, next) ? current : next;
-    });
-  }, [verticalOptions]);
-
-  useEffect(() => {
-    const validDepartmentIds = new Set(departmentOptions.map((option) => option.value));
-    setSelectedDepartmentIds((current) => {
-      const next = current.filter((id) => validDepartmentIds.has(id));
-      return haveSameValues(current, next) ? current : next;
-    });
-  }, [departmentOptions]);
-
-  // Resolve "narrowest wins" PER BRANCH, not globally — so selecting two
-  // verticals where one has a department picked and the other doesn't yields
-  // [Department: …, Vertical: …] instead of collapsing to a single Department.
-  // The rule for each office is:
-  //   - No verticals selected → emit the OFFICE
-  //   - Vertical selected, no departments under it → emit the VERTICAL
-  //   - Vertical selected with departments under it → emit each DEPARTMENT
   const resolvedScopes = useMemo(() => {
-    if (!orgNode) return [];
-
-    if (selectedOfficeIds.length === 0) {
-      return [buildScope('ORGANISATION', orgNode, orgNode.name)];
+    if (!rootNode) return [];
+    if (selectedIds.length === 0) {
+      return [{ scope_type: rootNode.type, scope_id: rootNode.id, scope_label: rootNode.name }];
     }
-
-    const scopes = [];
-
-    selectedOffices.forEach((office) => {
-      const verticalsInOffice = (office.children || []).filter(
-        (vertical) => selectedVerticalIds.includes(String(vertical.id)),
-      );
-
-      if (verticalsInOffice.length === 0) {
-        scopes.push(buildScope('OFFICE_LOCATION', office, office.name));
-        return;
-      }
-
-      verticalsInOffice.forEach((vertical) => {
-        const departmentsInVertical = (vertical.children || []).filter(
-          (department) => selectedDepartmentIds.includes(String(department.id)),
-        );
-
-        if (departmentsInVertical.length === 0) {
-          scopes.push(buildScope('VERTICAL', vertical, `${vertical.name} · ${office.name}`));
-        } else {
-          departmentsInVertical.forEach((department) => {
-            scopes.push(
-              buildScope('DEPARTMENT', department, `${department.name} · ${vertical.name} · ${office.name}`),
-            );
-          });
-        }
-      });
-    });
-
-    return scopes;
-  }, [orgNode, selectedDepartmentIds, selectedOfficeIds, selectedOffices, selectedVerticalIds]);
+    return selectedIds
+      .map((id) => nodeById.get(id))
+      .filter(Boolean)
+      .map((node) => ({
+        scope_type: node.type,
+        scope_id: node.id,
+        scope_label: `${NODE_TYPE_LABELS[node.type] || node.type}: ${fullPath(node.id)}`,
+      }));
+  }, [rootNode, selectedIds, nodeById]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!onChange || loading || !orgNode) return;
+    if (!onChange || loading || !rootNode) return;
     if (haveSameScopes(value, resolvedScopes)) return;
     onChange(resolvedScopes);
-  }, [loading, onChange, orgNode, resolvedScopes, value]);
+  }, [loading, onChange, rootNode, resolvedScopes, value]);
 
+  // Hydrate selection from an incoming value (skip the implicit root scope).
   useEffect(() => {
-    if (hasHydratedFromValue) return;
-    if (!orgNode || !Array.isArray(value) || value.length === 0) return;
-
-    const officeIds = new Set();
-    const verticalIds = new Set();
-    const departmentIds = new Set();
-
-    value.forEach((scope) => {
-      if (scope.scope_type === 'OFFICE_LOCATION') officeIds.add(String(scope.scope_id));
-
-      (orgNode.children || []).forEach((office) => {
-        (office.children || []).forEach((vertical) => {
-          if (scope.scope_type === 'VERTICAL' && vertical.id === Number(scope.scope_id)) {
-            officeIds.add(String(office.id));
-            verticalIds.add(String(vertical.id));
-          }
-
-          if (scope.scope_type === 'DEPARTMENT') {
-            (vertical.children || []).forEach((department) => {
-              if (department.id === Number(scope.scope_id)) {
-                officeIds.add(String(office.id));
-                verticalIds.add(String(vertical.id));
-                departmentIds.add(String(department.id));
-              }
-            });
-          }
-        });
-      });
-    });
-
-    setSelectedOfficeIds([...officeIds].sort());
-    setSelectedVerticalIds([...verticalIds].sort());
-    setSelectedDepartmentIds([...departmentIds].sort());
-    setHasHydratedFromValue(true);
-  }, [hasHydratedFromValue, orgNode, value]);
+    if (hasHydrated || !rootNode || !Array.isArray(value) || value.length === 0) return;
+    const ids = value
+      .filter((s) => Number(s.scope_id) !== Number(rootNode.id))
+      .map((s) => String(s.scope_id))
+      .filter((id) => nodeById.has(id));
+    setSelectedIds(ids);
+    setHasHydrated(true);
+  }, [hasHydrated, rootNode, value, nodeById]);
 
   if (error) {
     return (
@@ -220,53 +162,17 @@ export default function HierarchyScopeSelector({
   }
 
   return (
-    <div className={`space-y-4 ${className}`}>
-      <Select
-        label="Organisation"
-        name="scope_org"
-        value={orgNode ? String(orgNode.id) : String(currentOrganisationId || '')}
-        onChange={() => {}}
-        options={orgNode ? [{ value: String(orgNode.id), label: orgNode.name }] : []}
-        placeholder={loading ? 'Loading...' : 'Organisation'}
-        disabled
-      />
-
-      <MultiSelect
-        label="Office Locations"
-        name="scope_offices"
-        value={selectedOfficeIds}
-        onChange={setSelectedOfficeIds}
-        options={officeOptions}
-        placeholder={loading ? 'Loading office locations...' : 'Select one or more office locations'}
-        disabled={disabled || loading}
-        helpText="Leave empty to assign at organisation level."
-      />
-
-      {selectedOfficeIds.length > 0 && (
-        <MultiSelect
-          label="Verticals"
-          name="scope_verticals"
-          value={selectedVerticalIds}
-          onChange={setSelectedVerticalIds}
-          options={verticalOptions}
-          placeholder={loading ? 'Loading verticals...' : 'Optionally narrow down to one or more verticals'}
-          disabled={disabled || loading}
-          helpText="Leave empty to target all selected offices."
-        />
-      )}
-
-      {selectedVerticalIds.length > 0 && (
-        <MultiSelect
-          label="Departments"
-          name="scope_departments"
-          value={selectedDepartmentIds}
-          onChange={setSelectedDepartmentIds}
-          options={departmentOptions}
-          placeholder={loading ? 'Loading departments...' : 'Optionally narrow down to one or more departments'}
-          disabled={disabled || loading}
-          helpText="Leave empty to target all selected verticals."
-        />
-      )}
+    <div className={`space-y-3 ${className}`}>
+      <div className="rounded-xl border border-gray-200 max-h-72 overflow-y-auto px-3 py-2">
+        {loading && <p className="text-sm text-gray-400 py-2">Loading organisation…</p>}
+        {!loading && rootNode && (
+          <TreeRows node={rootNode} depth={0} selectedIds={selectedIds} toggle={toggle} disabled={disabled} pathById={pathById} />
+        )}
+        {!loading && !rootNode && <p className="text-sm text-gray-400 py-2">No organisation structure found.</p>}
+      </div>
+      <p className="text-xs text-gray-500">
+        Tick one or more units to scope here. Leave everything unticked to assign at the top (organisation-wide).
+      </p>
 
       {!loading && resolvedScopes.length > 0 && (
         <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">

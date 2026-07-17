@@ -37,6 +37,32 @@ const getPeopleTree = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
+// ── Generic nodes (operational + administrative) ──
+const createNode = catchAsync(async (req, res) => {
+  const node = await orgService.createNode(req.body, req.user.user_id);
+  res.status(201).json({ status: 'success', data: node });
+});
+
+const updateNode = catchAsync(async (req, res) => {
+  const node = await orgService.updateNode(req.params.id, req.body);
+  res.status(200).json({ status: 'success', data: node });
+});
+
+const deleteNode = catchAsync(async (req, res) => {
+  const result = await orgService.deleteNode(req.params.id, req.user.user_id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
+const addNodeMember = catchAsync(async (req, res) => {
+  const membership = await orgService.addNodeMember(req.params.id, req.body);
+  res.status(201).json({ status: 'success', data: membership });
+});
+
+const removeNodeMember = catchAsync(async (req, res) => {
+  const result = await orgService.removeNodeMember(req.params.id, req.params.userId);
+  res.status(200).json({ status: 'success', data: result });
+});
+
 // Office Locations
 const createOfficeLocation = catchAsync(async (req, res) => {
   const office = await orgService.createOfficeLocation(req.body, req.user.user_id);
@@ -93,6 +119,11 @@ module.exports = {
   getById,
   getChildren,
   getSubtree,
+  createNode,
+  updateNode,
+  deleteNode,
+  addNodeMember,
+  removeNodeMember,
   createOfficeLocation,
   updateOfficeLocation,
   deleteOfficeLocation,

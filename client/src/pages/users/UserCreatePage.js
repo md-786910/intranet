@@ -86,7 +86,12 @@ function extractPermissionIds(role) {
   );
 }
 
-export default function UserCreatePage() {
+export default function UserCreatePage({
+  embedded = false,
+  presetScope = null,
+  onCreated = null,
+  onCancel = null,
+} = {}) {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const { currentOrganisationId } = useCurrentOrganisation();
@@ -114,7 +119,7 @@ export default function UserCreatePage() {
   const [modules, setModules] = useState([]);
   const [assignedRoles, setAssignedRoles] = useState([]);
   const [pickerRoleId, setPickerRoleId] = useState('');
-  const [pickerScopes, setPickerScopes] = useState([]);
+  const [pickerScopes, setPickerScopes] = useState(presetScope ? [presetScope] : []);
   const [previewRoleIndex, setPreviewRoleIndex] = useState(null);
 
   // Extra permissions
@@ -319,7 +324,7 @@ export default function UserCreatePage() {
 
       const department_ids = departmentScopes.map((s) => Number(s.scope_id));
 
-      await userService.createUser({
+      const res = await userService.createUser({
         email: form.email,
         password: (setPasswordManually && form.password.trim()) ? form.password.trim() : undefined,
         first_name: form.first_name,
@@ -344,7 +349,12 @@ export default function UserCreatePage() {
           : undefined,
       });
       addToast(isInviteFlow ? `Invitation sent to ${form.email}` : 'User created successfully', 'success');
-      navigate('/users');
+      if (onCreated) {
+        // Embedded (e.g. org-tree "Add Member") — hand the new user back to the host.
+        onCreated(res.data?.data || null);
+      } else {
+        navigate('/users');
+      }
     } catch (err) {
       addToast(getErrorMessage(err, 'Failed to create user'), 'error');
       const validationErrors = extractValidationErrors(err);
@@ -356,7 +366,15 @@ export default function UserCreatePage() {
 
   return (
     <div>
-      <PageHeader title="Create User" subtitle="Add a new user account or invite an employee." backTo="/users" />
+      {!embedded && (
+        <PageHeader title="Create User" subtitle="Add a new user account or invite an employee." backTo="/users" />
+      )}
+
+      {embedded && presetScope && (
+        <div className="mb-4 rounded-lg bg-primary-50 border border-primary-100 px-4 py-2.5 text-sm text-primary-800">
+          Placing under: <span className="font-semibold">{presetScope.scope_label || presetScope.name}</span>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="p-6 space-y-6">
@@ -596,7 +614,7 @@ export default function UserCreatePage() {
 
         {/* ── Footer ── */}
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50/50 rounded-b-xl">
-          <Button variant="secondary" onClick={() => navigate('/users')}>Cancel</Button>
+          <Button variant="secondary" onClick={() => (embedded && onCancel ? onCancel() : navigate('/users'))}>Cancel</Button>
           <Button onClick={handleSave} loading={saving}>{isInviteFlow ? 'Send Invitation' : 'Create User'}</Button>
         </div>
       </div>

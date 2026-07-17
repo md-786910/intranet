@@ -4,97 +4,55 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import StatusBadge from '../../components/common/StatusBadge';
 import OrgTreeView from '../../components/org/OrgTreeView';
+import Modal from '../../components/common/Modal';
+import UserCreatePage from '../users/UserCreatePage';
 import { TYPE_COLORS, TYPE_ICONS, NODE_TYPE_LABELS } from '../../components/org/OrgTreeNode';
 import { orgService, transformOrgTree } from '../../services/orgService';
+import { userService } from '../../services/userService';
+import { ALLOWED_CHILDREN, ADD_CHILD_LABELS, MEMBER } from '../../utils/constants';
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
 import { usePermission } from '../../hooks/usePermission';
 
-const CHILD_TYPE_MAP = {
-  ORGANISATION: 'OFFICE_LOCATION',
-  OFFICE_LOCATION: 'VERTICAL',
-  VERTICAL: 'DEPARTMENT',
-};
-
-const CHILD_LABEL_MAP = {
-  ORGANISATION: 'Office Location',
-  OFFICE_LOCATION: 'Vertical',
-  VERTICAL: 'Department',
-};
-
-// Accent bar colors for the panel header
+// Accent bar colours for the panel header, per node type.
 const ACCENT_COLORS = {
-  ORGANISATION: 'bg-blue-500',
+  GROUP: 'bg-slate-500',
+  COMPANY: 'bg-blue-500',
   OFFICE_LOCATION: 'bg-emerald-500',
-  VERTICAL: 'bg-amber-500',
+  VERTICAL: 'bg-violet-500',
   DEPARTMENT: 'bg-gray-400',
+  ADMIN_UNIT: 'bg-amber-500',
 };
-
-function getCreateEndpoint(t) {
-  return t === 'OFFICE_LOCATION' ? orgService.createOfficeLocation
-    : t === 'VERTICAL' ? orgService.createVertical
-    : t === 'DEPARTMENT' ? orgService.createDepartment : null;
-}
-function getUpdateEndpoint(t) {
-  return t === 'OFFICE_LOCATION' ? orgService.updateOfficeLocation
-    : t === 'VERTICAL' ? orgService.updateVertical
-    : t === 'DEPARTMENT' ? orgService.updateDepartment : null;
-}
-function getDeleteEndpoint(t) {
-  return t === 'OFFICE_LOCATION' ? orgService.deleteOfficeLocation
-    : t === 'VERTICAL' ? orgService.deleteVertical
-    : t === 'DEPARTMENT' ? orgService.deleteDepartment : null;
-}
-
-function getManageScopeForCreate(parentNode, childType) {
-  if (!parentNode || !childType) return null;
-
-  if (childType === 'OFFICE_LOCATION') {
-    return { scope_type: 'ORGANISATION', scope_id: parentNode.id };
-  }
-
-  if (childType === 'VERTICAL') {
-    return { scope_type: 'OFFICE_LOCATION', scope_id: parentNode.id };
-  }
-
-  if (childType === 'DEPARTMENT') {
-    return { scope_type: 'VERTICAL', scope_id: parentNode.id };
-  }
-
-  return null;
-}
-
-function getManageScopeForNode(node) {
-  if (!node) return null;
-  return { scope_type: node.type, scope_id: node.id };
-}
 
 const EMPTY_FORM = { name: '', code: '', address: '', city: '', country: '', timezone: '' };
 
 export default function OrganisationPage() {
   const { addToast } = useToast();
-  const { hasPermission: canManageOfficeLocations } = usePermission('ADMIN', 'MANAGE_OFFICE_LOCATIONS');
-  const { hasPermission: canManageVerticals } = usePermission('ADMIN', 'MANAGE_VERTICALS');
-  const { hasPermission: canManageDepartments } = usePermission('ADMIN', 'MANAGE_DEPARTMENTS');
+  // The generic node API is gated on MANAGE_OFFICE_LOCATIONS server-side.
+  const { hasPermission: canManageNodes } = usePermission('ADMIN', 'MANAGE_OFFICE_LOCATIONS');
+
   const [tree, setTree] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Panel state: 'view' | 'edit' | 'create' | null
+  // Panel: 'view' | 'edit' | 'create' | 'member' | null
   const [panelMode, setPanelMode] = useState(null);
   const [selected, setSelected] = useState(null);
   const [createParent, setCreateParent] = useState(null);
   const [createNodeType, setCreateNodeType] = useState('');
 
-  // Form
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
-  // Delete
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // ── Fetch ──
+  // Member picker
+  const [users, setUsers] = useState([]);
+  const [memberUserId, setMemberUserId] = useState('');
+  const [memberPrimary, setMemberPrimary] = useState(false);
+  const [createUserOpen, setCreateUserOpen] = useState(false);
+
   const fetchTree = useCallback(async () => {
     try {
       setLoading(true);
@@ -109,23 +67,11 @@ export default function OrganisationPage() {
 
   useEffect(() => { fetchTree(); }, [fetchTree]);
 
-  const canManageNodeType = useCallback((nodeType) => (
-    nodeType === 'OFFICE_LOCATION' ? canManageOfficeLocations
-      : nodeType === 'VERTICAL' ? (canManageVerticals || canManageOfficeLocations)
-      : nodeType === 'DEPARTMENT' ? (canManageDepartments || canManageVerticals || canManageOfficeLocations)
-      : false
-  ), [canManageDepartments, canManageOfficeLocations, canManageVerticals]);
+  const canAddChildToNode = useCallback((node) => (
+    (ALLOWED_CHILDREN[node.type] || []).length > 0 && canManageNodes
+  ), [canManageNodes]);
 
-  const canAddChildToNode = useCallback((node) => {
-    const childType = CHILD_TYPE_MAP[node.type];
-    if (!childType) return false;
-    if (childType === 'OFFICE_LOCATION') return canManageOfficeLocations;
-    if (childType === 'VERTICAL') return canManageOfficeLocations || canManageVerticals;
-    if (childType === 'DEPARTMENT') return canManageOfficeLocations || canManageVerticals;
-    return false;
-  }, [canManageNodeType]);
-
-  const canEditNode = useCallback((node) => canManageNodeType(node.type), [canManageNodeType]);
+  const canEditNode = useCallback((node) => node.type !== 'GROUP' && canManageNodes, [canManageNodes]);
 
   // ── Panel actions ──
   const openView = (node) => {
@@ -136,9 +82,9 @@ export default function OrganisationPage() {
 
   const openEdit = (node) => {
     const target = node || selected;
-    if (!target || target.type === 'ORGANISATION') return;
-    if (!canManageNodeType(target.type)) {
-      addToast(`You do not have permission to manage ${NODE_TYPE_LABELS[target.type].toLowerCase()}s`, 'error');
+    if (!target || target.type === 'GROUP') return;
+    if (!canManageNodes) {
+      addToast('You do not have permission to manage the organisation structure', 'error');
       return;
     }
     setSelected(target);
@@ -152,11 +98,10 @@ export default function OrganisationPage() {
     setConfirmDelete(false);
   };
 
-  const openCreate = (parentNode) => {
-    const childType = CHILD_TYPE_MAP[parentNode.type];
-    if (!childType) return;
-    if (!canManageNodeType(childType)) {
-      addToast(`You do not have permission to create ${NODE_TYPE_LABELS[childType].toLowerCase()}s`, 'error');
+  const openCreate = (parentNode, childType) => {
+    if (!childType || !(ALLOWED_CHILDREN[parentNode.type] || []).includes(childType)) return;
+    if (!canManageNodes) {
+      addToast('You do not have permission to manage the organisation structure', 'error');
       return;
     }
     setCreateParent(parentNode);
@@ -167,12 +112,36 @@ export default function OrganisationPage() {
     setConfirmDelete(false);
   };
 
+  const openMember = async (parentNode) => {
+    if (!canManageNodes) {
+      addToast('You do not have permission to manage members', 'error');
+      return;
+    }
+    setCreateParent(parentNode);
+    setMemberUserId('');
+    setMemberPrimary(false);
+    setPanelMode('member');
+    try {
+      const res = await userService.getUsers({ limit: 100, status: 'ACTIVE' });
+      const list = res.data?.data?.users || res.data?.data || [];
+      setUsers(Array.isArray(list) ? list : []);
+    } catch {
+      setUsers([]);
+    }
+  };
+
+  // onAdd from the tree add-menu: (parentNode, childType)
+  const handleAdd = (parentNode, childType) => {
+    if (childType === MEMBER) openMember(parentNode);
+    else openCreate(parentNode, childType);
+  };
+
   const closePanel = () => {
     setPanelMode(null);
     setConfirmDelete(false);
   };
 
-  // ── Save ──
+  // ── Save (create / edit) ──
   const handleSave = async () => {
     const errs = {};
     if (!form.name.trim()) errs.name = 'Name is required';
@@ -191,27 +160,19 @@ export default function OrganisationPage() {
 
       if (panelMode === 'create') {
         if (!createParent) return;
-        const parentFkMap = {
-          OFFICE_LOCATION: { organisation_id: createParent.id },
-          VERTICAL: { office_location_id: createParent.id },
-          DEPARTMENT: { vertical_id: createParent.id },
-        };
-        const manageScope = getManageScopeForCreate(createParent, createNodeType);
-        await getCreateEndpoint(createNodeType)({
+        await orgService.createNode({
+          parent_id: createParent.id,
+          node_type: createNodeType,
           name: form.name.trim(),
           code: form.code.trim() || undefined,
-          ...parentFkMap[createNodeType],
           ...locationFields,
-          ...manageScope,
         });
-        addToast(`${NODE_TYPE_LABELS[createNodeType]} created`, 'success');
+        addToast(`${ADD_CHILD_LABELS[createNodeType]} created`, 'success');
       } else {
-        const manageScope = getManageScopeForNode(selected);
-        await getUpdateEndpoint(selected.type)(selected.id, {
+        await orgService.updateNode(selected.id, {
           name: form.name.trim(),
           code: form.code.trim() || undefined,
           ...locationFields,
-          ...manageScope,
         });
         addToast(`${NODE_TYPE_LABELS[selected.type]} updated`, 'success');
       }
@@ -224,12 +185,62 @@ export default function OrganisationPage() {
     }
   };
 
+  // ── Add member ──
+  const handleAddMember = async () => {
+    if (!memberUserId) { addToast('Select a person to add', 'error'); return; }
+    setSaving(true);
+    try {
+      await orgService.addNodeMember(createParent.id, {
+        user_id: Number(memberUserId),
+        is_primary: memberPrimary,
+      });
+      addToast('Member added', 'success');
+      closePanel();
+      fetchTree();
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to add member', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // New user created from the org tree → attach them to this node.
+  const handleUserCreated = async (user) => {
+    setCreateUserOpen(false);
+    if (!user || !createParent) { closePanel(); fetchTree(); return; }
+    try {
+      await orgService.addNodeMember(createParent.id, {
+        user_id: user.user_id,
+        is_primary: memberPrimary,
+      });
+      addToast('User created and added as a member', 'success');
+    } catch (err) {
+      addToast(err.response?.data?.message || 'User created, but could not attach as member', 'error');
+    } finally {
+      closePanel();
+      fetchTree();
+    }
+  };
+
+  const memberPresetScope = createParent ? {
+    scope_type: createParent.type,
+    scope_id: createParent.id,
+    scope_label: `${NODE_TYPE_LABELS[createParent.type] || createParent.type}: ${createParent.name}`,
+    name: createParent.name,
+  } : null;
+
+  const userLabel = (u) => {
+    const name = [u.first_name, u.last_name].filter(Boolean).join(' ').trim();
+    const job = u.profile?.job_title;
+    return `${name || u.email}${name ? ` — ${u.email}` : ''}${job ? ` · ${job}` : ''}`;
+  };
+
   // ── Delete ──
   const handleDelete = async () => {
-    if (!selected || selected.type === 'ORGANISATION') return;
+    if (!selected || selected.type === 'GROUP') return;
     setDeleting(true);
     try {
-      await getDeleteEndpoint(selected.type)(selected.id, getManageScopeForNode(selected));
+      await orgService.deleteNode(selected.id);
       addToast(`${NODE_TYPE_LABELS[selected.type]} deleted`, 'success');
       closePanel();
       setSelected(null);
@@ -242,15 +253,18 @@ export default function OrganisationPage() {
   };
 
   const updateField = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) setErrors(prev => ({ ...prev, [field]: null }));
+    setForm((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: null }));
   };
 
   const activeNodeType = panelMode === 'create' ? createNodeType : selected?.type;
   const isOffice = activeNodeType === 'OFFICE_LOCATION';
   const hasChildren = selected?.children?.length > 0;
+  const allowedChildren = selected ? (ALLOWED_CHILDREN[selected.type] || []) : [];
+
   const panelTitle =
-    panelMode === 'create' ? `New ${CHILD_LABEL_MAP[createParent?.type] || ''}` :
+    panelMode === 'create' ? `New ${ADD_CHILD_LABELS[createNodeType] || ''}` :
+    panelMode === 'member' ? 'Add Member' :
     panelMode === 'edit' ? `Edit ${NODE_TYPE_LABELS[selected?.type] || ''}` :
     selected?.name || '';
 
@@ -262,17 +276,16 @@ export default function OrganisationPage() {
     <div className="space-y-6">
       <PageHeader
         title="Organisation Structure"
-        subtitle="Manage your offices, verticals, and departments."
+        subtitle="Companies, offices, teams and administrative units — build the structure however you need."
       />
 
-      {/* ── Tree ── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <OrgTreeView
           tree={tree}
           loading={loading}
           selectedId={selected?.id}
           onSelect={openView}
-          onAdd={openCreate}
+          onAdd={handleAdd}
           onEdit={openEdit}
           onRetry={fetchTree}
           canAddNode={canAddChildToNode}
@@ -280,16 +293,12 @@ export default function OrganisationPage() {
         />
       </div>
 
-      {/* ── Slide-out Panel ── */}
       {panelMode && (
         <>
           <div className="fixed inset-0 bg-black/20 z-40" onClick={closePanel} />
           <div className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-xl z-50 flex flex-col overflow-hidden">
-
-            {/* Colored accent bar */}
             <div className={`h-1 flex-shrink-0 ${panelAccent}`} />
 
-            {/* ── Panel Header ── */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <span className={`flex-shrink-0 p-2 rounded-lg ${panelTypeColor}`}>
@@ -305,10 +314,8 @@ export default function OrganisationPage() {
                       <StatusBadge status={selected?.status} />
                     </div>
                   )}
-                  {panelMode === 'create' && createParent && (
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Under: {createParent.name}
-                    </p>
+                  {(panelMode === 'create' || panelMode === 'member') && createParent && (
+                    <p className="text-xs text-gray-500 mt-0.5">Under: {createParent.name}</p>
                   )}
                 </div>
               </div>
@@ -319,21 +326,10 @@ export default function OrganisationPage() {
               </button>
             </div>
 
-            {/* ── Panel Body ── */}
             <div className="flex-1 overflow-y-auto px-6 py-5">
-
-              {/* ════════ VIEW MODE ════════ */}
+              {/* VIEW */}
               {panelMode === 'view' && selected && (
                 <div className="space-y-6">
-                  {/* Path */}
-                  {selected.path && (
-                    <div>
-                      <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Path</dt>
-                      <dd className="text-sm text-gray-600 font-mono">{selected.path.replace(/\./g, ' / ')}</dd>
-                    </div>
-                  )}
-
-                  {/* Details card */}
                   <div className="bg-gray-50 rounded-lg p-4">
                     <dl className="grid grid-cols-2 gap-4 text-sm">
                       {selected.code && (
@@ -354,40 +350,35 @@ export default function OrganisationPage() {
                           <dd className="font-medium text-gray-800">{selected.country}</dd>
                         </div>
                       )}
-                      {selected.timezone && (
-                        <div>
-                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Timezone</dt>
-                          <dd className="font-medium text-gray-800">{selected.timezone}</dd>
-                        </div>
-                      )}
-                      {selected.address && (
-                        <div className="col-span-2">
-                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Address</dt>
-                          <dd className="font-medium text-gray-800">{selected.address}</dd>
-                        </div>
-                      )}
                       <div>
-                        <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Created</dt>
-                        <dd className="font-medium text-gray-800">{formatDate(selected.created_at)}</dd>
+                        <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Members</dt>
+                        <dd className="font-medium text-gray-800">{selected.memberCount || 0}</dd>
                       </div>
-                      {selected.children && (
+                      <div>
+                        <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Children</dt>
+                        <dd className="font-medium text-gray-800">{selected.children?.length || 0} direct</dd>
+                      </div>
+                      {selected.created_at && (
                         <div>
-                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Children</dt>
-                          <dd className="font-medium text-gray-800">{selected.children.length} direct</dd>
+                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Created</dt>
+                          <dd className="font-medium text-gray-800">{formatDate(selected.created_at)}</dd>
                         </div>
                       )}
                     </dl>
                   </div>
 
-                  {/* Add child */}
-                  {selected.type !== 'DEPARTMENT' && canAddChildToNode(selected) && (
-                    <Button variant="secondary" size="sm" onClick={() => openCreate(selected)}>
-                      + Add {CHILD_LABEL_MAP[selected.type]}
-                    </Button>
+                  {/* Add-child buttons (one per allowed child type) */}
+                  {allowedChildren.length > 0 && canAddChildToNode(selected) && (
+                    <div className="flex flex-wrap gap-2">
+                      {allowedChildren.map((childType) => (
+                        <Button key={childType} variant="secondary" size="sm" onClick={() => handleAdd(selected, childType)}>
+                          + {ADD_CHILD_LABELS[childType]}
+                        </Button>
+                      ))}
+                    </div>
                   )}
 
-                  {/* Delete zone */}
-                  {selected.type !== 'ORGANISATION' && canEditNode(selected) && (
+                  {selected.type !== 'GROUP' && canEditNode(selected) && (
                     <div className="pt-4 mt-2 border-t border-gray-200">
                       {!confirmDelete ? (
                         <button
@@ -399,16 +390,10 @@ export default function OrganisationPage() {
                         </button>
                       ) : (
                         <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                          <p className="text-sm text-red-800 font-medium mb-2">
-                            Delete &ldquo;{selected.name}&rdquo; permanently?
-                          </p>
+                          <p className="text-sm text-red-800 font-medium mb-2">Delete &ldquo;{selected.name}&rdquo; permanently?</p>
                           <div className="flex gap-2">
-                            <Button size="sm" variant="danger" onClick={handleDelete} loading={deleting}>
-                              Yes, delete
-                            </Button>
-                            <Button size="sm" variant="secondary" onClick={() => setConfirmDelete(false)}>
-                              Cancel
-                            </Button>
+                            <Button size="sm" variant="danger" onClick={handleDelete} loading={deleting}>Yes, delete</Button>
+                            <Button size="sm" variant="secondary" onClick={() => setConfirmDelete(false)}>Cancel</Button>
                           </div>
                         </div>
                       )}
@@ -417,86 +402,118 @@ export default function OrganisationPage() {
                 </div>
               )}
 
-              {/* ════════ EDIT / CREATE MODE ════════ */}
+              {/* EDIT / CREATE */}
               {(panelMode === 'edit' || panelMode === 'create') && (
                 <div className="space-y-4">
                   <Input
-                    label="Name"
-                    name="name"
-                    required
-                    value={form.name}
-                    error={errors.name}
+                    label="Name" name="name" required value={form.name} error={errors.name}
                     placeholder={
-                      activeNodeType === 'OFFICE_LOCATION' ? 'e.g. Mumbai Office' :
-                      activeNodeType === 'VERTICAL' ? 'e.g. Engineering' : 'e.g. Frontend Team'
+                      activeNodeType === 'COMPANY' ? 'e.g. BT-Electronics' :
+                      activeNodeType === 'ADMIN_UNIT' ? 'e.g. HR' :
+                      activeNodeType === 'OFFICE_LOCATION' ? 'e.g. Vienna Office' :
+                      activeNodeType === 'VERTICAL' ? 'e.g. Finance' : 'e.g. Invoicing'
                     }
                     onChange={(e) => updateField('name', e.target.value)}
                   />
                   <Input
-                    label="Code"
-                    name="code"
-                    value={form.code}
+                    label="Code" name="code" value={form.code}
                     placeholder="Optional short code"
                     helpText="Internal reference. Leave blank to auto-generate."
                     onChange={(e) => updateField('code', e.target.value)}
                   />
-
                   {isOffice && (
                     <>
-                      <Input label="Address" name="address" value={form.address}
-                        placeholder="Street address"
-                        onChange={(e) => updateField('address', e.target.value)} />
+                      <Input label="Address" name="address" value={form.address} placeholder="Street address" onChange={(e) => updateField('address', e.target.value)} />
                       <div className="grid grid-cols-2 gap-3">
-                        <Input label="City" name="city" value={form.city}
-                          placeholder="e.g. Mumbai"
-                          onChange={(e) => updateField('city', e.target.value)} />
-                        <Input label="Country" name="country" value={form.country}
-                          placeholder="e.g. India"
-                          onChange={(e) => updateField('country', e.target.value)} />
+                        <Input label="City" name="city" value={form.city} placeholder="e.g. Vienna" onChange={(e) => updateField('city', e.target.value)} />
+                        <Input label="Country" name="country" value={form.country} placeholder="e.g. Austria" onChange={(e) => updateField('country', e.target.value)} />
                       </div>
-                      <Input label="Timezone" name="timezone" value={form.timezone}
-                        placeholder="e.g. Asia/Kolkata"
-                        helpText="IANA format (America/New_York, Europe/London)"
-                        onChange={(e) => updateField('timezone', e.target.value)} />
+                      <Input label="Timezone" name="timezone" value={form.timezone} placeholder="e.g. Europe/Vienna" helpText="IANA format" onChange={(e) => updateField('timezone', e.target.value)} />
                     </>
                   )}
                 </div>
               )}
+
+              {/* MEMBER */}
+              {panelMode === 'member' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Person</label>
+                    <select
+                      value={memberUserId}
+                      onChange={(e) => setMemberUserId(e.target.value)}
+                      className="w-full py-2 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    >
+                      <option value="">Select a person…</option>
+                      {users.map((u) => (
+                        <option key={u.user_id} value={u.user_id}>
+                          {userLabel(u)}
+                        </option>
+                      ))}
+                    </select>
+                    {users.length === 0 && <p className="text-xs text-gray-400 mt-1">No users available.</p>}
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={memberPrimary} onChange={(e) => setMemberPrimary(e.target.checked)} />
+                    Set as primary placement
+                  </label>
+
+                  <div className="pt-3 mt-1 border-t border-gray-200">
+                    <p className="text-xs text-gray-500 mb-2">Don&rsquo;t see the person? Create a brand-new user and place them here.</p>
+                    <Button variant="secondary" size="sm" onClick={() => setCreateUserOpen(true)}>
+                      + Create new user
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* ── Panel Footer ── */}
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50/50">
-              {panelMode === 'view' && selected?.type !== 'ORGANISATION' && canEditNode(selected) && (
+              {panelMode === 'view' && selected?.type !== 'GROUP' && canEditNode(selected) && (
                 <Button variant="primary" className="w-full" onClick={() => openEdit(selected)}>
                   Edit {NODE_TYPE_LABELS[selected?.type]}
                 </Button>
               )}
-
               {panelMode === 'edit' && (
                 <div className="flex gap-3">
-                  <Button variant="secondary" className="flex-1" onClick={() => openView(selected)}>
-                    Cancel
-                  </Button>
-                  <Button variant="primary" className="flex-1" onClick={handleSave} loading={saving}>
-                    Save Changes
-                  </Button>
+                  <Button variant="secondary" className="flex-1" onClick={() => openView(selected)}>Cancel</Button>
+                  <Button variant="primary" className="flex-1" onClick={handleSave} loading={saving}>Save Changes</Button>
                 </div>
               )}
-
               {panelMode === 'create' && (
                 <div className="flex gap-3">
-                  <Button variant="secondary" className="flex-1" onClick={closePanel}>
-                    Cancel
-                  </Button>
-                  <Button variant="primary" className="flex-1" onClick={handleSave} loading={saving}>
-                    Create {NODE_TYPE_LABELS[createNodeType]}
-                  </Button>
+                  <Button variant="secondary" className="flex-1" onClick={closePanel}>Cancel</Button>
+                  <Button variant="primary" className="flex-1" onClick={handleSave} loading={saving}>Create {ADD_CHILD_LABELS[createNodeType]}</Button>
+                </div>
+              )}
+              {panelMode === 'member' && (
+                <div className="flex gap-3">
+                  <Button variant="secondary" className="flex-1" onClick={closePanel}>Cancel</Button>
+                  <Button variant="primary" className="flex-1" onClick={handleAddMember} loading={saving}>Add Member</Button>
                 </div>
               )}
             </div>
           </div>
         </>
       )}
+
+      {/* Create-new-user modal — reuses the full user-creation form, pre-scoped
+          to the node the admin is adding a member under. */}
+      <Modal
+        isOpen={createUserOpen}
+        onClose={() => setCreateUserOpen(false)}
+        title={`Create user under ${createParent?.name || ''}`}
+        size="3xl"
+      >
+        {createUserOpen && (
+          <UserCreatePage
+            embedded
+            presetScope={memberPresetScope}
+            onCreated={handleUserCreated}
+            onCancel={() => setCreateUserOpen(false)}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

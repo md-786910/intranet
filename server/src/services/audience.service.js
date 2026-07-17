@@ -1,85 +1,86 @@
 const scopeService = require('./scope.service');
 const visibilityConfig = require('../config/visibility.config');
 
-const SCOPE_HIERARCHY = ['ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'];
+// Ordered operational levels, plus ADMIN_UNIT for the administrative branch.
+// Node ids are globally unique, so audience matching is ultimately id-based;
+// this list only drives the optional per-entity level filtering below.
+const SCOPE_HIERARCHY = ['GROUP', 'COMPANY', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'];
+const ALL_LEVELS = [...SCOPE_HIERARCHY, 'ADMIN_UNIT'];
 
-const SCOPE_KEY_FIELD = {
-  ORGANISATION: 'organisation_id',
-  OFFICE_LOCATION: 'office_location_id',
-  VERTICAL: 'vertical_id',
-  DEPARTMENT: 'department_id',
-};
+// visibility.config still speaks the legacy 'ORGANISATION' label; treat it as
+// the tree root (GROUP).
+function normalizeLevel(level) {
+  return level === 'ORGANISATION' ? 'GROUP' : level;
+}
 
-// Resolve the set of scope levels honoured for an entity. Precedence:
+// Resolve which node levels count toward a user's audience coverage. Precedence:
 //   1. `audienceLevels` allow-list (explicit set of levels)
-//   2. `minLevel` shorthand (everything from ORG down to that level)
-//   3. fallback — all four levels
+//   2. `minLevel` shorthand (everything from the root down to that level)
+//   3. fallback — every level
 function resolveAllowedLevels(entity) {
   const cfg = visibilityConfig[entity] || {};
   if (Array.isArray(cfg.audienceLevels) && cfg.audienceLevels.length > 0) {
-    const valid = cfg.audienceLevels.filter((l) => SCOPE_HIERARCHY.includes(l));
+    const valid = cfg.audienceLevels.map(normalizeLevel).filter((l) => ALL_LEVELS.includes(l));
     if (valid.length > 0) return new Set(valid);
   }
-  const lvl = cfg.minLevel;
+  const lvl = normalizeLevel(cfg.minLevel);
   if (lvl && SCOPE_HIERARCHY.includes(lvl)) {
     const minIdx = SCOPE_HIERARCHY.indexOf(lvl);
     return new Set(SCOPE_HIERARCHY.filter((_, idx) => idx <= minIdx));
   }
-  return new Set(SCOPE_HIERARCHY);
+  return new Set(ALL_LEVELS);
 }
 
 async function getUserAudienceScopeKeys(userId, entity = 'documents') {
   const {
     UserRoleAssignment,
     UserPermission,
-    DepartmentMembership,
+    NodeMembership,
   } = require('../database/models');
 
   const allowedLevels = resolveAllowedLevels(entity);
+  // Keys are org_node ids (globally unique). A rule targeting node N matches a
+  // user whose scope coverage (self + ancestors, filtered by allowed levels)
+  // includes N.
   const scopeKeys = new Set();
 
-  const addAncestors = async (scopeType, scopeId) => {
-    if (!scopeType || !scopeId) return;
-    const ancestors = await scopeService.resolveAncestors(scopeType, scopeId);
-    if (!ancestors) return;
-
-    // Only include levels enabled by the visibility config.
-    SCOPE_HIERARCHY.forEach((level) => {
-      if (!allowedLevels.has(level)) return;
-      const id = ancestors[SCOPE_KEY_FIELD[level]];
-      if (id) scopeKeys.add(`${level}:${id}`);
+  const addAncestors = async (scopeId) => {
+    if (!scopeId) return;
+    const nodes = await scopeService.resolveAncestorNodes(scopeId);
+    nodes.forEach((n) => {
+      if (allowedLevels.has(n.node_type)) scopeKeys.add(Number(n.id));
     });
   };
 
-  const [roleAssignments, directPermissions, departmentMemberships] = await Promise.all([
+  const [roleAssignments, directPermissions, nodeMemberships] = await Promise.all([
     UserRoleAssignment.findAll({
       where: { user_id: userId },
-      attributes: ['scope_type', 'scope_id'],
+      attributes: ['scope_id'],
     }),
     UserPermission.findAll({
       where: { user_id: userId, effect: 'ALLOW' },
-      attributes: ['scope_type', 'scope_id'],
+      attributes: ['scope_id'],
     }),
-    DepartmentMembership.findAll({
+    NodeMembership.findAll({
       where: { user_id: userId },
-      attributes: ['department_id'],
+      attributes: ['node_id'],
     }),
   ]);
 
-  for (const a of roleAssignments) await addAncestors(a.scope_type, a.scope_id);
-  for (const p of directPermissions) await addAncestors(p.scope_type, p.scope_id);
-  for (const m of departmentMemberships) await addAncestors('DEPARTMENT', m.department_id);
+  for (const a of roleAssignments) await addAncestors(a.scope_id);
+  for (const p of directPermissions) await addAncestors(p.scope_id);
+  for (const m of nodeMemberships) await addAncestors(m.node_id);
 
   return scopeKeys;
 }
 
 // A document/article with no explicit audience rules is visible to everyone
 // (org-wide). Otherwise it must match at least one of the user's scope keys.
+// target_scope_id is an org_node id after the tree migration.
 function matchesAudience(audienceRules, userScopeKeys) {
   const rules = audienceRules || [];
   if (rules.length === 0) return true;
-  return rules.some((rule) =>
-    userScopeKeys.has(`${rule.target_scope_type}:${rule.target_scope_id}`));
+  return rules.some((rule) => userScopeKeys.has(Number(rule.target_scope_id)));
 }
 
 // Resolve the set of user_ids that should receive a notification for content

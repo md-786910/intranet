@@ -18,53 +18,15 @@ const permissionService = {
     try {
       const { sequelize } = require('../database/models');
 
-      // Resolve the target scope's full ancestor chain
-      const ancestors = await scopeService.resolveAncestors(scopeType, scopeId);
-      if (!ancestors) {
+      // Resolve the target scope node + all its ancestor node ids. A role or
+      // permission granted at any of these covers the target scope.
+      const ancestorIds = await scopeService.resolveAncestorIds(scopeId);
+      if (!ancestorIds || ancestorIds.length === 0) {
         await cacheService.set(cacheKey, 'false', CACHE_TTL);
         return false;
       }
 
-      // Build conditions to match any ancestor level
-      const conditions = [];
-      const replacements = { userId, moduleCode, actionCode };
-
-      if (ancestors.organisation_id != null) {
-        conditions.push(`(ura.scope_type = 'ORGANISATION' AND ura.scope_id = :orgId)`);
-        replacements.orgId = ancestors.organisation_id;
-      }
-      if (ancestors.office_location_id != null) {
-        conditions.push(`(ura.scope_type = 'OFFICE_LOCATION' AND ura.scope_id = :officeId)`);
-        replacements.officeId = ancestors.office_location_id;
-      }
-      if (ancestors.vertical_id != null) {
-        conditions.push(`(ura.scope_type = 'VERTICAL' AND ura.scope_id = :verticalId)`);
-        replacements.verticalId = ancestors.vertical_id;
-      }
-      if (ancestors.department_id != null) {
-        conditions.push(`(ura.scope_type = 'DEPARTMENT' AND ura.scope_id = :deptId)`);
-        replacements.deptId = ancestors.department_id;
-      }
-
-      if (conditions.length === 0) {
-        await cacheService.set(cacheKey, 'false', CACHE_TTL);
-        return false;
-      }
-
-      // Build direct permission scope conditions (same ancestor chain)
-      const directConditions = [];
-      if (ancestors.organisation_id != null) {
-        directConditions.push(`(up.scope_type = 'ORGANISATION' AND up.scope_id = :orgId)`);
-      }
-      if (ancestors.office_location_id != null) {
-        directConditions.push(`(up.scope_type = 'OFFICE_LOCATION' AND up.scope_id = :officeId)`);
-      }
-      if (ancestors.vertical_id != null) {
-        directConditions.push(`(up.scope_type = 'VERTICAL' AND up.scope_id = :verticalId)`);
-      }
-      if (ancestors.department_id != null) {
-        directConditions.push(`(up.scope_type = 'DEPARTMENT' AND up.scope_id = :deptId)`);
-      }
+      const replacements = { userId, moduleCode, actionCode, ancestorIds };
 
       const [result] = await sequelize.query(`
         SELECT EXISTS (
@@ -74,7 +36,7 @@ const permissionService = {
           JOIN module_action ma ON ma.module_action_id = rp.module_action_id AND ma.action_code = :actionCode
           JOIN module m ON m.module_id = ma.module_id AND m.code = :moduleCode
           WHERE ura.user_id = :userId
-            AND (${conditions.join(' OR ')})
+            AND ura.scope_id IN (:ancestorIds)
             AND (ura.starts_at IS NULL OR ura.starts_at <= NOW())
             AND (ura.ends_at IS NULL OR ura.ends_at > NOW())
 
@@ -86,7 +48,7 @@ const permissionService = {
           JOIN module m ON m.module_id = ma.module_id AND m.code = :moduleCode
           WHERE up.user_id = :userId
             AND up.effect = 'ALLOW'
-            ${directConditions.length > 0 ? `AND (${directConditions.join(' OR ')})` : ''}
+            AND up.scope_id IN (:ancestorIds)
         ) AS has_permission
       `, {
         replacements,
@@ -114,45 +76,10 @@ const permissionService = {
     try {
       const { sequelize } = require('../database/models');
 
-      const ancestors = await scopeService.resolveAncestors(scopeType, scopeId);
-      if (!ancestors) return {};
+      const ancestorIds = await scopeService.resolveAncestorIds(scopeId);
+      if (!ancestorIds || ancestorIds.length === 0) return {};
 
-      const conditions = [];
-      const replacements = { userId };
-
-      if (ancestors.organisation_id != null) {
-        conditions.push(`(ura.scope_type = 'ORGANISATION' AND ura.scope_id = :orgId)`);
-        replacements.orgId = ancestors.organisation_id;
-      }
-      if (ancestors.office_location_id != null) {
-        conditions.push(`(ura.scope_type = 'OFFICE_LOCATION' AND ura.scope_id = :officeId)`);
-        replacements.officeId = ancestors.office_location_id;
-      }
-      if (ancestors.vertical_id != null) {
-        conditions.push(`(ura.scope_type = 'VERTICAL' AND ura.scope_id = :verticalId)`);
-        replacements.verticalId = ancestors.vertical_id;
-      }
-      if (ancestors.department_id != null) {
-        conditions.push(`(ura.scope_type = 'DEPARTMENT' AND ura.scope_id = :deptId)`);
-        replacements.deptId = ancestors.department_id;
-      }
-
-      if (conditions.length === 0) return {};
-
-      // Build direct permission scope conditions
-      const directConditions = [];
-      if (ancestors.organisation_id != null) {
-        directConditions.push(`(up.scope_type = 'ORGANISATION' AND up.scope_id = :orgId)`);
-      }
-      if (ancestors.office_location_id != null) {
-        directConditions.push(`(up.scope_type = 'OFFICE_LOCATION' AND up.scope_id = :officeId)`);
-      }
-      if (ancestors.vertical_id != null) {
-        directConditions.push(`(up.scope_type = 'VERTICAL' AND up.scope_id = :verticalId)`);
-      }
-      if (ancestors.department_id != null) {
-        directConditions.push(`(up.scope_type = 'DEPARTMENT' AND up.scope_id = :deptId)`);
-      }
+      const replacements = { userId, ancestorIds };
 
       const permissions = await sequelize.query(`
         SELECT DISTINCT m.code AS module, ma.action_code AS action
@@ -161,7 +88,7 @@ const permissionService = {
         JOIN module_action ma ON ma.module_action_id = rp.module_action_id
         JOIN module m ON m.module_id = ma.module_id
         WHERE ura.user_id = :userId
-          AND (${conditions.join(' OR ')})
+          AND ura.scope_id IN (:ancestorIds)
           AND (ura.starts_at IS NULL OR ura.starts_at <= NOW())
           AND (ura.ends_at IS NULL OR ura.ends_at > NOW())
 
@@ -173,7 +100,7 @@ const permissionService = {
         JOIN module m ON m.module_id = ma.module_id
         WHERE up.user_id = :userId
           AND up.effect = 'ALLOW'
-          ${directConditions.length > 0 ? `AND (${directConditions.join(' OR ')})` : ''}
+          AND up.scope_id IN (:ancestorIds)
 
         ORDER BY module, action
       `, {
@@ -351,7 +278,7 @@ const permissionService = {
             AND (ura.ends_at IS NULL OR ura.ends_at > NOW())
             AND (
               r.code = 'OWNER'
-              OR (ura.scope_type = 'ORGANISATION' AND m.module_id IS NOT NULL)
+              OR (ura.scope_type IN ('ORGANISATION', 'GROUP') AND m.module_id IS NOT NULL)
             )
         ) AS is_global
       `, {

@@ -21,11 +21,49 @@ async function resolveEmployeeRoleId() {
   return role.role_id;
 }
 
-async function validateDepartmentsExist(departmentIds) {
-  const { Department } = require('../../database/models');
-  const rows = await Department.findAll({ where: { id: departmentIds }, attributes: ['id'] });
-  if (rows.length !== new Set(departmentIds).size) {
-    throw ApiError.badRequest('One or more department_ids are invalid');
+async function validateDepartmentsExist(nodeIds) {
+  // `nodeIds` are member-bearing org_node ids.
+  const { OrgNode } = require('../../database/models');
+  const { MEMBER_BEARING_NODE_TYPES } = require('../../utils/constants');
+  const rows = await OrgNode.findAll({ where: { id: nodeIds }, attributes: ['id', 'node_type'] });
+  if (rows.length !== new Set(nodeIds.map(Number)).size) {
+    throw ApiError.badRequest('One or more selected org units are invalid');
+  }
+  const bad = rows.find((r) => !MEMBER_BEARING_NODE_TYPES.includes(r.node_type));
+  if (bad) throw ApiError.badRequest(`Members cannot be attached to a ${bad.node_type}`);
+}
+
+/**
+ * Mirror a set of member-bearing node ids into legacy department_membership for
+ * the nodes that map to a legacy department, so department-centric readers keep
+ * working. node_membership is written separately (authoritative).
+ */
+async function mirrorDepartmentMemberships({ userId, nodeIds, primaryNodeId, transaction }) {
+  const { DepartmentMembership, OrgNode } = require('../../database/models');
+  const nodes = await OrgNode.findAll({
+    where: { id: [...new Set(nodeIds.map(Number))] },
+    attributes: ['id', 'node_type', 'legacy_ref'],
+    transaction,
+  });
+  const legacyDeptOf = (n) => (n.node_type === 'DEPARTMENT' && n.legacy_ref
+    ? Number(n.legacy_ref.split(':')[1]) : null);
+  const desiredDeptIds = new Set(nodes.map(legacyDeptOf).filter(Boolean));
+  const primaryNode = nodes.find((n) => Number(n.id) === Number(primaryNodeId));
+  const primaryDeptId = primaryNode ? legacyDeptOf(primaryNode) : null;
+
+  const existing = await DepartmentMembership.findAll({ where: { user_id: userId }, transaction });
+  const existingIds = new Set(existing.map((m) => Number(m.department_id)));
+  for (const m of existing) {
+    if (!desiredDeptIds.has(Number(m.department_id))) await m.destroy({ transaction });
+  }
+  for (const deptId of desiredDeptIds) {
+    if (!existingIds.has(deptId)) {
+      await DepartmentMembership.create({ user_id: userId, department_id: deptId, is_primary: false }, { transaction });
+    }
+  }
+  await DepartmentMembership.update({ is_primary: false }, { where: { user_id: userId }, transaction });
+  if (primaryDeptId) {
+    await DepartmentMembership.update({ is_primary: true }, { where: { user_id: userId, department_id: primaryDeptId }, transaction });
   }
 }
 
@@ -56,32 +94,69 @@ async function validateReportsTo({ reportsToUserId, selfUserId }) {
   }
 }
 
-async function syncDepartmentMemberships({ userId, departmentIds, primaryDepartmentId, transaction }) {
-  const { DepartmentMembership } = require('../../database/models');
-  const existing = await DepartmentMembership.findAll({ where: { user_id: userId }, transaction });
-  const existingIds = new Set(existing.map((m) => Number(m.department_id)));
-  const desiredIds = new Set(departmentIds.map(Number));
+/**
+ * When a role is granted scoped to a DEPARTMENT node, also make the user a
+ * member of it (node_membership + legacy department_membership mirror), matching
+ * the historical behavior where a department-scoped role implied membership.
+ */
+async function attachDepartmentScopeMembership({ userId, scopeId, transaction }) {
+  const { NodeMembership, DepartmentMembership, OrgNode } = require('../../database/models');
+  const node = await OrgNode.findByPk(scopeId, { transaction });
+  if (!node || node.node_type !== 'DEPARTMENT') return;
 
-  for (const membership of existing) {
-    if (!desiredIds.has(Number(membership.department_id))) await membership.destroy({ transaction });
-  }
-  for (const departmentId of desiredIds) {
-    if (!existingIds.has(departmentId)) {
-      await DepartmentMembership.create({ user_id: userId, department_id: departmentId, is_primary: false }, { transaction });
+  await NodeMembership.findOrCreate({
+    where: { user_id: userId, node_id: Number(scopeId) },
+    defaults: { user_id: userId, node_id: Number(scopeId), is_primary: false },
+    transaction,
+  });
+
+  if (node.legacy_ref) {
+    const deptId = Number(node.legacy_ref.split(':')[1]);
+    if (deptId) {
+      await DepartmentMembership.findOrCreate({
+        where: { user_id: userId, department_id: deptId },
+        defaults: { user_id: userId, department_id: deptId, is_primary: false },
+        transaction,
+      });
     }
   }
+}
 
-  const primaryId = primaryDepartmentId || [...desiredIds][0];
-  await DepartmentMembership.update({ is_primary: false }, { where: { user_id: userId }, transaction });
-  await DepartmentMembership.update({ is_primary: true }, { where: { user_id: userId, department_id: primaryId }, transaction });
+async function syncDepartmentMemberships({ userId, departmentIds, primaryDepartmentId, transaction }) {
+  // `departmentIds` / `primaryDepartmentId` are member-bearing org_node ids.
+  const { NodeMembership } = require('../../database/models');
+  const desiredIds = new Set(departmentIds.map(Number));
+  const primaryId = Number(primaryDepartmentId) || [...desiredIds][0] || null;
+
+  const existing = await NodeMembership.findAll({ where: { user_id: userId }, transaction });
+  const existingIds = new Set(existing.map((m) => Number(m.node_id)));
+  for (const membership of existing) {
+    if (!desiredIds.has(Number(membership.node_id))) await membership.destroy({ transaction });
+  }
+  for (const nodeId of desiredIds) {
+    if (!existingIds.has(nodeId)) {
+      await NodeMembership.create({ user_id: userId, node_id: nodeId, is_primary: false }, { transaction });
+    }
+  }
+  await NodeMembership.update({ is_primary: false }, { where: { user_id: userId }, transaction });
+  if (primaryId) {
+    await NodeMembership.update({ is_primary: true }, { where: { user_id: userId, node_id: primaryId }, transaction });
+  }
+
+  // Keep legacy department_membership in sync for department-centric readers.
+  await mirrorDepartmentMemberships({ userId, nodeIds: [...desiredIds], primaryNodeId: primaryId, transaction });
 }
 
 async function syncEmployeeRoleAssignments({ userId, roleId, departmentIds, actorUserId, transaction }) {
-  const { UserRoleAssignment } = require('../../database/models');
-  await UserRoleAssignment.destroy({ where: { user_id: userId, role_id: roleId, scope_type: 'DEPARTMENT' }, transaction });
-  for (const departmentId of new Set(departmentIds.map(Number))) {
+  const { UserRoleAssignment, OrgNode } = require('../../database/models');
+  const nodeIds = [...new Set(departmentIds.map(Number))];
+  const nodes = await OrgNode.findAll({ where: { id: nodeIds }, attributes: ['id', 'node_type'], transaction });
+  const typeById = new Map(nodes.map((n) => [Number(n.id), n.node_type]));
+
+  await UserRoleAssignment.destroy({ where: { user_id: userId, role_id: roleId }, transaction });
+  for (const nodeId of nodeIds) {
     await UserRoleAssignment.create({
-      user_id: userId, role_id: roleId, scope_type: 'DEPARTMENT', scope_id: departmentId, assigned_by: actorUserId || null,
+      user_id: userId, role_id: roleId, scope_type: typeById.get(nodeId) || 'DEPARTMENT', scope_id: nodeId, assigned_by: actorUserId || null,
     }, { transaction });
   }
 }
@@ -635,11 +710,7 @@ const usersService = {
           scope_type: role.scope_type || 'ORGANISATION', scope_id: role.scope_id, assigned_by: actorUserId,
         }, { transaction });
         if (role.scope_type === 'DEPARTMENT' && role.scope_id) {
-          await DepartmentMembership.findOrCreate({
-            where: { user_id: user.user_id, department_id: Number(role.scope_id) },
-            defaults: { user_id: user.user_id, department_id: Number(role.scope_id), is_primary: false },
-            transaction,
-          });
+          await attachDepartmentScopeMembership({ userId: user.user_id, scopeId: role.scope_id, transaction });
         }
       }
 
@@ -845,14 +916,7 @@ const usersService = {
     });
 
     if (data.scope_type === 'DEPARTMENT' && data.scope_id) {
-      await DepartmentMembership.findOrCreate({
-        where: { user_id: userId, department_id: Number(data.scope_id) },
-        defaults: {
-          user_id: userId,
-          department_id: Number(data.scope_id),
-          is_primary: false,
-        },
-      });
+      await attachDepartmentScopeMembership({ userId, scopeId: data.scope_id });
     }
 
     await cacheService.deletePattern(`bh:perm:${userId}:*`);

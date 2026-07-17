@@ -12,80 +12,155 @@ const orgService = {
   },
 
   async getNodeById(id) {
-    const { Organisation, OfficeLocation, Vertical, Department } = require('../../database/models');
-    // Try each level in order
-    let node = await Organisation.findByPk(id);
-    if (node) return { ...node.toJSON(), type: 'organisation' };
-
-    node = await OfficeLocation.findOne({ where: { id, deleted_at: null } });
-    if (node) return { ...node.toJSON(), type: 'office_location' };
-
-    node = await Vertical.findOne({ where: { id, deleted_at: null } });
-    if (node) return { ...node.toJSON(), type: 'vertical' };
-
-    node = await Department.findOne({ where: { id, deleted_at: null } });
-    if (node) return { ...node.toJSON(), type: 'department' };
-
-    throw ApiError.notFound('Org node not found');
+    const { OrgNode } = require('../../database/models');
+    const node = await OrgNode.findByPk(id);
+    if (!node) throw ApiError.notFound('Org node not found');
+    return node;
   },
 
   async getChildren(id) {
-    const { Organisation, OfficeLocation, Vertical, Department } = require('../../database/models');
-
-    // Check if it's an organisation → return office locations
-    let node = await Organisation.findByPk(id);
-    if (node) {
-      return OfficeLocation.findAll({ where: { organisation_id: id, deleted_at: null } });
-    }
-
-    // Check if it's an office location → return verticals
-    node = await OfficeLocation.findOne({ where: { id, deleted_at: null } });
-    if (node) {
-      return Vertical.findAll({ where: { office_location_id: id, deleted_at: null } });
-    }
-
-    // Check if it's a vertical → return departments
-    node = await Vertical.findOne({ where: { id, deleted_at: null } });
-    if (node) {
-      return Department.findAll({ where: { vertical_id: id, deleted_at: null } });
-    }
-
-    // Departments have no children
-    node = await Department.findOne({ where: { id, deleted_at: null } });
-    if (node) return [];
-
-    throw ApiError.notFound('Org node not found');
+    const { OrgNode } = require('../../database/models');
+    const node = await OrgNode.findByPk(id);
+    if (!node) throw ApiError.notFound('Org node not found');
+    return OrgNode.findAll({ where: { parent_id: id }, order: [['sort_order', 'ASC'], ['id', 'ASC']] });
   },
 
   async getSubtree(id) {
-    const { Organisation, OfficeLocation, Vertical, Department } = require('../../database/models');
+    const { Op } = require('sequelize');
+    const { OrgNode } = require('../../database/models');
+    const node = await OrgNode.findByPk(id);
+    if (!node) throw ApiError.notFound('Org node not found');
 
-    // Check if it's an organisation → full tree
-    let node = await Organisation.findByPk(id);
-    if (node) return hierarchyService.getFullTree(id);
-
-    // Check if it's an office location → return with nested verticals/departments
-    node = await OfficeLocation.findOne({
-      where: { id, deleted_at: null },
-      include: [{
-        model: Vertical, as: 'verticals', where: { deleted_at: null }, required: false,
-        include: [{ model: Department, as: 'departments', where: { deleted_at: null }, required: false }],
-      }],
+    // Everything whose materialized path starts with this node's path.
+    const rows = await OrgNode.findAll({
+      where: { path: { [Op.like]: `${node.path}%` } },
+      order: [['sort_order', 'ASC'], ['id', 'ASC']],
     });
-    if (node) return node;
 
-    // Check if it's a vertical → return with nested departments
-    node = await Vertical.findOne({
-      where: { id, deleted_at: null },
-      include: [{ model: Department, as: 'departments', where: { deleted_at: null }, required: false }],
+    const byId = new Map();
+    rows.forEach((n) => { const p = n.toJSON(); p.children = []; byId.set(Number(n.id), p); });
+    let root = null;
+    byId.forEach((n) => {
+      if (Number(n.id) === Number(id)) { root = n; return; }
+      const parent = byId.get(Number(n.parent_id));
+      if (parent) parent.children.push(n);
     });
-    if (node) return node;
+    return root;
+  },
 
-    // Department → leaf node
-    node = await Department.findOne({ where: { id, deleted_at: null } });
-    if (node) return node;
+  // ── Generic node CRUD (operational + administrative) ──
 
-    throw ApiError.notFound('Org node not found');
+  async createNode(data, userId) {
+    const { sequelize } = require('../../database/models');
+    const transaction = await sequelize.transaction();
+    try {
+      const organisationId = await organisationContextService.getCurrentOrganisationId();
+      const node = await hierarchyService.createNode({
+        organisation_id: organisationId,
+        parent_id: data.parent_id,
+        node_type: data.node_type,
+        kind: data.kind,
+        name: data.name,
+        code: data.code,
+        address: data.address,
+        city: data.city,
+        country: data.country,
+        timezone: data.timezone,
+        sort_order: data.sort_order,
+      }, transaction);
+
+      await auditService.log({
+        user_id: userId,
+        action: 'ORG_UNIT_CREATED',
+        resource_type: 'OrgNode',
+        resource_id: node.id,
+        details: { name: data.name, node_type: data.node_type },
+      });
+
+      await transaction.commit();
+      await cacheService.deletePattern('bh:org:tree:*');
+      organisationContextService.invalidateCache();
+      return node;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  },
+
+  async updateNode(id, data) {
+    const { OrgNode } = require('../../database/models');
+    const node = await OrgNode.findByPk(id);
+    if (!node) throw ApiError.notFound('Org node not found');
+
+    const allowedFields = ['name', 'code', 'status', 'sort_order'];
+    if (node.node_type === 'OFFICE_LOCATION') {
+      allowedFields.push('address', 'city', 'country', 'timezone');
+    }
+    const updates = {};
+    allowedFields.forEach((field) => {
+      if (data[field] !== undefined) updates[field] = data[field];
+    });
+
+    await node.update(updates);
+    await cacheService.deletePattern('bh:org:tree:*');
+    return node;
+  },
+
+  async deleteNode(id, userId) {
+    const { OrgNode, NodeMembership } = require('../../database/models');
+    const node = await OrgNode.findByPk(id);
+    if (!node) throw ApiError.notFound('Org node not found');
+    if (node.node_type === 'GROUP') throw ApiError.badRequest('The root group cannot be deleted');
+
+    const childCount = await OrgNode.count({ where: { parent_id: id } });
+    if (childCount > 0) {
+      throw ApiError.conflict('Cannot delete a node that still has children. Remove them first.');
+    }
+    const memberCount = await NodeMembership.count({ where: { node_id: id } });
+    if (memberCount > 0) {
+      throw ApiError.conflict('Cannot delete a node that still has members. Remove them first.');
+    }
+
+    await node.update({ deleted_at: new Date() });
+    await auditService.log({
+      user_id: userId, action: 'ORG_UNIT_DELETED', resource_type: 'OrgNode',
+      resource_id: id, details: { name: node.name, node_type: node.node_type },
+    });
+    await cacheService.deletePattern('bh:org:tree:*');
+    return { message: 'Node deleted successfully' };
+  },
+
+  // ── Node membership (attach/detach people at any member-bearing node) ──
+
+  async addNodeMember(nodeId, { user_id, is_primary = false }) {
+    const { MEMBER_BEARING_NODE_TYPES } = require('../../utils/constants');
+    const { OrgNode, NodeMembership, UserAccount } = require('../../database/models');
+
+    const node = await OrgNode.findByPk(nodeId);
+    if (!node) throw ApiError.notFound('Org node not found');
+    if (!MEMBER_BEARING_NODE_TYPES.includes(node.node_type)) {
+      throw ApiError.badRequest(`Members cannot be attached to a ${node.node_type}`);
+    }
+    const user = await UserAccount.findByPk(user_id);
+    if (!user) throw ApiError.notFound('User not found');
+
+    const [membership] = await NodeMembership.findOrCreate({
+      where: { user_id, node_id: nodeId },
+      defaults: { user_id, node_id: nodeId, is_primary },
+    });
+    if (is_primary && !membership.is_primary) {
+      await membership.update({ is_primary: true });
+    }
+    await cacheService.deletePattern('bh:org:tree:*');
+    return membership;
+  },
+
+  async removeNodeMember(nodeId, userId) {
+    const { NodeMembership } = require('../../database/models');
+    const deleted = await NodeMembership.destroy({ where: { node_id: nodeId, user_id: userId } });
+    if (!deleted) throw ApiError.notFound('Membership not found');
+    await cacheService.deletePattern('bh:org:tree:*');
+    return { message: 'Member removed' };
   },
 
   // ── Office Locations ──

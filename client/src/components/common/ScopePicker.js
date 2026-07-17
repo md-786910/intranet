@@ -3,18 +3,18 @@ import Select from './Select';
 import { orgService, transformOrgTree } from '../../services/orgService';
 
 const SCOPE_TYPE_OPTIONS = [
-  { value: 'ORGANISATION', label: 'Organisation' },
+  { value: 'GROUP', label: 'Group (organisation-wide)' },
+  { value: 'COMPANY', label: 'Company' },
   { value: 'OFFICE_LOCATION', label: 'Office Location' },
   { value: 'VERTICAL', label: 'Vertical' },
   { value: 'DEPARTMENT', label: 'Department' },
+  { value: 'ADMIN_UNIT', label: 'Administrative Unit' },
 ];
 
 function flattenByType(tree) {
   const result = {
-    ORGANISATION: [],
-    OFFICE_LOCATION: [],
-    VERTICAL: [],
-    DEPARTMENT: [],
+    GROUP: [], COMPANY: [], ORGANISATION: [],
+    OFFICE_LOCATION: [], VERTICAL: [], DEPARTMENT: [], ADMIN_UNIT: [],
   };
 
   function walk(nodes, breadcrumb = []) {

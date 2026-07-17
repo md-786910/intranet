@@ -1,74 +1,40 @@
 // Resolves a `{ scope_type, scope_id }` pair to a human-readable breadcrumb
-// (e.g. "Department: Product · V1 · Noida") given the org tree returned
-// from `useOrgTree`. Returns null if the scope can't be resolved (e.g.
-// tree still loading, or the entity was deleted).
+// given the generic org_node tree from `useOrgTree`. `scope_id` is a globally
+// unique org_node id, so resolution is by id (scope_type is only a fallback
+// label). Returns null if the node can't be found (tree loading / deleted).
+import { NODE_TYPE_LABELS } from './constants';
 
-export function findScopeLabel(tree, scopeType, scopeId) {
-  const orgNode = tree?.[0];
-  if (!orgNode || !scopeType || !scopeId) return null;
-
-  if (scopeType === 'ORGANISATION' && orgNode.id === Number(scopeId)) {
-    return `Organisation: ${orgNode.name}`;
+// Returns the ancestor chain [root, …, node] for a node id, or null.
+function findChain(node, scopeId, trail = []) {
+  if (!node) return null;
+  const next = [...trail, node];
+  if (node.id === Number(scopeId)) return next;
+  for (const child of node.children || []) {
+    const found = findChain(child, scopeId, next);
+    if (found) return found;
   }
-
-  for (const office of orgNode.children || []) {
-    if (scopeType === 'OFFICE_LOCATION' && office.id === Number(scopeId)) {
-      return `Office Location: ${office.name} · ${orgNode.name}`;
-    }
-
-    for (const vertical of office.children || []) {
-      if (scopeType === 'VERTICAL' && vertical.id === Number(scopeId)) {
-        return `Vertical: ${vertical.name} · ${office.name} · ${orgNode.name}`;
-      }
-
-      for (const department of vertical.children || []) {
-        if (scopeType === 'DEPARTMENT' && department.id === Number(scopeId)) {
-          return `Department: ${department.name} · ${vertical.name} · ${office.name}`;
-        }
-      }
-    }
-  }
-
   return null;
 }
 
-// Returns an ordered array of path segments (top → bottom) for breadcrumb rendering.
-// e.g. [{ type:'Org', name:'BrightNow' }, { type:'Office', name:'Delhi' }, ...]
+export function findScopeLabel(tree, scopeType, scopeId) {
+  const root = tree?.[0];
+  if (!root || !scopeId) return null;
+  const chain = findChain(root, scopeId);
+  if (!chain) return null;
+
+  const node = chain[chain.length - 1];
+  const label = NODE_TYPE_LABELS[node.type] || node.type;
+  // node name first, then ancestor names (nearest first), excluding the root group.
+  const ancestors = chain.slice(1, -1).map((n) => n.name).reverse();
+  const trail = [node.name, ...ancestors].join(' · ');
+  return `${label}: ${trail}`;
+}
+
+// Ordered array of path segments (top → bottom) for breadcrumb rendering.
 export function findScopePath(tree, scopeType, scopeId) {
-  const orgNode = tree?.[0];
-  if (!orgNode || !scopeType || !scopeId) return null;
-
-  if (scopeType === 'ORGANISATION' && orgNode.id === Number(scopeId)) {
-    return [{ type: 'Org', name: orgNode.name }];
-  }
-
-  for (const office of orgNode.children || []) {
-    if (scopeType === 'OFFICE_LOCATION' && office.id === Number(scopeId)) {
-      return [
-        { type: 'Org',    name: orgNode.name },
-        { type: 'Office', name: office.name  },
-      ];
-    }
-    for (const vertical of office.children || []) {
-      if (scopeType === 'VERTICAL' && vertical.id === Number(scopeId)) {
-        return [
-          { type: 'Org',      name: orgNode.name  },
-          { type: 'Office',   name: office.name   },
-          { type: 'Vertical', name: vertical.name },
-        ];
-      }
-      for (const department of vertical.children || []) {
-        if (scopeType === 'DEPARTMENT' && department.id === Number(scopeId)) {
-          return [
-            { type: 'Org',        name: orgNode.name     },
-            { type: 'Office',     name: office.name      },
-            { type: 'Vertical',   name: vertical.name    },
-            { type: 'Department', name: department.name  },
-          ];
-        }
-      }
-    }
-  }
-
-  return null;
+  const root = tree?.[0];
+  if (!root || !scopeId) return null;
+  const chain = findChain(root, scopeId);
+  if (!chain) return null;
+  return chain.map((n) => ({ type: NODE_TYPE_LABELS[n.type] || n.type, name: n.name }));
 }

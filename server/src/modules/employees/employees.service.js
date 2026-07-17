@@ -52,14 +52,21 @@ async function resolveEmployeeRoleId() {
   return role.role_id;
 }
 
-async function validateDepartmentsExist(departmentIds) {
-  const { Department } = require('../../database/models');
-  const rows = await Department.findAll({
-    where: { id: departmentIds },
-    attributes: ['id'],
+async function validateDepartmentsExist(nodeIds) {
+  // `nodeIds` are org_node ids (member-bearing nodes). Retained function name
+  // for its callers; validates existence + that members may attach there.
+  const { OrgNode } = require('../../database/models');
+  const { MEMBER_BEARING_NODE_TYPES } = require('../../utils/constants');
+  const rows = await OrgNode.findAll({
+    where: { id: nodeIds },
+    attributes: ['id', 'node_type'],
   });
-  if (rows.length !== new Set(departmentIds).size) {
-    throw ApiError.badRequest('One or more department_ids are invalid');
+  if (rows.length !== new Set(nodeIds.map(Number)).size) {
+    throw ApiError.badRequest('One or more selected org units are invalid');
+  }
+  const bad = rows.find((r) => !MEMBER_BEARING_NODE_TYPES.includes(r.node_type));
+  if (bad) {
+    throw ApiError.badRequest(`Members cannot be attached to a ${bad.node_type}`);
   }
 }
 
@@ -121,56 +128,85 @@ async function createInvitationForUser({ user, invitedByUserId, transaction }) {
 }
 
 async function syncDepartmentMemberships({ userId, departmentIds, primaryDepartmentId, transaction }) {
-  const { DepartmentMembership } = require('../../database/models');
+  // `departmentIds` / `primaryDepartmentId` are org_node ids (member-bearing).
+  // Primary source of truth is node_membership. For nodes that map to a legacy
+  // department we ALSO mirror department_membership so existing department-centric
+  // readers keep working during the transition.
+  const { NodeMembership, DepartmentMembership, OrgNode } = require('../../database/models');
 
-  const existing = await DepartmentMembership.findAll({
-    where: { user_id: userId },
+  const desiredIds = new Set(departmentIds.map(Number));
+  const primaryId = Number(primaryDepartmentId) || [...desiredIds][0] || null;
+
+  // ── node_membership (authoritative) ──
+  const existing = await NodeMembership.findAll({ where: { user_id: userId }, transaction });
+  const existingIds = new Set(existing.map((m) => Number(m.node_id)));
+  for (const membership of existing) {
+    if (!desiredIds.has(Number(membership.node_id))) await membership.destroy({ transaction });
+  }
+  for (const nodeId of desiredIds) {
+    if (!existingIds.has(nodeId)) {
+      await NodeMembership.create({ user_id: userId, node_id: nodeId, is_primary: false }, { transaction });
+    }
+  }
+  await NodeMembership.update({ is_primary: false }, { where: { user_id: userId }, transaction });
+  if (primaryId) {
+    await NodeMembership.update(
+      { is_primary: true },
+      { where: { user_id: userId, node_id: primaryId }, transaction },
+    );
+  }
+
+  // ── department_membership mirror (legacy readers) ──
+  const nodes = await OrgNode.findAll({
+    where: { id: [...desiredIds] },
+    attributes: ['id', 'node_type', 'legacy_ref'],
     transaction,
   });
-  const existingIds = new Set(existing.map((m) => Number(m.department_id)));
-  const desiredIds = new Set(departmentIds.map(Number));
+  const legacyDeptOf = (n) => (n.node_type === 'DEPARTMENT' && n.legacy_ref
+    ? Number(n.legacy_ref.split(':')[1]) : null);
+  const desiredDeptIds = new Set(nodes.map(legacyDeptOf).filter(Boolean));
+  const primaryNode = nodes.find((n) => Number(n.id) === primaryId);
+  const primaryDeptId = primaryNode ? legacyDeptOf(primaryNode) : null;
 
-  for (const membership of existing) {
-    if (!desiredIds.has(Number(membership.department_id))) {
-      await membership.destroy({ transaction });
+  const existingDept = await DepartmentMembership.findAll({ where: { user_id: userId }, transaction });
+  const existingDeptIds = new Set(existingDept.map((m) => Number(m.department_id)));
+  for (const m of existingDept) {
+    if (!desiredDeptIds.has(Number(m.department_id))) await m.destroy({ transaction });
+  }
+  for (const deptId of desiredDeptIds) {
+    if (!existingDeptIds.has(deptId)) {
+      await DepartmentMembership.create({ user_id: userId, department_id: deptId, is_primary: false }, { transaction });
     }
   }
-
-  for (const departmentId of desiredIds) {
-    if (!existingIds.has(departmentId)) {
-      await DepartmentMembership.create({
-        user_id: userId,
-        department_id: departmentId,
-        is_primary: false,
-      }, { transaction });
-    }
+  await DepartmentMembership.update({ is_primary: false }, { where: { user_id: userId }, transaction });
+  if (primaryDeptId) {
+    await DepartmentMembership.update(
+      { is_primary: true },
+      { where: { user_id: userId, department_id: primaryDeptId }, transaction },
+    );
   }
-
-  const primaryId = primaryDepartmentId || [...desiredIds][0];
-  await DepartmentMembership.update(
-    { is_primary: false },
-    { where: { user_id: userId }, transaction },
-  );
-  await DepartmentMembership.update(
-    { is_primary: true },
-    { where: { user_id: userId, department_id: primaryId }, transaction },
-  );
 }
 
 async function syncEmployeeRoleAssignments({ userId, roleId, departmentIds, actorUserId, transaction }) {
-  const { UserRoleAssignment } = require('../../database/models');
+  // Assign the EMPLOYEE role at each selected node (scope_id = org_node id).
+  const { UserRoleAssignment, OrgNode } = require('../../database/models');
 
+  const nodeIds = [...new Set(departmentIds.map(Number))];
+  const nodes = await OrgNode.findAll({ where: { id: nodeIds }, attributes: ['id', 'node_type'], transaction });
+  const typeById = new Map(nodes.map((n) => [Number(n.id), n.node_type]));
+
+  // Clear any prior auto-assigned employee-role rows for this user/role.
   await UserRoleAssignment.destroy({
-    where: { user_id: userId, scope_type: 'DEPARTMENT' },
+    where: { user_id: userId, role_id: roleId },
     transaction,
   });
 
-  for (const departmentId of new Set(departmentIds.map(Number))) {
+  for (const nodeId of nodeIds) {
     await UserRoleAssignment.create({
       user_id: userId,
       role_id: roleId,
-      scope_type: 'DEPARTMENT',
-      scope_id: departmentId,
+      scope_type: typeById.get(nodeId) || 'DEPARTMENT',
+      scope_id: nodeId,
       assigned_by: actorUserId || null,
     }, { transaction });
   }

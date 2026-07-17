@@ -1,104 +1,125 @@
 const { QueryTypes } = require('sequelize');
-const logger = require('../config/logger');
 
-const SCOPE_HIERARCHY = ['ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'];
-
+/**
+ * Tree-based scope resolution over the generic `org_node` table.
+ *
+ * A scope is identified by an integer `scope_id` which is an `org_node.id`
+ * (globally unique across the whole tree). `scope_type` is retained on the
+ * scope-bearing tables for backwards compatibility but is informational — all
+ * ancestry is resolved by walking the node tree, so a role granted at any
+ * ancestor node covers every descendant, at any depth.
+ */
 const scopeService = {
   /**
-   * Resolve the full ancestor chain for a given scope.
-   * Returns { organisation_id, office_location_id, vertical_id, department_id }
-   * with only the levels at or above the given scope populated.
+   * Load a node's ancestor chain (inclusive of the node itself) as an ordered
+   * array of { id, node_type, parent_id, name }, nearest-first (self → root).
+   * Uses the materialized `path` when present, else walks parent_id.
+   */
+  async resolveAncestorNodes(scopeId) {
+    const { sequelize } = require('../database/models');
+    const id = Number(scopeId);
+    if (!Number.isInteger(id)) return [];
+
+    const [node] = await sequelize.query(
+      'SELECT id, node_type, parent_id, name, path FROM org_node WHERE id = :id',
+      { replacements: { id }, type: QueryTypes.SELECT },
+    );
+    if (!node) return [];
+
+    let rows;
+    if (node.path) {
+      // path looks like "1/2/5/"; the ids are the full chain root → self.
+      const ids = node.path.split('/').filter(Boolean).map(Number);
+      rows = await sequelize.query(
+        'SELECT id, node_type, parent_id, name FROM org_node WHERE id IN (:ids)',
+        { replacements: { ids }, type: QueryTypes.SELECT },
+      );
+    } else {
+      // Fallback: walk parent_id upward.
+      rows = [];
+      let current = node;
+      const guard = new Set();
+      while (current && !guard.has(current.id)) {
+        guard.add(current.id);
+        rows.push({ id: current.id, node_type: current.node_type, parent_id: current.parent_id, name: current.name });
+        if (current.parent_id == null) break;
+        // eslint-disable-next-line no-await-in-loop
+        const [parent] = await sequelize.query(
+          'SELECT id, node_type, parent_id, name, path FROM org_node WHERE id = :id',
+          { replacements: { id: current.parent_id }, type: QueryTypes.SELECT },
+        );
+        current = parent;
+      }
+    }
+
+    // Order nearest-first (self → root) by descending depth (path length).
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const chain = [];
+    let cur = byId.get(id);
+    const guard = new Set();
+    while (cur && !guard.has(cur.id)) {
+      guard.add(cur.id);
+      chain.push(cur);
+      cur = cur.parent_id != null ? byId.get(cur.parent_id) : null;
+    }
+    return chain;
+  },
+
+  /**
+   * The node id + all ancestor ids. This is the set a permission check matches
+   * against: a role assigned at any of these covers the target scope.
+   */
+  async resolveAncestorIds(scopeId) {
+    const nodes = await this.resolveAncestorNodes(scopeId);
+    return nodes.map((n) => n.id);
+  },
+
+  /**
+   * Legacy-compatible ancestor shape. Returns the nearest ancestor node id for
+   * each of the four historical levels (the root GROUP maps to organisation_id).
+   * Retained so existing consumers (e.g. checkAdminHierarchyPermission,
+   * audience level filtering) keep working against the new tree.
    */
   async resolveAncestors(scopeType, scopeId) {
-    const { sequelize } = require('../database/models');
+    const nodes = await this.resolveAncestorNodes(scopeId);
+    if (nodes.length === 0) return null;
 
-    switch (scopeType) {
-      case 'ORGANISATION':
-        return { organisation_id: scopeId, office_location_id: null, vertical_id: null, department_id: null };
+    const nearest = (type) => {
+      const hit = nodes.find((n) => n.node_type === type);
+      return hit ? hit.id : null;
+    };
+    const root = nodes[nodes.length - 1];
 
-      case 'OFFICE_LOCATION': {
-        const [row] = await sequelize.query(
-          `SELECT organisation_id FROM office_location WHERE id = :id`,
-          { replacements: { id: scopeId }, type: QueryTypes.SELECT }
-        );
-        if (!row) return null;
-        return { organisation_id: row.organisation_id, office_location_id: scopeId, vertical_id: null, department_id: null };
-      }
-
-      case 'VERTICAL': {
-        const [row] = await sequelize.query(
-          `SELECT v.office_location_id, ol.organisation_id
-           FROM vertical v
-           JOIN office_location ol ON ol.id = v.office_location_id
-           WHERE v.id = :id`,
-          { replacements: { id: scopeId }, type: QueryTypes.SELECT }
-        );
-        if (!row) return null;
-        return { organisation_id: row.organisation_id, office_location_id: row.office_location_id, vertical_id: scopeId, department_id: null };
-      }
-
-      case 'DEPARTMENT': {
-        const [row] = await sequelize.query(
-          `SELECT d.vertical_id, v.office_location_id, ol.organisation_id
-           FROM department d
-           JOIN vertical v ON v.id = d.vertical_id
-           JOIN office_location ol ON ol.id = v.office_location_id
-           WHERE d.id = :id`,
-          { replacements: { id: scopeId }, type: QueryTypes.SELECT }
-        );
-        if (!row) return null;
-        return { organisation_id: row.organisation_id, office_location_id: row.office_location_id, vertical_id: row.vertical_id, department_id: scopeId };
-      }
-
-      default:
-        return null;
-    }
+    return {
+      // GROUP (tree root) fills the historical ORGANISATION slot.
+      organisation_id: nearest('GROUP') || (root && root.parent_id == null ? root.id : null),
+      office_location_id: nearest('OFFICE_LOCATION'),
+      vertical_id: nearest('VERTICAL'),
+      department_id: nearest('DEPARTMENT'),
+    };
   },
 
   /**
-   * Check if parentScope is an ancestor of (or equal to) childScope.
-   * A role assigned at OFFICE_LOCATION level covers all VERTICALs and DEPARTMENTs under it.
+   * True if parent scope is an ancestor of (or equal to) the child scope.
+   * Signature keeps the legacy (type,id,type,id) shape; only the ids matter now.
    */
   async isAncestorOf(parentType, parentId, childType, childId) {
-    // Same scope — always true
-    if (parentType === childType && parentId === childId) return true;
-
-    // Parent must be higher in hierarchy
-    const parentLevel = SCOPE_HIERARCHY.indexOf(parentType);
-    const childLevel = SCOPE_HIERARCHY.indexOf(childType);
-    if (parentLevel < 0 || childLevel < 0 || parentLevel >= childLevel) return false;
-
-    // Resolve child's ancestors and check if parent is in the chain
-    const ancestors = await this.resolveAncestors(childType, childId);
-    if (!ancestors) return false;
-
-    const columnMap = {
-      ORGANISATION: 'organisation_id',
-      OFFICE_LOCATION: 'office_location_id',
-      VERTICAL: 'vertical_id',
-      DEPARTMENT: 'department_id',
-    };
-
-    return ancestors[columnMap[parentType]] === parentId;
+    const pId = Number(parentId);
+    const cId = Number(childId);
+    if (!Number.isInteger(pId) || !Number.isInteger(cId)) return false;
+    if (pId === cId) return true;
+    const ancestorIds = await this.resolveAncestorIds(cId);
+    return ancestorIds.includes(pId);
   },
 
   /**
-   * Get the scope name for display purposes.
+   * Display name for a scope (node) id.
    */
   async getScopeName(scopeType, scopeId) {
     const { sequelize } = require('../database/models');
-    const tableMap = {
-      ORGANISATION: 'organisation',
-      OFFICE_LOCATION: 'office_location',
-      VERTICAL: 'vertical',
-      DEPARTMENT: 'department',
-    };
-    const table = tableMap[scopeType];
-    if (!table) return null;
-
     const [row] = await sequelize.query(
-      `SELECT name FROM ${table} WHERE id = :id`,
-      { replacements: { id: scopeId }, type: QueryTypes.SELECT }
+      'SELECT name FROM org_node WHERE id = :id',
+      { replacements: { id: Number(scopeId) }, type: QueryTypes.SELECT },
     );
     return row ? row.name : null;
   },

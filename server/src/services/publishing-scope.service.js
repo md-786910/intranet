@@ -35,7 +35,7 @@ async function assertAudienceWithinUserScope(userId, audienceTargets) {
   });
 
   if (assignments.some((a) => a.role?.code === 'OWNER')) return;
-  if (assignments.some((a) => a.scope_type === 'ORGANISATION')) return;
+  if (assignments.some((a) => a.scope_type === 'ORGANISATION' || a.scope_type === 'GROUP')) return;
 
   if (assignments.length === 0) {
     throw ApiError.forbidden('SCOPE_OUT_OF_BOUNDS: user has no scope assignments');

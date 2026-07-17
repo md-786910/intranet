@@ -36,6 +36,10 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'organisation_id',
       as: 'officeLocations',
     });
+    Organisation.hasMany(models.OrgNode, {
+      foreignKey: 'organisation_id',
+      as: 'nodes',
+    });
   };
 
   return Organisation;
