@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Table from '../../components/common/Table';
 import Pagination from '../../components/common/Pagination';
@@ -9,6 +9,8 @@ import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import OrgHierarchyView from '../../components/azure-ad/OrgHierarchyView';
+
+const VALID_VIEWS = new Set(['list', 'tree']);
 
 // ── Avatar helper ─────────────────────────────────────────────────────────────
 const AVATAR_COLORS = [
@@ -100,11 +102,24 @@ function ViewToggle({ view, onChange }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ActiveDirectoryPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { addToast: showToast } = useToast();
   const { page, limit, setPage, setLimit, resetPage } = usePagination({ initialPage: 1, initialLimit: 50 });
 
-  // View mode
-  const [view, setView] = useState('list');
+  // View mode — persisted in ?view=list|tree
+  const view = useMemo(() => {
+    const v = searchParams.get('view');
+    return VALID_VIEWS.has(v) ? v : 'list';
+  }, [searchParams]);
+
+  const setView = useCallback((next) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (next === 'list') params.delete('view');
+      else params.set('view', next);
+      return params;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   // List state
   const [users, setUsers]       = useState([]);

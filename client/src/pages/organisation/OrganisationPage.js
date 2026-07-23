@@ -7,8 +7,8 @@ import OrgTreeView from '../../components/org/OrgTreeView';
 import Modal from '../../components/common/Modal';
 import UserCreatePage from '../users/UserCreatePage';
 import { TYPE_COLORS, TYPE_ICONS, NODE_TYPE_LABELS } from '../../components/org/OrgTreeNode';
+import OrgNodeMembers from '../../components/org/OrgNodeMembers';
 import { orgService, transformOrgTree } from '../../services/orgService';
-import { userService } from '../../services/userService';
 import { ALLOWED_CHILDREN, ADD_CHILD_LABELS, MEMBER } from '../../utils/constants';
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
@@ -34,7 +34,7 @@ export default function OrganisationPage() {
   const [tree, setTree] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Panel: 'view' | 'edit' | 'create' | 'member' | null
+  // Panel: 'view' | 'edit' | 'create' | null
   const [panelMode, setPanelMode] = useState(null);
   const [selected, setSelected] = useState(null);
   const [createParent, setCreateParent] = useState(null);
@@ -47,11 +47,14 @@ export default function OrganisationPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Member picker
-  const [users, setUsers] = useState([]);
-  const [memberUserId, setMemberUserId] = useState('');
-  const [memberPrimary, setMemberPrimary] = useState(false);
+  // Member create (modal)
+  const [memberPrimary, setMemberPrimary] = useState(true);
   const [createUserOpen, setCreateUserOpen] = useState(false);
+
+  // Sidebar member list (hierarchical)
+  const [nodeMembers, setNodeMembers] = useState(null);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState(null);
 
   const fetchTree = useCallback(async () => {
     try {
@@ -67,6 +70,21 @@ export default function OrganisationPage() {
 
   useEffect(() => { fetchTree(); }, [fetchTree]);
 
+  const fetchNodeMembers = useCallback(async (nodeId) => {
+    if (!nodeId) return;
+    setMembersLoading(true);
+    setMembersError(null);
+    try {
+      const res = await orgService.getNodeMembers(nodeId);
+      setNodeMembers(res.data?.data || null);
+    } catch {
+      setNodeMembers(null);
+      setMembersError('Failed to load members');
+    } finally {
+      setMembersLoading(false);
+    }
+  }, []);
+
   const canAddChildToNode = useCallback((node) => (
     (ALLOWED_CHILDREN[node.type] || []).length > 0 && canManageNodes
   ), [canManageNodes]);
@@ -78,6 +96,8 @@ export default function OrganisationPage() {
     setSelected(node);
     setPanelMode('view');
     setConfirmDelete(false);
+    setNodeMembers(null);
+    fetchNodeMembers(node.id);
   };
 
   const openEdit = (node) => {
@@ -112,22 +132,17 @@ export default function OrganisationPage() {
     setConfirmDelete(false);
   };
 
-  const openMember = async (parentNode) => {
+  const openMember = (parentNode) => {
     if (!canManageNodes) {
       addToast('You do not have permission to manage members', 'error');
       return;
     }
     setCreateParent(parentNode);
-    setMemberUserId('');
-    setMemberPrimary(false);
-    setPanelMode('member');
-    try {
-      const res = await userService.getUsers({ limit: 100, status: 'ACTIVE' });
-      const list = res.data?.data?.users || res.data?.data || [];
-      setUsers(Array.isArray(list) ? list : []);
-    } catch {
-      setUsers([]);
-    }
+    setMemberPrimary(true);
+    setSelected(parentNode);
+    setPanelMode('view');
+    setConfirmDelete(false);
+    setCreateUserOpen(true);
   };
 
   // onAdd from the tree add-menu: (parentNode, childType)
@@ -136,9 +151,17 @@ export default function OrganisationPage() {
     else openCreate(parentNode, childType);
   };
 
+  const backToParentView = () => {
+    const parent = createParent || selected;
+    if (parent) openView(parent);
+    else closePanel();
+  };
+
   const closePanel = () => {
     setPanelMode(null);
     setConfirmDelete(false);
+    setNodeMembers(null);
+    setMembersError(null);
   };
 
   // ── Save (create / edit) ──
@@ -185,31 +208,14 @@ export default function OrganisationPage() {
     }
   };
 
-  // ── Add member ──
-  const handleAddMember = async () => {
-    if (!memberUserId) { addToast('Select a person to add', 'error'); return; }
-    setSaving(true);
-    try {
-      await orgService.addNodeMember(createParent.id, {
-        user_id: Number(memberUserId),
-        is_primary: memberPrimary,
-      });
-      addToast('Member added', 'success');
-      closePanel();
-      fetchTree();
-    } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to add member', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
+  // ── Add member (via create-user modal only) ──
   // New user created from the org tree → attach them to this node.
   const handleUserCreated = async (user) => {
     setCreateUserOpen(false);
     if (!user || !createParent) { closePanel(); fetchTree(); return; }
+    const parent = createParent;
     try {
-      await orgService.addNodeMember(createParent.id, {
+      await orgService.addNodeMember(parent.id, {
         user_id: user.user_id,
         is_primary: memberPrimary,
       });
@@ -217,8 +223,11 @@ export default function OrganisationPage() {
     } catch (err) {
       addToast(err.response?.data?.message || 'User created, but could not attach as member', 'error');
     } finally {
-      closePanel();
       fetchTree();
+      setSelected(parent);
+      setPanelMode('view');
+      setConfirmDelete(false);
+      fetchNodeMembers(parent.id);
     }
   };
 
@@ -228,12 +237,6 @@ export default function OrganisationPage() {
     scope_label: `${NODE_TYPE_LABELS[createParent.type] || createParent.type}: ${createParent.name}`,
     name: createParent.name,
   } : null;
-
-  const userLabel = (u) => {
-    const name = [u.first_name, u.last_name].filter(Boolean).join(' ').trim();
-    const job = u.profile?.job_title;
-    return `${name || u.email}${name ? ` — ${u.email}` : ''}${job ? ` · ${job}` : ''}`;
-  };
 
   // ── Delete ──
   const handleDelete = async () => {
@@ -264,7 +267,6 @@ export default function OrganisationPage() {
 
   const panelTitle =
     panelMode === 'create' ? `New ${ADD_CHILD_LABELS[createNodeType] || ''}` :
-    panelMode === 'member' ? 'Add Member' :
     panelMode === 'edit' ? `Edit ${NODE_TYPE_LABELS[selected?.type] || ''}` :
     selected?.name || '';
 
@@ -285,7 +287,6 @@ export default function OrganisationPage() {
           loading={loading}
           selectedId={selected?.id}
           onSelect={openView}
-          onAdd={handleAdd}
           onEdit={openEdit}
           onRetry={fetchTree}
           canAddNode={canAddChildToNode}
@@ -301,6 +302,18 @@ export default function OrganisationPage() {
 
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div className="flex items-center gap-3 min-w-0 flex-1">
+                {(panelMode === 'create' || panelMode === 'edit') && (
+                  <button
+                    type="button"
+                    onClick={panelMode === 'edit' && selected ? () => openView(selected) : backToParentView}
+                    className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg flex-shrink-0 transition-colors"
+                    title="Back"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                    </svg>
+                  </button>
+                )}
                 <span className={`flex-shrink-0 p-2 rounded-lg ${panelTypeColor}`}>
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d={panelIconPath} />
@@ -314,7 +327,7 @@ export default function OrganisationPage() {
                       <StatusBadge status={selected?.status} />
                     </div>
                   )}
-                  {(panelMode === 'create' || panelMode === 'member') && createParent && (
+                  {panelMode === 'create' && createParent && (
                     <p className="text-xs text-gray-500 mt-0.5">Under: {createParent.name}</p>
                   )}
                 </div>
@@ -329,43 +342,39 @@ export default function OrganisationPage() {
             <div className="flex-1 overflow-y-auto px-6 py-5">
               {/* VIEW */}
               {panelMode === 'view' && selected && (
-                <div className="space-y-6">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <dl className="grid grid-cols-2 gap-4 text-sm">
+                <div className="space-y-5">
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <dl className="grid grid-cols-2 gap-3 text-sm">
                       {selected.code && (
                         <div>
-                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Code</dt>
+                          <dt className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-0.5">Code</dt>
                           <dd className="font-medium text-gray-800">{selected.code}</dd>
                         </div>
                       )}
                       {selected.city && (
                         <div>
-                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">City</dt>
+                          <dt className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-0.5">City</dt>
                           <dd className="font-medium text-gray-800">{selected.city}</dd>
                         </div>
                       )}
-                      {selected.country && (
-                        <div>
-                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Country</dt>
-                          <dd className="font-medium text-gray-800">{selected.country}</dd>
-                        </div>
-                      )}
                       <div>
-                        <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Members</dt>
-                        <dd className="font-medium text-gray-800">{selected.memberCount || 0}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Children</dt>
+                        <dt className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-0.5">Children</dt>
                         <dd className="font-medium text-gray-800">{selected.children?.length || 0} direct</dd>
                       </div>
                       {selected.created_at && (
                         <div>
-                          <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Created</dt>
+                          <dt className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-0.5">Created</dt>
                           <dd className="font-medium text-gray-800">{formatDate(selected.created_at)}</dd>
                         </div>
                       )}
                     </dl>
                   </div>
+
+                  <OrgNodeMembers
+                    data={nodeMembers}
+                    loading={membersLoading}
+                    error={membersError}
+                  />
 
                   {/* Add-child buttons (one per allowed child type) */}
                   {allowedChildren.length > 0 && canAddChildToNode(selected) && (
@@ -379,7 +388,7 @@ export default function OrganisationPage() {
                   )}
 
                   {selected.type !== 'GROUP' && canEditNode(selected) && (
-                    <div className="pt-4 mt-2 border-t border-gray-200">
+                    <div className="pt-3 border-t border-gray-200">
                       {!confirmDelete ? (
                         <button
                           onClick={() => setConfirmDelete(true)}
@@ -433,39 +442,6 @@ export default function OrganisationPage() {
                   )}
                 </div>
               )}
-
-              {/* MEMBER */}
-              {panelMode === 'member' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Person</label>
-                    <select
-                      value={memberUserId}
-                      onChange={(e) => setMemberUserId(e.target.value)}
-                      className="w-full py-2 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    >
-                      <option value="">Select a person…</option>
-                      {users.map((u) => (
-                        <option key={u.user_id} value={u.user_id}>
-                          {userLabel(u)}
-                        </option>
-                      ))}
-                    </select>
-                    {users.length === 0 && <p className="text-xs text-gray-400 mt-1">No users available.</p>}
-                  </div>
-                  <label className="flex items-center gap-2 text-sm text-gray-700">
-                    <input type="checkbox" checked={memberPrimary} onChange={(e) => setMemberPrimary(e.target.checked)} />
-                    Set as primary placement
-                  </label>
-
-                  <div className="pt-3 mt-1 border-t border-gray-200">
-                    <p className="text-xs text-gray-500 mb-2">Don&rsquo;t see the person? Create a brand-new user and place them here.</p>
-                    <Button variant="secondary" size="sm" onClick={() => setCreateUserOpen(true)}>
-                      + Create new user
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50/50">
@@ -482,14 +458,8 @@ export default function OrganisationPage() {
               )}
               {panelMode === 'create' && (
                 <div className="flex gap-3">
-                  <Button variant="secondary" className="flex-1" onClick={closePanel}>Cancel</Button>
+                  <Button variant="secondary" className="flex-1" onClick={backToParentView}>Back</Button>
                   <Button variant="primary" className="flex-1" onClick={handleSave} loading={saving}>Create {ADD_CHILD_LABELS[createNodeType]}</Button>
-                </div>
-              )}
-              {panelMode === 'member' && (
-                <div className="flex gap-3">
-                  <Button variant="secondary" className="flex-1" onClick={closePanel}>Cancel</Button>
-                  <Button variant="primary" className="flex-1" onClick={handleAddMember} loading={saving}>Add Member</Button>
                 </div>
               )}
             </div>

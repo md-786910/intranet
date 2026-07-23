@@ -1,13 +1,20 @@
 import { useMemo } from 'react';
 import { useAuth } from './useAuth';
 import { useCurrentOrganisation } from './useCurrentOrganisation';
+import { useOrgTree } from './useOrgTree';
 
 const SCOPE_RANK = {
   DEPARTMENT: 4,
+  ADMIN_UNIT: 4,
   VERTICAL: 3,
   OFFICE_LOCATION: 2,
+  COMPANY: 2,
   ORGANISATION: 1,
+  GROUP: 1,
 };
+
+const ORG_WIDE_TYPES = new Set(['ORGANISATION', 'GROUP']);
+const PUBLISH_ANYWHERE_ROLES = new Set(['CONTENT_EDITOR', 'OFFICE_MANAGER', 'OWNER']);
 
 function pickNarrowest(assignments) {
   if (!assignments.length) return null;
@@ -27,32 +34,55 @@ function toAudienceTarget(assignment) {
 /**
  * Resolves the publishing scope context for News/Documents create + edit flows.
  *
- * - Platform Owner or users with any ORGANISATION-scope assignment: unrestricted.
- *   Audience selector stays empty and enabled; owning_scope = ORGANISATION.
- * - Sub-org-only users (OFFICE / VERTICAL / DEPARTMENT): audience is locked to
- *   their assignments and disabled; owning_scope follows their narrowest scope
- *   so backend `checkPermission` ancestor walk matches their role assignment.
+ * Unrestricted audience when:
+ * - Platform Owner
+ * - CONTENT_EDITOR / OFFICE_MANAGER (can choose any hierarchy)
+ * - Any ORGANISATION/GROUP-scope assignment, or role attached to the Group root node
+ *
+ * Other roles with only sub-org assignments stay locked to those scopes.
  */
 export function usePublishingScope() {
   const { isOwner, roleAssignments } = useAuth();
   const { currentOrganisationId } = useCurrentOrganisation();
+  const { tree } = useOrgTree();
 
   return useMemo(() => {
     const assignments = roleAssignments || [];
-    const orgAssignments = assignments.filter((a) => a.scope_type === 'ORGANISATION');
-    const subOrgAssignments = assignments.filter((a) => a.scope_type !== 'ORGANISATION');
+    const rootNode = tree?.[0] || null;
+    const rootId = rootNode?.id != null ? Number(rootNode.id) : null;
+
+    const hasPublishAnywhereRole = assignments.some(
+      (a) => a.role?.code && PUBLISH_ANYWHERE_ROLES.has(a.role.code),
+    );
+
+    const hasOrgWideAssignment = assignments.some((a) => {
+      if (ORG_WIDE_TYPES.has(a.scope_type)) return true;
+      if (rootId != null && Number(a.scope_id) === rootId) return true;
+      return false;
+    });
+
+    const subOrgAssignments = assignments.filter((a) => {
+      if (ORG_WIDE_TYPES.has(a.scope_type)) return false;
+      if (rootId != null && Number(a.scope_id) === rootId) return false;
+      return true;
+    });
 
     const lockAudience =
-      !isOwner && orgAssignments.length === 0 && subOrgAssignments.length > 0;
+      !isOwner
+      && !hasPublishAnywhereRole
+      && !hasOrgWideAssignment
+      && subOrgAssignments.length > 0;
 
     const narrowest = lockAudience ? pickNarrowest(subOrgAssignments) : null;
 
     const owningScope = lockAudience && narrowest
       ? { scope_type: narrowest.scope_type, scope_id: narrowest.scope_id }
-      : { scope_type: 'ORGANISATION', scope_id: currentOrganisationId };
+      : rootId != null
+        ? { scope_type: rootNode?.type || 'GROUP', scope_id: rootId }
+        : { scope_type: 'ORGANISATION', scope_id: currentOrganisationId };
 
     const lockedTargets = lockAudience ? subOrgAssignments.map(toAudienceTarget) : [];
 
     return { lockAudience, lockedTargets, owningScope };
-  }, [isOwner, roleAssignments, currentOrganisationId]);
+  }, [isOwner, roleAssignments, currentOrganisationId, tree]);
 }

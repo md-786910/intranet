@@ -9,6 +9,7 @@ export const orgService = {
   deleteNode: (id) => api.delete(`/org/nodes/${id}`),
   addNodeMember: (id, data) => api.post(`/org/nodes/${id}/members`, data),
   removeNodeMember: (id, userId) => api.delete(`/org/nodes/${id}/members/${userId}`),
+  getNodeMembers: (id) => api.get(`/org/nodes/${id}/members`),
 };
 
 /**

@@ -6,7 +6,8 @@ import Table from '../../components/common/Table';
 import Pagination from '../../components/common/Pagination';
 import SearchBar from '../../components/common/SearchBar';
 import StatusBadge from '../../components/common/StatusBadge';
-import PriorityBadge from '../../components/common/PriorityBadge';
+import { priorityLaneClass } from '../../components/common/PriorityBadge';
+import AudienceSummary from '../../components/common/AudienceSummary';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { announcementService } from '../../services/announcementService';
 import { useToast } from '../../hooks/useToast';
@@ -124,7 +125,6 @@ export default function AnnouncementsListPage() {
       <div>
         <div className="flex items-center gap-2">
           <span className="font-medium text-gray-900">{row.title}</span>
-          <PriorityBadge priority={row.priority || 'NORMAL'} hideOnNormal />
           {row.show_in_marquee && (
             <span className="text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">
               Marquee
@@ -134,6 +134,9 @@ export default function AnnouncementsListPage() {
       </div>
     )},
     { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    { key: 'audience', label: 'Publishes to', render: (row) => (
+      <AudienceSummary audience_summary={row.audience_summary} />
+    )},
     { key: 'author', label: 'Author', render: (row) => {
       const action = latestAction(row);
       return (
@@ -255,6 +258,7 @@ export default function AnnouncementsListPage() {
         emptyMessage={isTrash
           ? (search ? 'No archived announcements match the filter' : 'Archive is empty')
           : 'No announcements found'}
+        getRowClassName={(row) => priorityLaneClass(row.priority)}
         onRowClick={isTrash ? undefined : (row) => navigate(`/announcements/${row.announcement_item_id}`)}
       />
       <Pagination

@@ -6,9 +6,9 @@ const logger = require('../config/logger');
  * Defence-in-depth: ensure a publisher only targets audience scopes they
  * actually own (per their user_role_assignment rows).
  *
- * - OWNER role: unrestricted.
- * - ORGANISATION-scope assignment: unrestricted (matches today's behavior
- *   for org-wide Content Editors).
+ * - OWNER / CONTENT_EDITOR / OFFICE_MANAGER: unrestricted audience (can pick
+ *   any hierarchy node).
+ * - ORGANISATION/GROUP-scope assignment: unrestricted.
  * - Sub-org only: each target must equal one of the user's assignments OR
  *   be a descendant of one.
  *
@@ -34,7 +34,9 @@ async function assertAudienceWithinUserScope(userId, audienceTargets) {
     attributes: ['scope_type', 'scope_id'],
   });
 
-  if (assignments.some((a) => a.role?.code === 'OWNER')) return;
+  const PUBLISH_ANYWHERE_ROLES = new Set(['OWNER', 'CONTENT_EDITOR', 'OFFICE_MANAGER']);
+
+  if (assignments.some((a) => a.role?.code && PUBLISH_ANYWHERE_ROLES.has(a.role.code))) return;
   if (assignments.some((a) => a.scope_type === 'ORGANISATION' || a.scope_type === 'GROUP')) return;
 
   if (assignments.length === 0) {

@@ -95,14 +95,14 @@ async function validateReportsTo({ reportsToUserId, selfUserId }) {
 }
 
 /**
- * When a role is granted scoped to a DEPARTMENT node, also make the user a
- * member of it (node_membership + legacy department_membership mirror), matching
- * the historical behavior where a department-scoped role implied membership.
+ * When a role is granted on a member-bearing org node, also attach node_membership
+ * (and legacy department_membership when a DEPARTMENT has legacy_ref).
  */
 async function attachDepartmentScopeMembership({ userId, scopeId, transaction }) {
+  const { MEMBER_BEARING_NODE_TYPES } = require('../../utils/constants');
   const { NodeMembership, DepartmentMembership, OrgNode } = require('../../database/models');
   const node = await OrgNode.findByPk(scopeId, { transaction });
-  if (!node || node.node_type !== 'DEPARTMENT') return;
+  if (!node || !MEMBER_BEARING_NODE_TYPES.includes(node.node_type)) return;
 
   await NodeMembership.findOrCreate({
     where: { user_id: userId, node_id: Number(scopeId) },
@@ -110,7 +110,7 @@ async function attachDepartmentScopeMembership({ userId, scopeId, transaction })
     transaction,
   });
 
-  if (node.legacy_ref) {
+  if (node.node_type === 'DEPARTMENT' && node.legacy_ref) {
     const deptId = Number(node.legacy_ref.split(':')[1]);
     if (deptId) {
       await DepartmentMembership.findOrCreate({
@@ -223,18 +223,21 @@ async function buildRolesBlockForWelcome(rolesToAssign) {
     OfficeLocation,
     Vertical,
     Department,
+    OrgNode,
   } = require('../../database/models');
 
   const roleIds = [...new Set(rolesToAssign.map((r) => r.role_id).filter(Boolean))];
 
   const grouped = { ORGANISATION: [], OFFICE_LOCATION: [], VERTICAL: [], DEPARTMENT: [] };
+  const orgNodeIds = [];
   rolesToAssign.forEach((r) => {
     if (r.scope_type && r.scope_id && grouped[r.scope_type]) {
       grouped[r.scope_type].push(r.scope_id);
     }
+    if (r.scope_id) orgNodeIds.push(r.scope_id);
   });
 
-  const [roles, orgs, offices, verticals, departments] = await Promise.all([
+  const [roles, orgs, offices, verticals, departments, orgNodes] = await Promise.all([
     roleIds.length
       ? Role.findAll({ where: { role_id: roleIds }, attributes: ['role_id', 'name'] })
       : [],
@@ -264,6 +267,9 @@ async function buildRolesBlockForWelcome(rolesToAssign) {
           }],
         })
       : [],
+    orgNodeIds.length
+      ? OrgNode.findAll({ where: { id: [...new Set(orgNodeIds)] }, attributes: ['id', 'name'] })
+      : [],
   ]);
 
   const indexBy = (rows, key) => Object.fromEntries(rows.map((r) => [r[key], r]));
@@ -272,22 +278,27 @@ async function buildRolesBlockForWelcome(rolesToAssign) {
   const officeIdx = indexBy(offices, 'id');
   const verticalIdx = indexBy(verticals, 'id');
   const departmentIdx = indexBy(departments, 'id');
+  const orgNodeIdx = indexBy(orgNodes, 'id');
 
   const labelForScope = (scopeType, scopeId) => {
+    const fromNode = orgNodeIdx[scopeId]?.name;
+    if (['GROUP', 'COMPANY', 'ADMIN_UNIT'].includes(scopeType)) {
+      return fromNode || SCOPE_LABEL_FALLBACK;
+    }
     switch (scopeType) {
-      case 'ORGANISATION': return orgIdx[scopeId]?.name || SCOPE_LABEL_FALLBACK;
-      case 'OFFICE_LOCATION': return officeIdx[scopeId]?.name || SCOPE_LABEL_FALLBACK;
+      case 'ORGANISATION': return orgIdx[scopeId]?.name || fromNode || SCOPE_LABEL_FALLBACK;
+      case 'OFFICE_LOCATION': return officeIdx[scopeId]?.name || fromNode || SCOPE_LABEL_FALLBACK;
       case 'VERTICAL': {
         const v = verticalIdx[scopeId];
-        if (!v) return SCOPE_LABEL_FALLBACK;
+        if (!v) return fromNode || SCOPE_LABEL_FALLBACK;
         return [v.name, v.officeLocation?.name].filter(Boolean).join(' · ');
       }
       case 'DEPARTMENT': {
         const d = departmentIdx[scopeId];
-        if (!d) return SCOPE_LABEL_FALLBACK;
+        if (!d) return fromNode || SCOPE_LABEL_FALLBACK;
         return [d.name, d.vertical?.name, d.vertical?.officeLocation?.name].filter(Boolean).join(' · ');
       }
-      default: return SCOPE_LABEL_FALLBACK;
+      default: return fromNode || SCOPE_LABEL_FALLBACK;
     }
   };
 
@@ -644,8 +655,14 @@ const usersService = {
     const transaction = await sequelize.transaction();
 
     const plainPassword = data.password && data.password.trim() ? data.password.trim() : null;
-    // No password = invitation flow (employee-style)
-    const isInviteFlow = !plainPassword && Array.isArray(data.department_ids) && data.department_ids.length > 0;
+    const hasDepartments = Array.isArray(data.department_ids) && data.department_ids.length > 0;
+    const hasInitialRoles = (Array.isArray(data.initial_roles) && data.initial_roles.length > 0)
+      || Boolean(data.initial_role?.role_id);
+    // No password = invitation when the user has membership/role context to attach.
+    const isInviteFlow = !plainPassword && (hasDepartments || hasInitialRoles);
+    if (!plainPassword && !isInviteFlow) {
+      throw ApiError.badRequest('Password is required unless inviting with a department or role assignment');
+    }
 
     try {
       const existing = await UserAccount.findOne({
@@ -709,7 +726,7 @@ const usersService = {
           user_id: user.user_id, role_id: role.role_id,
           scope_type: role.scope_type || 'ORGANISATION', scope_id: role.scope_id, assigned_by: actorUserId,
         }, { transaction });
-        if (role.scope_type === 'DEPARTMENT' && role.scope_id) {
+        if (role.scope_id) {
           await attachDepartmentScopeMembership({ userId: user.user_id, scopeId: role.scope_id, transaction });
         }
       }
@@ -915,7 +932,7 @@ const usersService = {
       ends_at: data.ends_at || null,
     });
 
-    if (data.scope_type === 'DEPARTMENT' && data.scope_id) {
+    if (data.scope_id) {
       await attachDepartmentScopeMembership({ userId, scopeId: data.scope_id });
     }
 

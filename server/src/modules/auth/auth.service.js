@@ -401,6 +401,7 @@ const authService = {
       OfficeLocation,
       Vertical,
       Department,
+      OrgNode,
     } = require("../../database/models");
 
     const user = await UserAccount.findByPk(userId, {
@@ -426,11 +427,13 @@ const authService = {
     });
 
     const groupedIds = { ORGANISATION: [], OFFICE_LOCATION: [], VERTICAL: [], DEPARTMENT: [] };
+    const orgNodeIds = [];
     assignments.forEach((a) => {
       if (groupedIds[a.scope_type]) groupedIds[a.scope_type].push(a.scope_id);
+      if (a.scope_id) orgNodeIds.push(a.scope_id);
     });
 
-    const [orgs, offices, verticals, departments] = await Promise.all([
+    const [orgs, offices, verticals, departments, orgNodes] = await Promise.all([
       groupedIds.ORGANISATION.length
         ? Organisation.findAll({ where: { id: groupedIds.ORGANISATION }, attributes: ['id', 'name'] })
         : [],
@@ -464,6 +467,9 @@ const authService = {
             }],
           })
         : [],
+      orgNodeIds.length
+        ? OrgNode.findAll({ where: { id: [...new Set(orgNodeIds)] }, attributes: ['id', 'name', 'node_type'] })
+        : [],
     ]);
 
     const indexBy = (rows) => Object.fromEntries(rows.map((r) => [r.id, r]));
@@ -471,29 +477,40 @@ const authService = {
     const officeIdx = indexBy(offices);
     const verticalIdx = indexBy(verticals);
     const departmentIdx = indexBy(departments);
+    const orgNodeIdx = indexBy(orgNodes);
+
+    const labelFromOrgNode = (scopeId) => {
+      const node = orgNodeIdx[scopeId];
+      return node ? node.name : null;
+    };
 
     const buildLabel = (assignment) => {
+      const fromNode = labelFromOrgNode(assignment.scope_id);
+      // Org-tree scopes (GROUP/COMPANY/ADMIN_UNIT and modern node ids) resolve via OrgNode.
+      if (['GROUP', 'COMPANY', 'ADMIN_UNIT'].includes(assignment.scope_type)) {
+        return fromNode;
+      }
       switch (assignment.scope_type) {
         case 'ORGANISATION': {
           const o = orgIdx[assignment.scope_id];
-          return o ? o.name : null;
+          return o ? o.name : fromNode;
         }
         case 'OFFICE_LOCATION': {
           const o = officeIdx[assignment.scope_id];
-          return o ? o.name : null;
+          return o ? o.name : fromNode;
         }
         case 'VERTICAL': {
           const v = verticalIdx[assignment.scope_id];
-          if (!v) return null;
+          if (!v) return fromNode;
           return [v.name, v.officeLocation?.name].filter(Boolean).join(' · ');
         }
         case 'DEPARTMENT': {
           const d = departmentIdx[assignment.scope_id];
-          if (!d) return null;
+          if (!d) return fromNode;
           return [d.name, d.vertical?.name, d.vertical?.officeLocation?.name].filter(Boolean).join(' · ');
         }
         default:
-          return null;
+          return fromNode;
       }
     };
 

@@ -1,7 +1,10 @@
 const Joi = require('joi');
 
 const idPattern = Joi.number().integer().positive();
-const scopeTypePattern = Joi.string().valid('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT');
+const scopeTypePattern = Joi.string().valid(
+  'ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT',
+  'GROUP', 'COMPANY', 'ADMIN_UNIT',
+);
 
 const scopeTarget = Joi.object({
   scope_type: scopeTypePattern.required(),

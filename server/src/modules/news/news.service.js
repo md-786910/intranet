@@ -209,6 +209,8 @@ const newsService = {
       });
 
       await enrichWithEngagement(rows, userId);
+      await require('../../services/audience-summary.service')
+        .attachAudienceSummaries(rows, 'NEWS', 'news_item_id');
 
       return {
         articles: rows,

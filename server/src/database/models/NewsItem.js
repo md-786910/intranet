@@ -91,7 +91,10 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     owning_scope_type: {
-      type: DataTypes.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
+      type: DataTypes.ENUM(
+        'ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT',
+        'GROUP', 'COMPANY', 'ADMIN_UNIT',
+      ),
       allowNull: false,
     },
     owning_scope_id: {

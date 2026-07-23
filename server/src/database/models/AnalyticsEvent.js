@@ -22,7 +22,10 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     scope_type: {
-      type: DataTypes.ENUM('ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'),
+      type: DataTypes.ENUM(
+        'ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT',
+        'GROUP', 'COMPANY', 'ADMIN_UNIT',
+      ),
       allowNull: true,
     },
     scope_id: {

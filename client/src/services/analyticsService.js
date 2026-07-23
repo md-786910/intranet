@@ -5,4 +5,5 @@ export const analyticsService = {
   getContentAnalytics: (params) => api.get('/analytics/content', { params }),
   getUserAnalytics: (params) => api.get('/analytics/users', { params }),
   getPushAnalytics: (params) => api.get('/analytics/push', { params }),
+  getContentWorkspace: (params) => api.get('/analytics/content-workspace', { params }),
 };

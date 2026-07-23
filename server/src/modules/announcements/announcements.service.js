@@ -133,6 +133,9 @@ const announcementsService = {
         statusCounts.ALL += c;
       });
 
+      await require('../../services/audience-summary.service')
+        .attachAudienceSummaries(rows, 'ANNOUNCEMENT', 'announcement_item_id');
+
       return {
         announcements: rows,
         pagination: buildPagination(page, limit, count),

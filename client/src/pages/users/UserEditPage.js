@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
@@ -96,7 +96,16 @@ function RoleCard({ assignment, allRoles, modules, scopeLabel, onRemove, removin
 export default function UserEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { addToast } = useToast();
+
+  const detailBackTo = useMemo(() => {
+    const from = searchParams.get('from');
+    if (from && from.startsWith('/') && !from.startsWith('//') && !from.includes('://')) {
+      return `/users/${id}?from=${encodeURIComponent(from)}`;
+    }
+    return `/users/${id}`;
+  }, [id, searchParams]);
 
   const [tab, setTab] = useState('profile');
   const [loading, setLoading] = useState(true);
@@ -453,7 +462,7 @@ export default function UserEditPage() {
 
   return (
     <div>
-      <PageHeader title={`Edit: ${user.first_name} ${user.last_name}`} subtitle={user.email} backTo={`/users/${id}`} />
+      <PageHeader title={`Edit: ${user.first_name} ${user.last_name}`} subtitle={user.email} backTo={detailBackTo} />
 
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="border-b border-gray-200 px-6">
@@ -634,7 +643,7 @@ export default function UserEditPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                <Button variant="secondary" onClick={() => navigate(`/users/${id}`)}>Cancel</Button>
+                <Button variant="secondary" onClick={() => navigate(detailBackTo)}>Cancel</Button>
                 <Button onClick={handleSaveProfile} loading={saving}>Save Changes</Button>
               </div>
             </div>

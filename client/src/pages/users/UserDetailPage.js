@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Select from '../../components/common/Select';
@@ -197,6 +197,7 @@ function OrgNode({ person, isSelf, onClick }) {
 export default function UserDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { addToast } = useToast();
   const { currentOrganisationId } = useCurrentOrganisation();
   const { tree: orgTree } = useOrgTree();
@@ -210,6 +211,16 @@ export default function UserDetailPage() {
   const [permDeleteOpen, setPermDeleteOpen] = useState(false);
   const [permDeleting, setPermDeleting] = useState(false);
   const [resending, setResending] = useState(false);
+
+  // Prefer ?from= when opened from another screen (e.g. Organisation tree).
+  // Only allow same-app relative paths.
+  const backTo = useMemo(() => {
+    const from = searchParams.get('from');
+    if (from && from.startsWith('/') && !from.startsWith('//') && !from.includes('://')) {
+      return from;
+    }
+    return '/users';
+  }, [searchParams]);
 
   // Roles & modules
   const [allRoles, setAllRoles] = useState([]);
@@ -422,11 +433,16 @@ export default function UserDetailPage() {
       <PageHeader
         title={`${user.first_name} ${user.last_name}`}
         subtitle={user.email}
-        backTo="/users"
+        backTo={backTo}
         actions={
           <div className="flex gap-2 items-center">
             {user.status === 'ACTIVE' && (
-              <Button variant="secondary" size="sm" onClick={() => navigate(`/users/${id}/edit`)}>Edit</Button>
+              <Button variant="secondary" size="sm" onClick={() => {
+                const qs = searchParams.get('from')
+                  ? `?from=${encodeURIComponent(searchParams.get('from'))}`
+                  : '';
+                navigate(`/users/${id}/edit${qs}`);
+              }}>Edit</Button>
             )}
             {user.status === 'ACTIVE' && (
               <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>Deactivate</Button>

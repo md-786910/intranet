@@ -163,6 +163,187 @@ const orgService = {
     return { message: 'Member removed' };
   },
 
+  /**
+   * Members for a node, nested under the org subtree so the sidebar can show
+   * people in their correct structural hierarchy with basic profile info.
+   */
+  async listNodeMembers(nodeId) {
+    const { Op } = require('sequelize');
+    const {
+      OrgNode, NodeMembership, UserAccount, PersonProfile, UserRoleAssignment, Role,
+    } = require('../../database/models');
+
+    const node = await OrgNode.findByPk(nodeId);
+    if (!node) throw ApiError.notFound('Org node not found');
+
+    const subtreeNodes = await OrgNode.findAll({
+      where: { path: { [Op.like]: `${node.path}%` } },
+      attributes: ['id', 'parent_id', 'name', 'node_type', 'code', 'path', 'sort_order'],
+      order: [['sort_order', 'ASC'], ['id', 'ASC']],
+    });
+    const nodeIds = subtreeNodes.map((n) => n.id);
+    if (nodeIds.length === 0) {
+      return {
+        node: { id: node.id, name: node.name, node_type: node.node_type, code: node.code },
+        total: 0,
+        members: [],
+        children: [],
+      };
+    }
+
+    const memberships = await NodeMembership.findAll({
+      where: { node_id: { [Op.in]: nodeIds } },
+      include: [{
+        model: UserAccount,
+        as: 'user',
+        attributes: ['user_id', 'first_name', 'last_name', 'email', 'avatar_url', 'status', 'deleted_at'],
+        where: { deleted_at: null },
+        required: true,
+        include: [
+          {
+            model: PersonProfile,
+            as: 'profile',
+            attributes: ['job_title', 'employee_id', 'reports_to_user_id'],
+            required: false,
+            include: [{
+              model: UserAccount,
+              as: 'manager',
+              attributes: ['user_id', 'first_name', 'last_name'],
+              required: false,
+            }],
+          },
+          {
+            model: UserRoleAssignment,
+            as: 'roleAssignments',
+            attributes: ['assignment_id', 'role_id'],
+            required: false,
+            include: [{
+              model: Role,
+              as: 'role',
+              attributes: ['role_id', 'code', 'name'],
+              required: false,
+            }],
+          },
+        ],
+      }],
+      order: [['is_primary', 'DESC'], ['joined_at', 'ASC'], ['membership_id', 'ASC']],
+    });
+
+    const ROLE_PRIORITY = {
+      OWNER: 0,
+      OFFICE_MANAGER: 1,
+      CONTENT_EDITOR: 2,
+      EMPLOYEE: 9,
+    };
+
+    const pickPrimaryRole = (roles) => {
+      if (!roles.length) return null;
+      return [...roles].sort((a, b) => {
+        const pa = ROLE_PRIORITY[a.code] ?? 5;
+        const pb = ROLE_PRIORITY[b.code] ?? 5;
+        if (pa !== pb) return pa - pb;
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      })[0];
+    };
+
+    const mapMember = (m) => {
+      const u = m.user;
+      const profile = u?.profile;
+      const manager = profile?.manager;
+      const roles = (u.roleAssignments || [])
+        .map((a) => a.role)
+        .filter(Boolean);
+      // De-dupe by code
+      const uniqueRoles = [];
+      const seen = new Set();
+      roles.forEach((r) => {
+        if (!r.code || seen.has(r.code)) return;
+        seen.add(r.code);
+        uniqueRoles.push(r);
+      });
+      const primaryRole = pickPrimaryRole(uniqueRoles);
+      return {
+        membership_id: m.membership_id,
+        user_id: u.user_id,
+        is_primary: !!m.is_primary,
+        first_name: u.first_name,
+        last_name: u.last_name,
+        email: u.email,
+        avatar_url: u.avatar_url || null,
+        status: u.status,
+        job_title: profile?.job_title || null,
+        employee_id: profile?.employee_id || null,
+        role_code: primaryRole?.code || null,
+        role_label: primaryRole?.name || 'Other',
+        roles: uniqueRoles.map((r) => ({ code: r.code, name: r.name })),
+        manager: manager
+          ? { user_id: manager.user_id, first_name: manager.first_name, last_name: manager.last_name }
+          : null,
+      };
+    };
+
+    const membersByNode = new Map();
+    memberships.forEach((m) => {
+      const id = Number(m.node_id);
+      if (!membersByNode.has(id)) membersByNode.set(id, []);
+      membersByNode.get(id).push(mapMember(m));
+    });
+
+    const byId = new Map();
+    subtreeNodes.forEach((n) => {
+      byId.set(Number(n.id), {
+        id: n.id,
+        parent_id: n.parent_id,
+        name: n.name,
+        node_type: n.node_type,
+        code: n.code,
+        members: membersByNode.get(Number(n.id)) || [],
+        children: [],
+      });
+    });
+
+    let root = byId.get(Number(nodeId));
+    byId.forEach((n) => {
+      if (Number(n.id) === Number(nodeId)) return;
+      const parent = byId.get(Number(n.parent_id));
+      if (parent) parent.children.push(n);
+    });
+
+    // Drop empty branches so the sidebar stays concise.
+    const prune = (n) => {
+      const children = n.children.map(prune).filter(Boolean);
+      const next = {
+        id: n.id,
+        name: n.name,
+        node_type: n.node_type,
+        code: n.code,
+        members: n.members,
+        children,
+      };
+      if (next.members.length === 0 && next.children.length === 0 && Number(n.id) !== Number(nodeId)) {
+        return null;
+      }
+      return next;
+    };
+    root = prune(root) || {
+      id: node.id,
+      name: node.name,
+      node_type: node.node_type,
+      code: node.code,
+      members: [],
+      children: [],
+    };
+
+    const countAll = (n) => n.members.length + n.children.reduce((s, c) => s + countAll(c), 0);
+
+    return {
+      node: { id: node.id, name: node.name, node_type: node.node_type, code: node.code },
+      total: countAll(root),
+      members: root.members,
+      children: root.children,
+    };
+  },
+
   // ── Office Locations ──
 
   async getOfficeLocation(id) {
@@ -589,18 +770,127 @@ const orgService = {
   },
 
   /**
-   * Returns the user's full org hierarchy chain:
-   *   Organisation -> OfficeLocation -> Vertical -> Department(s)
+   * Returns the user's org hierarchy for Settings.
+   * Prefer flexible OrgNode path via node_membership; fall back to legacy
+   * department_membership → Vertical → Office → Organisation.
    *
-   * The chain follows the user's primary department membership. All
-   * department memberships are returned (with isPrimary flag) so that
-   * users with multiple memberships under the same vertical see them all.
+   * Response always includes `path` (root → membership node) for the UI.
+   * Legacy-shaped fields are derived for older consumers.
    */
   async getMyHierarchy(userId) {
     const {
-      DepartmentMembership, Department, Vertical, OfficeLocation, Organisation,
+      NodeMembership, OrgNode, Organisation,
+      DepartmentMembership, Department, Vertical, OfficeLocation,
     } = require('../../database/models');
 
+    const empty = () => ({
+      path: [],
+      memberships: [],
+      organisation: null,
+      officeLocation: null,
+      vertical: null,
+      departments: [],
+    });
+
+    const pathNode = (n) => ({
+      id: n.id,
+      name: n.name,
+      node_type: n.node_type,
+    });
+
+    const deriveLegacyFromPath = (path, membershipsPayload) => {
+      const company = path.find((n) => n.node_type === 'COMPANY');
+      const group = path.find((n) => n.node_type === 'GROUP');
+      const office = path.find((n) => n.node_type === 'OFFICE_LOCATION');
+      const vertical = path.find((n) => n.node_type === 'VERTICAL');
+      const orgNode = company || group || null;
+      return {
+        organisation: orgNode ? { id: orgNode.id, name: orgNode.name } : null,
+        officeLocation: office ? { id: office.id, name: office.name } : null,
+        vertical: vertical ? { id: vertical.id, name: vertical.name } : null,
+        departments: membershipsPayload.filter((m) => (
+          m.node_type === 'DEPARTMENT' || m.node_type === 'ADMIN_UNIT'
+        )).map((m) => ({
+          id: m.id,
+          name: m.name,
+          isPrimary: !!m.isPrimary,
+          verticalId: vertical?.id || null,
+          verticalName: vertical?.name || null,
+        })),
+      };
+    };
+
+    const buildAncestorPath = async (leafNode) => {
+      if (!leafNode) return [];
+
+      // path format: "1/5/12/" → include every ancestor id plus leaf
+      const idsFromPath = String(leafNode.path || '')
+        .split('/')
+        .map((s) => Number(s))
+        .filter((n) => Number.isInteger(n) && n > 0);
+
+      const ids = idsFromPath.length > 0
+        ? idsFromPath
+        : [Number(leafNode.id)];
+
+      const nodes = await OrgNode.findAll({
+        where: { id: ids },
+        attributes: ['id', 'name', 'node_type', 'parent_id', 'organisation_id', 'path'],
+      });
+      const byId = new Map(nodes.map((n) => [Number(n.id), n]));
+
+      // Prefer path order; fall back to parent walk if path incomplete
+      const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
+      if (ordered.length > 0) return ordered.map(pathNode);
+
+      const chain = [];
+      let current = leafNode;
+      const seen = new Set();
+      while (current && !seen.has(Number(current.id))) {
+        seen.add(Number(current.id));
+        chain.push(pathNode(current));
+        if (!current.parent_id) break;
+        // eslint-disable-next-line no-await-in-loop
+        current = byId.get(Number(current.parent_id))
+          || await OrgNode.findByPk(current.parent_id, {
+            attributes: ['id', 'name', 'node_type', 'parent_id', 'organisation_id', 'path'],
+          });
+      }
+      return chain.reverse();
+    };
+
+    // ── Primary: node_membership ──
+    const nodeMemberships = await NodeMembership.findAll({
+      where: { user_id: userId },
+      order: [['is_primary', 'DESC'], ['joined_at', 'ASC'], ['membership_id', 'ASC']],
+      include: [{
+        model: OrgNode,
+        as: 'node',
+        required: true,
+        attributes: ['id', 'name', 'node_type', 'parent_id', 'organisation_id', 'path'],
+      }],
+    });
+
+    if (nodeMemberships.length > 0) {
+      const membershipsPayload = nodeMemberships.map((m) => ({
+        id: m.node.id,
+        name: m.node.name,
+        node_type: m.node.node_type,
+        isPrimary: !!m.is_primary,
+      }));
+
+      const primary = nodeMemberships[0];
+      const path = await buildAncestorPath(primary.node);
+      const legacy = deriveLegacyFromPath(path, membershipsPayload);
+
+      return {
+        path,
+        memberships: membershipsPayload,
+        ...legacy,
+      };
+    }
+
+    // ── Fallback: legacy department_membership ──
     const memberships = await DepartmentMembership.findAll({
       where: { user_id: userId },
       order: [['is_primary', 'DESC'], ['joined_at', 'ASC']],
@@ -630,7 +920,7 @@ const orgService = {
     });
 
     if (!memberships || memberships.length === 0) {
-      return { organisation: null, officeLocation: null, vertical: null, departments: [] };
+      return empty();
     }
 
     const primary = memberships[0];
@@ -646,7 +936,25 @@ const orgService = {
       verticalName: m.department.vertical?.name || null,
     }));
 
+    const path = [
+      organisation && { id: organisation.id, name: organisation.name, node_type: 'COMPANY' },
+      officeLocation && { id: officeLocation.id, name: officeLocation.name, node_type: 'OFFICE_LOCATION' },
+      vertical && { id: vertical.id, name: vertical.name, node_type: 'VERTICAL' },
+      primary.department && {
+        id: primary.department.id,
+        name: primary.department.name,
+        node_type: 'DEPARTMENT',
+      },
+    ].filter(Boolean);
+
     return {
+      path,
+      memberships: departments.map((d) => ({
+        id: d.id,
+        name: d.name,
+        node_type: 'DEPARTMENT',
+        isPrimary: d.isPrimary,
+      })),
       organisation: organisation ? { id: organisation.id, name: organisation.name } : null,
       officeLocation: officeLocation ? { id: officeLocation.id, name: officeLocation.name } : null,
       vertical: { id: vertical.id, name: vertical.name },

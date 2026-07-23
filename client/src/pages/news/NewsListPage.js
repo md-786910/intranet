@@ -6,7 +6,8 @@ import Table from '../../components/common/Table';
 import Pagination from '../../components/common/Pagination';
 import SearchBar from '../../components/common/SearchBar';
 import StatusBadge from '../../components/common/StatusBadge';
-import PriorityBadge from '../../components/common/PriorityBadge';
+import { priorityLaneClass } from '../../components/common/PriorityBadge';
+import AudienceSummary from '../../components/common/AudienceSummary';
 import Select from '../../components/common/Select';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { newsService } from '../../services/newsService';
@@ -134,14 +135,14 @@ export default function NewsListPage() {
   const activeColumns = [
     { key: 'title', label: 'Title', render: (row) => (
       <div>
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-gray-900">{row.title}</span>
-          <PriorityBadge priority={row.priority || 'NORMAL'} hideOnNormal />
-        </div>
+        <div className="font-medium text-gray-900">{row.title}</div>
         {row.summary && <div className="text-xs text-gray-500 mt-0.5">{truncate(row.summary, 80)}</div>}
       </div>
     )},
     { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    { key: 'audience', label: 'Publishes to', render: (row) => (
+      <AudienceSummary audience_summary={row.audience_summary} />
+    )},
     { key: 'author', label: 'Author', render: (row) => {
       const action = latestAction(row);
       return (
@@ -171,10 +172,7 @@ export default function NewsListPage() {
   const trashColumns = [
     { key: 'title', label: 'Title', render: (row) => (
       <div>
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-gray-900">{row.title}</span>
-          <PriorityBadge priority={row.priority || 'NORMAL'} hideOnNormal />
-        </div>
+        <div className="font-medium text-gray-900">{row.title}</div>
         {row.summary && <div className="text-xs text-gray-500 mt-0.5">{truncate(row.summary, 80)}</div>}
       </div>
     )},
@@ -291,6 +289,7 @@ export default function NewsListPage() {
         emptyMessage={isTrash
           ? (search ? 'No archived articles match the filter' : 'Archive is empty')
           : 'No articles found'}
+        getRowClassName={(row) => priorityLaneClass(row.priority)}
         onRowClick={isTrash ? undefined : (row) => navigate(`/news/${row.news_item_id}`)}
       />
       <Pagination

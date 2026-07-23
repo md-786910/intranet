@@ -16,6 +16,7 @@ import InvitationAcceptPage from './pages/auth/InvitationAcceptPage';
 
 // Pages
 import DashboardPage from './pages/dashboard/DashboardPage';
+import ContentDashboardPage from './pages/dashboard/ContentDashboardPage';
 import OrganisationPage from './pages/organisation/OrganisationPage';
 import UsersListPage from './pages/users/UsersListPage';
 import UserCreatePage from './pages/users/UserCreatePage';
@@ -76,9 +77,11 @@ function HomeRedirect() {
   if (hasPermission('ADMIN', 'MANAGE_USERS')) return <Navigate to="/users" replace />;
   if (hasPermission('ADMIN', 'MANAGE_ROLES')) return <Navigate to="/roles" replace />;
   if (hasPermission('ADMIN', 'MANAGE_OFFICE_LOCATIONS')) return <Navigate to="/organisation" replace />;
-  // Content managers need EDIT or CREATE — VIEW alone is an employee-level permission
-  if (hasPermission('NEWS', 'EDIT') || hasPermission('NEWS', 'CREATE')) return <Navigate to="/news" replace />;
-  if (hasPermission('DOCUMENTS', 'EDIT') || hasPermission('DOCUMENTS', 'CREATE')) return <Navigate to="/documents" replace />;
+  // Content managers — dedicated content dashboard
+  if (hasPermission('NEWS', 'EDIT') || hasPermission('NEWS', 'CREATE')
+    || hasPermission('DOCUMENTS', 'EDIT') || hasPermission('DOCUMENTS', 'CREATE')) {
+    return <Navigate to="/content-dashboard" replace />;
+  }
   // No admin permissions — send to employee portal
   window.location.replace(EMPLOYEE_APP_URL);
   return null;
@@ -106,6 +109,7 @@ function App() {
                 }
               >
                 <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/content-dashboard" element={<ContentDashboardPage />} />
                 <Route path="/organisation" element={<OrganisationPage />} />
 
                 {/* Active Directory */}

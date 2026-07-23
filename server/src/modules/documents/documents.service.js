@@ -214,6 +214,9 @@ const documentsService = {
         statusCounts.ALL += c;
       });
 
+      await require('../../services/audience-summary.service')
+        .attachAudienceSummaries(rows, 'DOCUMENT', 'document_item_id');
+
       return {
         documents: rows,
         pagination: buildPagination(page, limit, count),

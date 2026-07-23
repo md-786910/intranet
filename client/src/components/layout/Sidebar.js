@@ -3,6 +3,8 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { PermissionContext } from '../../contexts/PermissionContext';
 import { useAuth } from '../../hooks/useAuth';
 
+const SCOPE_RANK = { DEPARTMENT: 4, VERTICAL: 3, OFFICE_LOCATION: 2, COMPANY: 2, ORGANISATION: 1, GROUP: 1 };
+
 const ICONS = {
   dashboard: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
   organisation: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
@@ -17,10 +19,22 @@ const ICONS = {
   settings: 'M21.75 6.75a4.5 4.5 0 01-4.884 4.484c-1.076-.091-2.264.071-2.95.904l-7.152 8.684a2.548 2.548 0 11-3.586-3.586l8.684-7.152c.833-.686.995-1.874.904-2.95a4.5 4.5 0 016.336-4.486l-3.276 3.276a3.004 3.004 0 002.25 2.25l3.276-3.276c.256.565.398 1.192.398 1.852z',
   analytics: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
   activity: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
+  logout: 'M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9',
 };
 
 const menuItems = [
   { type: 'link', label: 'Dashboard', path: '/dashboard', icon: ICONS.dashboard, module: 'ADMIN', action: 'VIEW_ANALYTICS' },
+  {
+    type: 'link',
+    label: 'Dashboard',
+    path: '/content-dashboard',
+    icon: ICONS.dashboard,
+    hideWhen: { module: 'ADMIN', action: 'VIEW_ANALYTICS' },
+    anyOf: [
+      { module: 'NEWS', action: 'VIEW' },
+      { module: 'DOCUMENTS', action: 'VIEW' },
+    ],
+  },
   {
     type: 'group',
     label: 'Organisation',
@@ -47,7 +61,7 @@ const menuItems = [
     type: 'group',
     label: 'Content',
     icon: ICONS.news,
-    defaultOpen: false,
+    defaultOpen: true,
     children: [
       { label: 'News', path: '/news', icon: ICONS.news, module: 'NEWS', action: 'VIEW' },
       { label: 'Announcements', path: '/announcements', icon: ICONS.news, module: 'NEWS', action: 'VIEW' },
@@ -83,7 +97,6 @@ const menuItems = [
       },
     ],
   },
-  // Employee Management section removed — employees are now managed from Organisation → Users
   {
     type: 'group',
     label: 'Settings',
@@ -102,25 +115,26 @@ function MenuLink({ item, indented = false }) {
     <NavLink
       to={item.path}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-          indented ? 'pl-9' : ''
+        `relative flex items-center gap-3 rounded-lg text-sm font-medium transition-colors ${
+          indented ? 'pl-9 pr-3 py-2' : 'px-3 py-2'
         } ${
           isActive
-            ? 'bg-primary-50 text-primary-700'
-            : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+            ? 'bg-primary-50 text-primary-700 before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[3px] before:rounded-full before:bg-primary-600'
+            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
         }`
       }
     >
-      <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <svg className="w-5 h-5 flex-shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
       </svg>
-      {item.label}
+      <span className="truncate">{item.label}</span>
     </NavLink>
   );
 }
 
 function isItemVisible(item, hasPermission, isOwner) {
   if (item.ownerOnly) return Boolean(isOwner);
+  if (item.hideWhen && hasPermission(item.hideWhen.module, item.hideWhen.action)) return false;
   if (Array.isArray(item.anyOf) && item.anyOf.length > 0) {
     return item.anyOf.some((p) => hasPermission(p.module, p.action));
   }
@@ -144,8 +158,6 @@ function MenuGroup({ group }) {
     [group.children, hasPermission, isOwner],
   );
 
-  // Expand at mount if the current route is inside this group, so a page refresh
-  // on /news keeps Content open. Manual toggles after that are preserved.
   const [expanded, setExpanded] = useState(() => {
     if (group.defaultOpen) return true;
     return group.children.some((child) => location.pathname.startsWith(child.path));
@@ -154,13 +166,13 @@ function MenuGroup({ group }) {
   if (visibleChildren.length === 0) return null;
 
   return (
-    <div className="mt-3 first:mt-0">
+    <div>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-800 hover:bg-gray-100 transition-colors"
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
       >
-        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <svg className="w-5 h-5 flex-shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d={group.icon} />
         </svg>
         <span className="flex-1 text-left whitespace-nowrap truncate">{group.label}</span>
@@ -175,7 +187,7 @@ function MenuGroup({ group }) {
         </svg>
       </button>
       {expanded && (
-        <div className="mt-1 space-y-1">
+        <div className="mt-0.5 space-y-0.5">
           {visibleChildren.map((child) => (
             <MenuLink key={child.path} item={child} indented />
           ))}
@@ -186,19 +198,53 @@ function MenuGroup({ group }) {
 }
 
 export default function Sidebar() {
+  const { user, logout, isOwner, roleAssignments } = useAuth();
+
+  const roleLabel = useMemo(() => {
+    if (isOwner) return 'Owner';
+    const orgWide = (roleAssignments || []).find(
+      (a) => a.scope_type === 'GROUP' || a.scope_type === 'ORGANISATION',
+    );
+    if (orgWide?.role?.name) return orgWide.role.name;
+    const ranked = [...(roleAssignments || [])].sort(
+      (a, b) => (SCOPE_RANK[b.scope_type] || 0) - (SCOPE_RANK[a.scope_type] || 0),
+    );
+    return ranked[0]?.role?.name || 'Admin';
+  }, [isOwner, roleAssignments]);
+
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 h-full overflow-y-auto px-4 py-6">
-      <div className="mb-8 px-3">
-        <h1 className="text-xl font-bold text-primary-800">BrightNow</h1>
-        <p className="text-xs text-gray-500 mt-1">Admin Panel</p>
+    <aside className="w-64 bg-white border-r border-gray-200 h-full flex flex-col">
+      <div className="px-4 pt-5 pb-4 flex-shrink-0">
+        <h1 className="text-xl font-semibold tracking-tight text-primary-800">BrightNow</h1>
+        <p className="text-xs font-bold text-primary-700 mt-1">{roleLabel}</p>
       </div>
-      <nav className="space-y-1">
+
+      <nav className="flex-1 overflow-y-auto px-3 pb-3 space-y-0.5">
         {menuItems.map((item, index) =>
           item.type === 'group'
             ? <MenuGroup key={`group-${index}`} group={item} />
             : <TopLevelLink key={item.path} item={item} />,
         )}
       </nav>
+
+      <div className="flex-shrink-0 border-t border-gray-100 p-4 space-y-2.5">
+        <div className="px-1 min-w-0">
+          <p className="text-sm font-medium text-gray-800 truncate">
+            {[user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'User'}
+          </p>
+          <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+        </div>
+        <button
+          type="button"
+          onClick={logout}
+          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d={ICONS.logout} />
+          </svg>
+          Logout
+        </button>
+      </div>
     </aside>
   );
 }

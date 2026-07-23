@@ -19,7 +19,15 @@ const analyticsQuerySchema = {
   }),
 };
 
+const contentWorkspaceSchema = {
+  query: Joi.object({
+    period: Joi.string().valid('7d', '30d', 'week').default('7d'),
+    type: Joi.string().valid('all', 'news', 'documents', 'announcements').default('all'),
+  }),
+};
+
 module.exports = {
   dashboardSchema,
   analyticsQuerySchema,
+  contentWorkspaceSchema,
 };

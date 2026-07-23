@@ -43,7 +43,6 @@ export default function OrgTreeView({
   tree = [],
   selectedId,
   onSelect,
-  onAdd,
   onEdit,
   loading,
   onRetry,
@@ -153,7 +152,6 @@ export default function OrgTreeView({
               node={node}
               selectedId={selectedId}
               onSelect={onSelect}
-              onAdd={onAdd}
               onEdit={onEdit}
               expandAll={expandAll}
               isLast={idx === filteredTree.length - 1}

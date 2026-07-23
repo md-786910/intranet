@@ -11,41 +11,47 @@ const STYLES = {
   LOW: {
     pill: 'bg-gray-100 text-gray-700',
     dot: 'bg-gray-400',
-    label: 'Low priority',
+    lane: 'border-l-[3px] border-l-gray-400',
+    label: 'Low',
   },
   NORMAL: {
     pill: 'bg-blue-50 text-blue-700',
     dot: 'bg-blue-500',
-    label: 'Normal priority',
+    lane: '',
+    label: 'Normal',
   },
   HIGH: {
     pill: 'bg-orange-500 text-white',
     dot: 'bg-orange-500',
-    label: 'High priority',
+    lane: 'border-l-[3px] border-l-orange-500',
+    label: 'High',
   },
   URGENT: {
     pill: 'bg-red-600 text-white',
     dot: 'bg-red-600',
+    lane: 'border-l-[3px] border-l-red-600',
     label: 'Urgent',
   },
 };
+
+/** Left-edge row stripe class for list tables (empty for NORMAL). */
+export function priorityLaneClass(priority, { hideOnNormal = true } = {}) {
+  const key = priority || 'NORMAL';
+  if (hideOnNormal && key === 'NORMAL') return '';
+  return (STYLES[key] || STYLES.NORMAL).lane;
+}
 
 export default function PriorityBadge({ priority = 'NORMAL', size = 'md', hideOnNormal = false }) {
   const conf = STYLES[priority] || STYLES.NORMAL;
   if (hideOnNormal && priority === 'NORMAL') return null;
 
-  if (size === 'sm') {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs">
-        <span className={`inline-block w-2 h-2 rounded-full ${conf.dot}`} aria-hidden />
-        <span className="text-gray-600">{conf.label}</span>
-      </span>
-    );
-  }
+  const padding =
+    size === 'lg' ? 'px-4 py-1.5 text-sm font-bold' :
+    size === 'sm' ? 'px-1.5 py-0.5 text-[10px] font-semibold' :
+    'px-2 py-0.5 text-[11px] font-semibold';
 
-  const padding = size === 'lg' ? 'px-4 py-1.5 text-sm' : 'px-3 py-1 text-xs';
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full font-bold uppercase tracking-wide ${padding} ${conf.pill}`}>
+    <span className={`inline-flex items-center rounded-full uppercase tracking-wide ${padding} ${conf.pill}`}>
       {conf.label}
     </span>
   );

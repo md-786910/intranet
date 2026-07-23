@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function Table({
   columns = [], data = [], loading, emptyMessage = 'No data found',
-  sortBy, sortOrder, onSort, onRowClick,
+  sortBy, sortOrder, onSort, onRowClick, getRowClassName,
 }) {
   if (loading) {
     return (
@@ -60,19 +60,25 @@ export default function Table({
                 </td>
               </tr>
             ) : (
-              data.map((row, idx) => (
-                <tr
-                  key={row.id || idx}
-                  className={`hover:bg-gray-50 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
-                >
-                  {columns.map((col) => (
-                    <td key={col.key} className="px-4 py-3 text-gray-700">
-                      {col.render ? col.render(row) : row[col.key]}
-                    </td>
-                  ))}
-                </tr>
-              ))
+              data.map((row, idx) => {
+                const accent = getRowClassName ? getRowClassName(row) : '';
+                return (
+                  <tr
+                    key={row.id || idx}
+                    className={`hover:bg-gray-50 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+                    onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  >
+                    {columns.map((col, colIdx) => (
+                      <td
+                        key={col.key}
+                        className={`px-4 py-3 text-gray-700 ${colIdx === 0 && accent ? accent : ''}`}
+                      >
+                        {col.render ? col.render(row) : row[col.key]}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

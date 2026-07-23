@@ -16,6 +16,11 @@ import { jobTitleService } from '../../services/jobTitleService';
 import { useToast } from '../../hooks/useToast';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
+import { useAuth } from '../../hooks/useAuth';
+
+const CURATED_ROLE_CODES = ['EMPLOYEE', 'CONTENT_EDITOR', 'OFFICE_MANAGER'];
+const PUBLISH_ROLE_CODES = new Set(['CONTENT_EDITOR', 'OFFICE_MANAGER']);
+const ORG_WIDE_SCOPE_TYPES = new Set(['GROUP', 'ORGANISATION']);
 
 function isSameRoleAssignment(left, right) {
   return left.role_id === right.role_id
@@ -95,6 +100,7 @@ export default function UserCreatePage({
   const navigate = useNavigate();
   const { addToast } = useToast();
   const { currentOrganisationId } = useCurrentOrganisation();
+  const { isOwner } = useAuth();
 
   const [form, setForm] = useState({
     email: '', password: '', first_name: '', last_name: '', phone: '',
@@ -121,6 +127,11 @@ export default function UserCreatePage({
   const [pickerRoleId, setPickerRoleId] = useState('');
   const [pickerScopes, setPickerScopes] = useState(presetScope ? [presetScope] : []);
   const [previewRoleIndex, setPreviewRoleIndex] = useState(null);
+
+  // Embedded org-tree member create
+  const [memberRoleId, setMemberRoleId] = useState('');
+  const [publishAnywhere, setPublishAnywhere] = useState(true);
+  const [narrowScopes, setNarrowScopes] = useState([]);
 
   // Extra permissions
   const [extraPerms, setExtraPerms] = useState([]);
@@ -185,7 +196,34 @@ export default function UserCreatePage({
     }
   }, [departmentScopes, primaryDeptId]);
 
-  const isInviteFlow = !setPasswordManually && departmentScopes.length > 0;
+  const isInviteFlow = !setPasswordManually && (
+    departmentScopes.length > 0
+    || assignedRoles.length > 0
+    || (embedded && Boolean(presetScope) && Boolean(memberRoleId))
+  );
+
+  const curatedRoles = useMemo(() => {
+    const byCode = Object.fromEntries(allRoles.map((r) => [r.code, r]));
+    const list = CURATED_ROLE_CODES.map((code) => byCode[code]).filter(Boolean);
+    if (isOwner && byCode.OWNER) list.push(byCode.OWNER);
+    return list;
+  }, [allRoles, isOwner]);
+
+  const selectedMemberRole = useMemo(
+    () => curatedRoles.find((r) => String(r.role_id) === String(memberRoleId)) || null,
+    [curatedRoles, memberRoleId],
+  );
+
+  const isRootGroupPreset = embedded && presetScope?.scope_type === 'GROUP';
+  const memberRoleCanPublish = selectedMemberRole && PUBLISH_ROLE_CODES.has(selectedMemberRole.code);
+  const showPublishAnywhereToggle = isRootGroupPreset && memberRoleCanPublish;
+
+  // Default to Employee once roles load (embedded create only)
+  useEffect(() => {
+    if (!embedded || !presetScope || memberRoleId || curatedRoles.length === 0) return;
+    const employee = curatedRoles.find((r) => r.code === 'EMPLOYEE');
+    if (employee) setMemberRoleId(String(employee.role_id));
+  }, [embedded, presetScope, memberRoleId, curatedRoles]);
 
   const roleOptions = useMemo(() => {
     return allRoles
@@ -299,20 +337,56 @@ export default function UserCreatePage({
     if (setPasswordManually && !form.password.trim()) {
       newErrors.password = 'Password is required';
     }
-    if (!setPasswordManually && departmentScopes.length === 0) {
+
+    let embeddedRoles = [];
+    if (embedded && presetScope) {
+      if (!memberRoleId || !selectedMemberRole) {
+        newErrors.member_role = 'Select a role for this member';
+      } else if (showPublishAnywhereToggle && !publishAnywhere) {
+        const narrowed = narrowScopes.filter((s) => !ORG_WIDE_SCOPE_TYPES.has(s.scope_type));
+        if (narrowed.length === 0) {
+          newErrors.narrow_scope = 'Pick at least one non-root scope for publish access, or enable publish anywhere';
+        } else {
+          embeddedRoles = narrowed.map((scope) => ({
+            role_id: selectedMemberRole.role_id,
+            role_name: selectedMemberRole.name,
+            is_system: selectedMemberRole.is_system,
+            scope_type: scope.scope_type,
+            scope_id: scope.scope_id,
+            scope_label: scope.scope_label,
+          }));
+        }
+      } else {
+        embeddedRoles = [{
+          role_id: selectedMemberRole.role_id,
+          role_name: selectedMemberRole.name,
+          is_system: selectedMemberRole.is_system,
+          scope_type: presetScope.scope_type,
+          scope_id: presetScope.scope_id,
+          scope_label: presetScope.scope_label,
+        }];
+      }
+    } else if (!setPasswordManually && departmentScopes.length === 0 && assignedRoles.length === 0 && !pickerRoleId) {
       newErrors.scopes = 'Select at least one department to invite by email, or enable "Set password manually"';
     }
+
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
     setSaving(true);
     try {
-      const draftRoles = buildDraftRoleAssignments(allRoles, pickerRoleId, pickerScopes, currentOrganisationId);
-      const finalRoles = [...assignedRoles];
-      draftRoles.forEach((assignment) => {
-        if (!finalRoles.some((existing) => isSameRoleAssignment(existing, assignment))) {
-          finalRoles.push(assignment);
-        }
-      });
+      const draftRoles = embedded && presetScope
+        ? []
+        : buildDraftRoleAssignments(allRoles, pickerRoleId, pickerScopes, currentOrganisationId);
+      const finalRoles = embedded && presetScope
+        ? embeddedRoles
+        : [...assignedRoles];
+      if (!(embedded && presetScope)) {
+        draftRoles.forEach((assignment) => {
+          if (!finalRoles.some((existing) => isSameRoleAssignment(existing, assignment))) {
+            finalRoles.push(assignment);
+          }
+        });
+      }
 
       const draftPermissions = buildDraftPermissions(modules, permModuleId, permActionId, permScopes, currentOrganisationId);
       const finalPermissions = [...extraPerms];
@@ -441,79 +515,168 @@ export default function UserCreatePage({
           {/* ── Roles & Organisation ── */}
           <div className="border-t border-gray-100 pt-5">
             <h3 className="text-sm font-semibold text-gray-800 mb-1">Roles &amp; Organisation</h3>
-            <p className="text-xs text-gray-500 mb-4">
-              Assign the Employee role at department level to create org memberships and control content access.
-            </p>
-            {errors.scopes && (
-              <p className="mb-3 text-xs text-red-600">{errors.scopes}</p>
-            )}
-
-            {assignedRoles.length > 0 && (
-              <div className="space-y-2 mb-4">
-                {assignedRoles.map((a, i) => (
-                  <div key={i}
-                    className={`flex items-center justify-between px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
-                      previewRoleIndex === i ? 'border-primary-200 bg-primary-50/50' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
-                    }`}
-                    onClick={() => setPreviewRoleIndex(previewRoleIndex === i ? null : i)}>
-                    <div className="min-w-0">
-                      <span className="text-sm font-medium text-gray-900">{a.role_name}</span>
-                      {a.is_system && <span className="ml-2 text-xs text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full">System</span>}
-                      <div className="text-xs text-gray-500 mt-0.5 truncate">{formatScopeLabel(a.scope_label, a.scope_type, a.scope_id)}</div>
-                    </div>
-                    <div className="flex items-center gap-2 ml-3 flex-shrink-0">
-                      <span className="text-xs text-gray-400">{previewRoleIndex === i ? 'Hide' : 'Permissions'}</span>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); handleRemoveRole(i); }}
-                        className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+            {embedded && presetScope ? (
+              <>
+                <p className="text-xs text-gray-500 mb-4">
+                  Choose a role for this member. Scope defaults to{' '}
+                  <span className="font-medium text-gray-700">{presetScope.scope_label || presetScope.name}</span>.
+                </p>
+                {errors.member_role && (
+                  <p className="mb-3 text-xs text-red-600">{errors.member_role}</p>
+                )}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {curatedRoles.map((role) => {
+                    const selected = String(role.role_id) === String(memberRoleId);
+                    return (
+                      <button
+                        key={role.role_id}
+                        type="button"
+                        onClick={() => {
+                          setMemberRoleId(String(role.role_id));
+                          if (errors.member_role) setErrors((e) => ({ ...e, member_role: null }));
+                          if (!PUBLISH_ROLE_CODES.has(role.code)) {
+                            setPublishAnywhere(true);
+                            setNarrowScopes([]);
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                          selected
+                            ? 'border-primary-300 bg-primary-50 text-primary-800'
+                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {role.name}
                       </button>
-                    </div>
-                  </div>
-                ))}
-                {previewRoleIndex !== null && modules.length > 0 && (
-                  <div className="border border-gray-200 rounded-lg p-4 bg-gray-50/50">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                      Permissions — {assignedRoles[previewRoleIndex].role_name}
-                    </p>
-                    <PermissionMatrix modules={modules} selectedPermissions={previewPermissions} disabled />
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex items-end gap-3">
-              <Select label="Add Role" name="role" value={pickerRoleId}
-                onChange={(e) => setPickerRoleId(e.target.value)}
-                options={roleOptions} placeholder="Select a role…" className="flex-1" />
-              <Button variant="secondary" size="md" onClick={handleAddRole} disabled={!pickerRoleId}>Add</Button>
-            </div>
-
-            {pickerRoleId && (
-              <div className="mt-3 space-y-3">
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <p className="text-xs text-gray-500 mb-3">Scope this role to one or more org nodes:</p>
-                  <HierarchyScopeSelector value={pickerScopes} onChange={setPickerScopes} />
+                    );
+                  })}
                 </div>
-                {pickerRole && modules.length > 0 && (
-                  <div className="border border-dashed border-gray-300 rounded-lg p-4 bg-gray-50/30">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                      Permissions — {pickerRole.name}
-                    </p>
-                    <PermissionMatrix modules={modules} selectedPermissions={pickerPermissions} disabled />
+
+                {showPublishAnywhereToggle && (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 space-y-3">
+                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={publishAnywhere}
+                        onChange={(e) => {
+                          setPublishAnywhere(e.target.checked);
+                          if (e.target.checked) {
+                            setNarrowScopes([]);
+                            if (errors.narrow_scope) setErrors((err) => ({ ...err, narrow_scope: null }));
+                          }
+                        }}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium text-gray-800">
+                          Can publish anywhere in this organisation
+                        </span>
+                        <span className="block text-xs text-gray-500 mt-0.5">
+                          When on, this role is granted at the Group root (unrestricted audience).
+                          When off, pick a subtree where they can publish.
+                        </span>
+                      </span>
+                    </label>
+                    {!publishAnywhere && (
+                      <div className="pt-1">
+                        {errors.narrow_scope && (
+                          <p className="mb-2 text-xs text-red-600">{errors.narrow_scope}</p>
+                        )}
+                        <p className="text-xs text-gray-500 mb-2">Publish scope (must not be the Group root):</p>
+                        <HierarchyScopeSelector
+                          value={narrowScopes}
+                          onChange={(scopes) => {
+                            setNarrowScopes(scopes);
+                            if (errors.narrow_scope) setErrors((err) => ({ ...err, narrow_scope: null }));
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
 
-            {departmentOptions.length > 1 && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <Select label="Primary Department" name="primary_department" value={primaryDeptId}
-                  onChange={(e) => setPrimaryDeptId(e.target.value)}
-                  options={departmentOptions} placeholder="First selected (default)"
-                  helpText="Which department to use as primary when the user belongs to more than one." />
-              </div>
+                {!showPublishAnywhereToggle && memberRoleCanPublish && !isRootGroupPreset && (
+                  <p className="text-xs text-gray-500">
+                    Publish audience will be limited to this node and its descendants.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-gray-500 mb-4">
+                  Assign the Employee role at department level to create org memberships and control content access.
+                </p>
+                {errors.scopes && (
+                  <p className="mb-3 text-xs text-red-600">{errors.scopes}</p>
+                )}
+
+                {assignedRoles.length > 0 && (
+                  <div className="space-y-2 mb-4">
+                    {assignedRoles.map((a, i) => (
+                      <div key={i}
+                        className={`flex items-center justify-between px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
+                          previewRoleIndex === i ? 'border-primary-200 bg-primary-50/50' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                        }`}
+                        onClick={() => setPreviewRoleIndex(previewRoleIndex === i ? null : i)}>
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium text-gray-900">{a.role_name}</span>
+                          {a.is_system && <span className="ml-2 text-xs text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full">System</span>}
+                          <div className="text-xs text-gray-500 mt-0.5 truncate">{formatScopeLabel(a.scope_label, a.scope_type, a.scope_id)}</div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                          <span className="text-xs text-gray-400">{previewRoleIndex === i ? 'Hide' : 'Permissions'}</span>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); handleRemoveRole(i); }}
+                            className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {previewRoleIndex !== null && modules.length > 0 && (
+                      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50/50">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                          Permissions — {assignedRoles[previewRoleIndex].role_name}
+                        </p>
+                        <PermissionMatrix modules={modules} selectedPermissions={previewPermissions} disabled />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-end gap-3">
+                  <Select label="Add Role" name="role" value={pickerRoleId}
+                    onChange={(e) => setPickerRoleId(e.target.value)}
+                    options={roleOptions} placeholder="Select a role…" className="flex-1" />
+                  <Button variant="secondary" size="md" onClick={handleAddRole} disabled={!pickerRoleId}>Add</Button>
+                </div>
+
+                {pickerRoleId && (
+                  <div className="mt-3 space-y-3">
+                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-xs text-gray-500 mb-3">Scope this role to one or more org nodes:</p>
+                      <HierarchyScopeSelector value={pickerScopes} onChange={setPickerScopes} />
+                    </div>
+                    {pickerRole && modules.length > 0 && (
+                      <div className="border border-dashed border-gray-300 rounded-lg p-4 bg-gray-50/30">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                          Permissions — {pickerRole.name}
+                        </p>
+                        <PermissionMatrix modules={modules} selectedPermissions={pickerPermissions} disabled />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {departmentOptions.length > 1 && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <Select label="Primary Department" name="primary_department" value={primaryDeptId}
+                      onChange={(e) => setPrimaryDeptId(e.target.value)}
+                      options={departmentOptions} placeholder="First selected (default)"
+                      helpText="Which department to use as primary when the user belongs to more than one." />
+                  </div>
+                )}
+              </>
             )}
           </div>
 

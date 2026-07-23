@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ALLOWED_CHILDREN, ADD_CHILD_LABELS, NODE_TYPE_LABELS as LABELS } from '../../utils/constants';
+import { ALLOWED_CHILDREN, NODE_TYPE_LABELS as LABELS } from '../../utils/constants';
 
 const NODE_TYPE_LABELS = LABELS;
 
@@ -33,14 +33,13 @@ export default function OrgTreeNode({
   isLast = false,
   selectedId,
   onSelect,
-  onAdd,
   onEdit,
   expandAll,
   canAddNode,
   canEditNode,
 }) {
-  const [expanded, setExpanded] = useState(true);
-  const [showAddMenu, setShowAddMenu] = useState(false);
+  // Default: expand root only so first-level children are visible but collapsed
+  const [expanded, setExpanded] = useState(depth === 0);
   const hasChildren = node.children && node.children.length > 0;
   const childCount = node.children?.length || 0;
   const isSelected = selectedId === node.id;
@@ -67,19 +66,21 @@ export default function OrgTreeNode({
         <div className="absolute left-[-16px] top-[20px] w-4 h-px bg-gray-200" />
       )}
 
-      {/* Node row */}
+      {/* Node row — click expands/collapses; + / edit handle their own actions */}
       <div
-        className={`group flex items-center gap-2.5 py-2.5 px-3 rounded-lg cursor-pointer transition-all ${
+        className={`group flex items-center gap-2.5 py-2.5 px-3 rounded-lg transition-all ${
+          hasChildren ? 'cursor-pointer' : ''
+        } ${
           isSelected
             ? 'bg-primary-50/80 shadow-sm ring-1 ring-primary-100'
             : 'hover:bg-gray-50'
         }`}
-        onClick={() => onSelect(node)}
+        onClick={hasChildren ? () => setExpanded((v) => !v) : undefined}
       >
         {/* Expand/collapse */}
         {hasChildren ? (
           <button
-            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+            onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
             className="p-0.5 text-gray-400 hover:text-gray-700 flex-shrink-0 rounded transition-colors"
           >
             <svg className={`w-4 h-4 transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
@@ -112,9 +113,9 @@ export default function OrgTreeNode({
 
         {/* Hover actions */}
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 relative">
-          {canAddChild && onAdd && (
+          {canAddChild && onSelect && (
             <button
-              onClick={(e) => { e.stopPropagation(); setShowAddMenu((v) => !v); }}
+              onClick={(e) => { e.stopPropagation(); onSelect(node); }}
               className="p-1 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
               title="Add inside"
             >
@@ -137,26 +138,6 @@ export default function OrgTreeNode({
         </div>
       </div>
 
-      {/* Add-child menu — lists the child types allowed under this node */}
-      {showAddMenu && canAddChild && (
-        <div className="ml-[42px] mt-1 mb-1 flex flex-wrap items-center gap-1.5 px-3 py-2 bg-primary-50/60 border border-dashed border-primary-200 rounded-lg">
-          <span className="text-xs text-gray-500 mr-1">Add inside:</span>
-          {allowedChildTypes.map((childType) => (
-            <button
-              key={childType}
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowAddMenu(false);
-                onAdd(node, childType);
-              }}
-              className="text-xs font-medium px-2.5 py-1 rounded-md border border-primary-200 bg-white text-primary-700 hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-colors"
-            >
-              + {ADD_CHILD_LABELS[childType] || childType}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Children with tree connector lines */}
       {hasChildren && expanded && (
         <div className="relative ml-[22px] pl-4 border-l border-gray-200">
@@ -173,7 +154,6 @@ export default function OrgTreeNode({
                   isLast={isLastChild}
                   selectedId={selectedId}
                   onSelect={onSelect}
-                  onAdd={onAdd}
                   onEdit={onEdit}
                   expandAll={expandAll}
                   canAddNode={canAddNode}

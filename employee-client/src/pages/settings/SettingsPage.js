@@ -5,12 +5,15 @@ import { useAuth } from '../../hooks/useAuth';
 import { authService } from '../../services/authService';
 import { orgService } from '../../services/orgService';
 
-const HIERARCHY_LEVELS = [
-  { key: 'organisation', label: 'Company', icon: 'business', accent: 'indigo' },
-  { key: 'officeLocation', label: 'Office Location', icon: 'location_city', accent: 'sky' },
-  { key: 'vertical', label: 'Vertical', icon: 'account_tree', accent: 'violet' },
-  { key: 'department', label: 'Department', icon: 'groups', accent: 'emerald' },
-];
+const NODE_TYPE_META = {
+  GROUP: { label: 'Group', icon: 'apartment', accent: 'indigo' },
+  COMPANY: { label: 'Company', icon: 'business', accent: 'indigo' },
+  ORGANISATION: { label: 'Company', icon: 'business', accent: 'indigo' },
+  OFFICE_LOCATION: { label: 'Office Location', icon: 'location_city', accent: 'sky' },
+  VERTICAL: { label: 'Vertical', icon: 'account_tree', accent: 'violet' },
+  DEPARTMENT: { label: 'Department', icon: 'groups', accent: 'emerald' },
+  ADMIN_UNIT: { label: 'Admin Unit', icon: 'admin_panel_settings', accent: 'emerald' },
+};
 
 const SCOPE_PRIORITY = ['ORGANISATION', 'OFFICE_LOCATION', 'VERTICAL', 'DEPARTMENT'];
 
@@ -70,23 +73,18 @@ function RolesSection({ roleAssignments, loading }) {
 }
 
 const ACCENT_STYLES = {
-  indigo: { iconBg: 'bg-indigo-50', iconText: 'text-indigo-600', dot: 'bg-indigo-500' },
-  sky: { iconBg: 'bg-sky-50', iconText: 'text-sky-600', dot: 'bg-sky-500' },
-  violet: { iconBg: 'bg-violet-50', iconText: 'text-violet-600', dot: 'bg-violet-500' },
-  emerald: { iconBg: 'bg-emerald-50', iconText: 'text-emerald-600', dot: 'bg-emerald-500' },
+  indigo: { iconBg: 'bg-indigo-50', iconText: 'text-indigo-600' },
+  sky: { iconBg: 'bg-sky-50', iconText: 'text-sky-600' },
+  violet: { iconBg: 'bg-violet-50', iconText: 'text-violet-600' },
+  emerald: { iconBg: 'bg-emerald-50', iconText: 'text-emerald-600' },
 };
 
 function HierarchyChart({ hierarchy, loading }) {
-  const primaryDept = hierarchy?.departments?.find((d) => d.isPrimary) || hierarchy?.departments?.[0] || null;
-  const otherDepts = (hierarchy?.departments || []).filter((d) => d !== primaryDept);
-
-  const valueFor = (key) => {
-    if (key === 'organisation') return hierarchy?.organisation?.name || null;
-    if (key === 'officeLocation') return hierarchy?.officeLocation?.name || null;
-    if (key === 'vertical') return hierarchy?.vertical?.name || null;
-    if (key === 'department') return primaryDept?.name || null;
-    return null;
-  };
+  const path = hierarchy?.path || [];
+  const memberships = hierarchy?.memberships || [];
+  const primaryId = memberships.find((m) => m.isPrimary)?.id
+    || (path.length ? path[path.length - 1].id : null);
+  const otherMemberships = memberships.filter((m) => m.id !== primaryId);
 
   return (
     <div>
@@ -95,53 +93,71 @@ function HierarchyChart({ hierarchy, loading }) {
         <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Organization Path</h3>
       </div>
 
-      <div className="flex flex-col md:flex-row md:items-stretch gap-3 md:gap-2">
-        {HIERARCHY_LEVELS.map((level, idx) => {
-          const accent = ACCENT_STYLES[level.accent];
-          const value = valueFor(level.key);
-          const isLast = idx === HIERARCHY_LEVELS.length - 1;
+      {loading ? (
+        <div className="flex flex-col md:flex-row gap-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex-1 h-24 bg-zinc-100 rounded-2xl animate-pulse" />
+          ))}
+        </div>
+      ) : path.length === 0 ? (
+        <div className="bg-white border border-zinc-200/70 rounded-2xl p-5">
+          <p className="text-sm font-medium text-zinc-300 italic">Not assigned</p>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-col md:flex-row md:items-stretch gap-3 md:gap-2">
+            {path.map((node, idx) => {
+              const meta = NODE_TYPE_META[node.node_type] || NODE_TYPE_META.DEPARTMENT;
+              const accent = ACCENT_STYLES[meta.accent] || ACCENT_STYLES.indigo;
+              const isLast = idx === path.length - 1;
 
-          return (
-            <React.Fragment key={level.key}>
-              <div className="flex-1 min-w-0">
-                <div className="h-full bg-white border border-zinc-200/70 rounded-2xl p-4 hover:border-zinc-300 hover:shadow-sm transition-all">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className={`w-8 h-8 rounded-lg ${accent.iconBg} ${accent.iconText} flex items-center justify-center shrink-0`}>
-                      <MaterialIcon name={level.icon} className="text-[18px]" />
-                    </div>
-                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider truncate">{level.label}</span>
-                  </div>
-                  {loading ? (
-                    <div className="h-5 w-3/4 bg-zinc-100 rounded animate-pulse" />
-                  ) : value ? (
-                    <p className="text-sm font-bold text-zinc-900 leading-snug break-words">{value}</p>
-                  ) : (
-                    <p className="text-sm font-medium text-zinc-300 italic">Not assigned</p>
-                  )}
-                  {level.key === 'department' && otherDepts.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-zinc-100 space-y-1.5">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Also a member of</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {otherDepts.map((d) => (
-                          <span key={d.id} className="inline-flex items-center px-2 py-0.5 rounded-md bg-zinc-50 border border-zinc-200 text-[11px] font-semibold text-zinc-600">
-                            {d.name}
-                          </span>
-                        ))}
+              return (
+                <React.Fragment key={`${node.node_type}-${node.id}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="h-full bg-white border border-zinc-200/70 rounded-2xl p-4 hover:border-zinc-300 hover:shadow-sm transition-all">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className={`w-8 h-8 rounded-lg ${accent.iconBg} ${accent.iconText} flex items-center justify-center shrink-0`}>
+                          <MaterialIcon name={meta.icon} className="text-[18px]" />
+                        </div>
+                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider truncate">
+                          {meta.label}
+                        </span>
                       </div>
+                      <p className="text-sm font-bold text-zinc-900 leading-snug break-words">{node.name}</p>
+                    </div>
+                  </div>
+
+                  {!isLast && (
+                    <div className="hidden md:flex items-center justify-center text-zinc-300 shrink-0 px-1">
+                      <MaterialIcon name="chevron_right" className="text-[24px]" />
                     </div>
                   )}
-                </div>
-              </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
 
-              {!isLast && (
-                <div className="hidden md:flex items-center justify-center text-zinc-300 shrink-0 px-1">
-                  <MaterialIcon name="chevron_right" className="text-[24px]" />
-                </div>
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
+          {otherMemberships.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-zinc-100">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Also a member of</span>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {otherMemberships.map((m) => {
+                  const meta = NODE_TYPE_META[m.node_type] || NODE_TYPE_META.DEPARTMENT;
+                  return (
+                    <span
+                      key={m.id}
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-zinc-50 border border-zinc-200 text-[11px] font-semibold text-zinc-600"
+                    >
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase">{meta.label}</span>
+                      {m.name}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

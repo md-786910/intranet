@@ -21,4 +21,9 @@ const push = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
-module.exports = { dashboard, content, users, push };
+const contentWorkspace = catchAsync(async (req, res) => {
+  const result = await analyticsService.getContentWorkspace(req.query, req.user.user_id);
+  res.status(200).json({ status: 'success', data: result });
+});
+
+module.exports = { dashboard, content, users, push, contentWorkspace };

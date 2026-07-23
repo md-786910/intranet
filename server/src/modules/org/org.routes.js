@@ -58,6 +58,12 @@ router.post(
   controller.addNodeMember
 );
 
+router.get(
+  '/nodes/:id/members',
+  validate(schemas.idParam),
+  controller.listNodeMembers
+);
+
 router.delete(
   '/nodes/:id/members/:userId',
   authorize('ADMIN', 'MANAGE_OFFICE_LOCATIONS'),

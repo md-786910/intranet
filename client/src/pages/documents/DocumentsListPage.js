@@ -6,7 +6,8 @@ import Table from '../../components/common/Table';
 import Pagination from '../../components/common/Pagination';
 import SearchBar from '../../components/common/SearchBar';
 import StatusBadge from '../../components/common/StatusBadge';
-import PriorityBadge from '../../components/common/PriorityBadge';
+import { priorityLaneClass } from '../../components/common/PriorityBadge';
+import AudienceSummary from '../../components/common/AudienceSummary';
 import Select from '../../components/common/Select';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { documentService } from '../../services/documentService';
@@ -127,12 +128,12 @@ export default function DocumentsListPage() {
 
   const activeColumns = [
     { key: 'title', label: 'Title', render: (row) => (
-      <div className="flex items-center gap-2">
-        <span className="font-medium text-gray-900">{row.title}</span>
-        <PriorityBadge priority={row.priority || 'NORMAL'} hideOnNormal />
-      </div>
+      <span className="font-medium text-gray-900">{row.title}</span>
     )},
     { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    { key: 'audience', label: 'Publishes to', render: (row) => (
+      <AudienceSummary audience_summary={row.audience_summary} />
+    )},
     { key: 'category', label: 'Category', render: (row) => (
       <span className="text-gray-500">{row.category?.name || '—'}</span>
     )},
@@ -164,10 +165,7 @@ export default function DocumentsListPage() {
 
   const trashColumns = [
     { key: 'title', label: 'Title', render: (row) => (
-      <div className="flex items-center gap-2">
-        <span className="font-medium text-gray-900">{row.title}</span>
-        <PriorityBadge priority={row.priority || 'NORMAL'} hideOnNormal />
-      </div>
+      <span className="font-medium text-gray-900">{row.title}</span>
     )},
     { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
     { key: 'category', label: 'Category', render: (row) => (
@@ -282,6 +280,7 @@ export default function DocumentsListPage() {
         emptyMessage={isTrash
           ? (search ? 'No archived documents match the filter' : 'Archive is empty')
           : 'No documents found'}
+        getRowClassName={(row) => priorityLaneClass(row.priority)}
         onRowClick={isTrash ? undefined : (row) => navigate(`/documents/${row.document_item_id}`)}
       />
       <Pagination

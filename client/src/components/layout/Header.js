@@ -1,52 +1,101 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
+import { useOrgTree } from '../../hooks/useOrgTree';
+import { findScopePath } from '../../utils/scopeLabel';
 
-const SCOPE_RANK = { DEPARTMENT: 4, VERTICAL: 3, OFFICE_LOCATION: 2, ORGANISATION: 1 };
+const SCOPE_RANK = { DEPARTMENT: 4, VERTICAL: 3, OFFICE_LOCATION: 2, ORGANISATION: 1, COMPANY: 2, GROUP: 1 };
 
 function pickPrimaryAssignment(assignments) {
-  const subOrg = assignments.filter((a) => a.scope_type !== 'ORGANISATION');
-  if (subOrg.length === 0) return null;
-  return [...subOrg].sort(
+  if (!assignments?.length) return null;
+  // Prefer org-wide / Group-root assignments so Content Editors with
+  // publish-anywhere aren't labeled by a narrower Employee membership.
+  const orgWide = assignments.find(
+    (a) => a.scope_type === 'GROUP' || a.scope_type === 'ORGANISATION' || a.role?.code === 'OWNER',
+  );
+  if (orgWide) return orgWide;
+  return [...assignments].sort(
     (a, b) => (SCOPE_RANK[b.scope_type] || 0) - (SCOPE_RANK[a.scope_type] || 0),
   )[0];
 }
 
-export default function Header() {
-  const { user, logout, isOwner, roleAssignments } = useAuth();
-
-  const primaryAssignment = !isOwner ? pickPrimaryAssignment(roleAssignments || []) : null;
-  const scopeBadge = primaryAssignment
-    ? [primaryAssignment.role?.name, primaryAssignment.scope_label].filter(Boolean).join(' · ')
-    : null;
+function HierarchyRow({ segments }) {
+  if (!segments?.length) return null;
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-      <div>
-        <h2 className="text-lg font-semibold text-gray-800">
+    <div className="flex items-center gap-1 min-w-0 max-w-xl overflow-x-auto">
+      {segments.map((seg, i) => (
+        <React.Fragment key={`${seg.type}-${seg.name}-${i}`}>
+          {i > 0 && (
+            <svg className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
+          )}
+          <div
+            className={`flex-shrink-0 inline-flex flex-col px-2.5 py-1 rounded-lg border ${
+              i === segments.length - 1
+                ? 'bg-primary-50 border-primary-100'
+                : 'bg-gray-50 border-gray-100'
+            }`}
+            title={`${seg.type}: ${seg.name}`}
+          >
+            <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 leading-none">
+              {seg.type}
+            </span>
+            <span
+              className={`text-[12px] font-semibold truncate max-w-[9rem] mt-0.5 ${
+                i === segments.length - 1 ? 'text-primary-700' : 'text-gray-700'
+              }`}
+            >
+              {seg.name}
+            </span>
+          </div>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+export default function Header() {
+  const { user, isOwner, roleAssignments } = useAuth();
+  const { currentOrganisationName } = useCurrentOrganisation();
+  const { tree } = useOrgTree();
+
+  const hierarchySegments = useMemo(() => {
+    const primary = pickPrimaryAssignment(roleAssignments || []);
+
+    if (primary?.scope_id && tree?.length) {
+      const path = findScopePath(tree, primary.scope_type, primary.scope_id);
+      if (path?.length) return path;
+    }
+
+    // Owner / org-wide: show organisation as a single segment
+    if (currentOrganisationName) {
+      return [{ type: isOwner ? 'Owner' : 'Organisation', name: currentOrganisationName }];
+    }
+
+    return [];
+  }, [roleAssignments, tree, currentOrganisationName, isOwner]);
+
+  const roleName = useMemo(() => {
+    if (isOwner) return 'Platform Owner';
+    const primary = pickPrimaryAssignment(roleAssignments || []);
+    return primary?.role?.name || null;
+  }, [isOwner, roleAssignments]);
+
+  return (
+    <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between gap-4">
+      <div className="min-w-0 flex-shrink-0">
+        <h2 className="text-[15px] font-semibold text-gray-800 tracking-tight truncate">
           Welcome back, {user?.first_name || 'User'}
         </h2>
+        {roleName && (
+          <p className="text-[11px] text-gray-400 mt-0.5 truncate">{roleName}</p>
+        )}
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="text-right">
-          <p className="text-sm font-medium text-gray-700">
-            {user?.first_name} {user?.last_name}
-          </p>
-          <p className="text-xs text-gray-500">{user?.email}</p>
-          {scopeBadge && (
-            <p className="text-xs text-primary-600 mt-0.5">{scopeBadge}</p>
-          )}
-        </div>
-
-        <button
-          onClick={logout}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-          </svg>
-          Logout
-        </button>
+      <div className="flex items-center justify-end min-w-0 flex-1">
+        <HierarchyRow segments={hierarchySegments} />
       </div>
     </header>
   );
