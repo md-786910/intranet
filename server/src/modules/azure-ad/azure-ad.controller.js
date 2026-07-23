@@ -82,4 +82,24 @@ const clearCache = catchAsync(async (req, res) => {
   res.json({ status: 'success', message: 'Active Directory cache cleared' });
 });
 
-module.exports = { listUsers, getUser, getUserDirectReports, getOrgTreeRoots, getDepartments, testConnection, clearCache };
+// POST /azure-ad/sync-users
+const syncUsers = catchAsync(async (req, res) => {
+  const { dry_run, only_enabled, password } = req.body;
+  const result = await service.syncUsersFromEntra({
+    dryRun: dry_run,
+    onlyEnabled: only_enabled !== false,
+    password,
+  }, req.user.user_id);
+  res.json({ status: 'success', data: result });
+});
+
+module.exports = {
+  listUsers,
+  getUser,
+  getUserDirectReports,
+  getOrgTreeRoots,
+  getDepartments,
+  testConnection,
+  clearCache,
+  syncUsers,
+};

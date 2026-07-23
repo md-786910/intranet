@@ -16,6 +16,9 @@ export const azureAdService = {
   /** Distinct department names for the filter dropdown */
   getDepartments: () => api.get('/azure-ad/departments'),
 
+  /** Sync Entra users into BrightNow (password create / email update, no email) */
+  syncUsers: (body) => api.post('/azure-ad/sync-users', body),
+
   /** Clear all Azure AD Redis cache keys */
   clearCache: () => api.delete('/azure-ad/cache'),
 };

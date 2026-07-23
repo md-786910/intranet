@@ -28,6 +28,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(20),
       allowNull: true,
     },
+    azure_object_id: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+      unique: true,
+    },
     avatar_url: {
       type: DataTypes.STRING(500),
       allowNull: true,

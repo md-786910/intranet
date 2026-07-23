@@ -161,6 +161,41 @@ async function syncEmployeeRoleAssignments({ userId, roleId, departmentIds, acto
   }
 }
 
+/** Attach EMPLOYEE + node membership without wiping other memberships/roles. */
+async function ensureEmployeeAtNode({ userId, nodeId, actorUserId, transaction }) {
+  const { UserRoleAssignment, OrgNode, sequelize } = require('../../database/models');
+  const ownTx = !transaction;
+  const tx = transaction || await sequelize.transaction();
+  try {
+    await attachDepartmentScopeMembership({ userId, scopeId: nodeId, transaction: tx });
+    const roleId = await resolveEmployeeRoleId();
+    const node = await OrgNode.findByPk(nodeId, { attributes: ['id', 'node_type'], transaction: tx });
+    if (!node) throw ApiError.badRequest('Org unit is invalid');
+    const existing = await UserRoleAssignment.findOne({
+      where: {
+        user_id: userId,
+        role_id: roleId,
+        scope_type: node.node_type,
+        scope_id: nodeId,
+      },
+      transaction: tx,
+    });
+    if (!existing) {
+      await UserRoleAssignment.create({
+        user_id: userId,
+        role_id: roleId,
+        scope_type: node.node_type,
+        scope_id: nodeId,
+        assigned_by: actorUserId || null,
+      }, { transaction: tx });
+    }
+    if (ownTx) await tx.commit();
+  } catch (err) {
+    if (ownTx) await tx.rollback();
+    throw err;
+  }
+}
+
 async function syncChatBlocks({ userId, blockedIds, actorUserId, transaction }) {
   const { ChatBlock } = require('../../database/models');
   const desired = Array.from(new Set((blockedIds || []).map(Number).filter((id) => Number.isInteger(id) && id > 0 && id !== Number(userId))));
@@ -462,6 +497,11 @@ const usersService = {
           model: PersonProfile,
           as: 'profile',
           required: false,
+          attributes: [
+            'profile_id', 'user_id', 'job_title', 'bio', 'department_display',
+            'location', 'date_of_birth', 'date_of_joining', 'employee_id',
+            'role_category_id', 'reports_to_user_id',
+          ],
           include: [
             { model: RoleCategory, as: 'roleCategory', attributes: ['id', 'name', 'rank'], required: false },
           ],
@@ -688,6 +728,7 @@ const usersService = {
         first_name: data.first_name,
         last_name: data.last_name,
         phone: data.phone || null,
+        azure_object_id: data.azure_object_id || null,
         status: isInviteFlow ? 'INVITED' : 'ACTIVE',
       }, { transaction });
 
@@ -696,6 +737,9 @@ const usersService = {
         ...(data.profile || {}),
         job_title: data.profile?.job_title || null,
         employee_id: data.profile?.employee_id || null,
+        department_display: data.profile?.department_display || null,
+        location: data.profile?.location || null,
+        date_of_joining: data.profile?.date_of_joining || null,
         role_category_id: data.role_category_id || null,
         reports_to_user_id: data.reports_to_user_id || null,
       };
@@ -758,16 +802,18 @@ const usersService = {
 
       await transaction.commit();
 
-      if (isInviteFlow) {
-        const inviter = actorUserId
-          ? await UserAccount.findByPk(actorUserId, { attributes: ['first_name', 'last_name'] })
-          : null;
-        const inviterName = inviter ? `${inviter.first_name} ${inviter.last_name}`.trim() : 'An administrator';
-        emailService.sendEmployeeInvitation({ to: user.email, firstName: user.first_name, inviterName, token: inviteToken, expiresAt: inviteExpiresAt })
-          .catch((err) => logger.warn(`invite email failed for ${user.email}: ${err.message}`));
-      } else {
-        sendWelcomeEmailForNewUser({ newUser: user, plainPassword, rolesToAssign, actorUserId })
-          .catch((err) => logger.warn(`welcome email failed for ${user.email}: ${err.message}`));
+      if (!data.skip_email) {
+        if (isInviteFlow) {
+          const inviter = actorUserId
+            ? await UserAccount.findByPk(actorUserId, { attributes: ['first_name', 'last_name'] })
+            : null;
+          const inviterName = inviter ? `${inviter.first_name} ${inviter.last_name}`.trim() : 'An administrator';
+          emailService.sendEmployeeInvitation({ to: user.email, firstName: user.first_name, inviterName, token: inviteToken, expiresAt: inviteExpiresAt })
+            .catch((err) => logger.warn(`invite email failed for ${user.email}: ${err.message}`));
+        } else {
+          sendWelcomeEmailForNewUser({ newUser: user, plainPassword, rolesToAssign, actorUserId })
+            .catch((err) => logger.warn(`welcome email failed for ${user.email}: ${err.message}`));
+        }
       }
 
       return this.getById(user.user_id);
@@ -785,7 +831,7 @@ const usersService = {
       const user = await UserAccount.findByPk(id, { transaction });
       if (!user) throw ApiError.notFound('User not found');
 
-      const userFields = ['first_name', 'last_name', 'phone', 'status'];
+      const userFields = ['first_name', 'last_name', 'phone', 'status', 'azure_object_id'];
       userFields.forEach((field) => {
         if (data[field] !== undefined) user[field] = data[field];
       });
@@ -1222,6 +1268,8 @@ const usersService = {
 
     return { ancestors, self, direct_reports };
   },
+
+  ensureEmployeeAtNode,
 };
 
 module.exports = usersService;

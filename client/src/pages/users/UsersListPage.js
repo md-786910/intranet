@@ -14,6 +14,7 @@ import { useDebounce } from "../../hooks/useDebounce";
 import { useOrgTree } from "../../hooks/useOrgTree";
 import { formatDate } from "../../utils/formatters";
 import { useCurrentOrganisation } from "../../hooks/useCurrentOrganisation";
+import { findScopePath } from "../../utils/scopeLabel";
 
 const STATUS_OPTIONS = [
   { value: "ACTIVE", label: "Active" },
@@ -24,100 +25,132 @@ const STATUS_OPTIONS = [
 
 const SCOPE_PRIORITY = [
   "ORGANISATION",
+  "GROUP",
+  "COMPANY",
+  "ADMIN_UNIT",
   "OFFICE_LOCATION",
   "VERTICAL",
   "DEPARTMENT",
 ];
 
-function resolveScopeLabel(assignment, orgNode) {
-  if (!assignment || !orgNode) return null;
-  switch (assignment.scope_type) {
-    case "ORGANISATION":
-      return { path: [], name: orgNode.name };
-    case "OFFICE_LOCATION": {
-      // eslint-disable-next-line eqeqeq
-      const office = (orgNode.children || []).find(
-        (o) => o.id == assignment.scope_id,
-      );
-      return office ? { path: [orgNode.name], name: office.name } : null;
-    }
-    case "VERTICAL": {
-      for (const office of orgNode.children || []) {
-        // eslint-disable-next-line eqeqeq
-        const vertical = (office.children || []).find(
-          (v) => v.id == assignment.scope_id,
-        );
-        if (vertical)
-          return { path: [orgNode.name, office.name], name: vertical.name };
-      }
-      return null;
-    }
-    default:
-      return null;
-  }
+function scopeTypeOf(assignment) {
+  return String(assignment?.scope_type || "").toUpperCase();
 }
 
-function OrgCell({ memberships = [], roleAssignments = [], orgNode = null }) {
-  if (memberships.length === 0) {
-    const sorted = [...roleAssignments].sort(
-      (a, b) =>
-        SCOPE_PRIORITY.indexOf(a.scope_type) -
-        SCOPE_PRIORITY.indexOf(b.scope_type),
-    );
-    const primary = sorted[0];
-    const resolved = primary ? resolveScopeLabel(primary, orgNode) : null;
-    if (!resolved) return <span className="text-gray-400 text-sm">—</span>;
-    return (
-      <div className="min-w-0 leading-tight">
-        {resolved.path.length > 0 && (
-          <div className="flex items-center gap-1 text-[11px] text-gray-400 truncate">
-            {resolved.path.map((part, idx) => (
-              <React.Fragment key={`${part}-${idx}`}>
-                {idx > 0 && <span className="text-gray-300">›</span>}
-                <span className="truncate">{part}</span>
-              </React.Fragment>
-            ))}
-          </div>
-        )}
-        <div className="text-sm font-semibold text-gray-900 truncate mt-0.5">
-          {resolved.name}
-        </div>
-      </div>
-    );
-  }
-
-  const primary = memberships.find((m) => m.is_primary) || memberships[0];
-  const dept = primary?.department;
-  if (!dept) return <span className="text-gray-400 text-sm">—</span>;
-  const parentPath = [
-    dept.vertical?.officeLocation?.name,
-    dept.vertical?.name,
-  ].filter(Boolean);
-  const extraCount = memberships.length - 1;
+function OrgUnassigned() {
   return (
-    <div className="flex items-start gap-2 min-w-0">
-      <div className="min-w-0 leading-tight">
-        {parentPath.length > 0 && (
-          <div className="flex items-center gap-1 text-[11px] text-gray-400 truncate">
-            {parentPath.map((part, idx) => (
-              <React.Fragment key={`${part}-${idx}`}>
-                {idx > 0 && <span className="text-gray-300">›</span>}
-                <span className="truncate">{part}</span>
-              </React.Fragment>
-            ))}
-          </div>
-        )}
-        <div className="text-sm font-semibold text-gray-900 truncate mt-0.5">
-          {dept.name}
-        </div>
-      </div>
-      {extraCount > 0 && (
-        <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-indigo-50 text-indigo-600 border border-indigo-100">
-          +{extraCount}
+    <span
+      className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-500"
+      title="Not linked to an organisation unit"
+    >
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300" aria-hidden />
+      Unassigned
+    </span>
+  );
+}
+
+/** Same visual as user detail role breadcrumb: BrightNow › [HR] */
+function ScopeBreadcrumb({ path }) {
+  if (!path || path.length === 0) return null;
+  return (
+    <div className="flex items-center flex-wrap gap-0.5 min-w-0" title={path.map((s) => s.name).join(" › ")}>
+      {path.map((seg, i) => (
+        <span key={`${seg.name}-${i}`} className="flex items-center gap-0.5 min-w-0">
+          {i > 0 && (
+            <svg className="w-3 h-3 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          )}
+          <span
+            className={`text-xs px-1.5 py-0.5 rounded font-medium truncate ${
+              i === path.length - 1
+                ? "bg-primary-50 text-primary-700"
+                : "text-gray-500"
+            }`}
+          >
+            {seg.name}
+          </span>
         </span>
-      )}
+      ))}
     </div>
   );
+}
+
+/** Pick the deepest resolvable role scope path from the org tree. */
+function bestRoleScopePath(tree, roleAssignments) {
+  const roles = Array.isArray(roleAssignments) ? roleAssignments : [];
+  if (!tree?.length || roles.length === 0) return null;
+
+  const scored = roles
+    .map((a) => {
+      const path = findScopePath(tree, a.scope_type, a.scope_id);
+      if (!path?.length) return null;
+      const depth = path.length;
+      const typeRank = SCOPE_PRIORITY.indexOf(scopeTypeOf(a));
+      return { path, depth, typeRank: typeRank < 0 ? 99 : typeRank };
+    })
+    .filter(Boolean);
+
+  if (scored.length === 0) return null;
+  scored.sort((a, b) => b.depth - a.depth || b.typeRank - a.typeRank);
+  return scored[0].path;
+}
+
+function OrgCell({
+  memberships = [],
+  roleAssignments = [],
+  orgTree = [],
+  departmentDisplay = null,
+}) {
+  const mems = Array.isArray(memberships) ? memberships : [];
+  const roles = Array.isArray(roleAssignments) ? roleAssignments : [];
+  const deptLabel = (departmentDisplay || "").trim() || null;
+
+  // 1) Prefer role scope path from org tree (same source as Roles tab → BrightNow › HR)
+  const rolePath = bestRoleScopePath(orgTree, roles);
+  if (rolePath?.length) {
+    return <ScopeBreadcrumb path={rolePath} />;
+  }
+
+  // 2) Legacy department memberships
+  if (mems.length > 0) {
+    const primary = mems.find((m) => m.is_primary) || mems[0];
+    const dept = primary?.department;
+    if (dept?.name) {
+      const crumbs = [
+        dept.vertical?.officeLocation?.organisation?.name,
+        dept.vertical?.officeLocation?.name,
+        dept.vertical?.name,
+        dept.name,
+      ].filter(Boolean);
+      const path = crumbs.map((name) => ({ name }));
+      const extraCount = mems.length - 1;
+      return (
+        <div className="flex items-center gap-2 min-w-0">
+          <ScopeBreadcrumb path={path} />
+          {extraCount > 0 && (
+            <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+              +{extraCount}
+            </span>
+          )}
+        </div>
+      );
+    }
+  }
+
+  // 3) Azure department_display under org root name
+  const rootName = orgTree?.[0]?.name;
+  if (deptLabel && rootName) {
+    return <ScopeBreadcrumb path={[{ name: rootName }, { name: deptLabel }]} />;
+  }
+  if (roles.length > 0 && rootName) {
+    return <ScopeBreadcrumb path={[{ name: rootName }]} />;
+  }
+  if (deptLabel) {
+    return <ScopeBreadcrumb path={[{ name: deptLabel }]} />;
+  }
+
+  return <OrgUnassigned />;
 }
 
 export default function UsersListPage() {
@@ -261,7 +294,12 @@ export default function UsersListPage() {
         <OrgCell
           memberships={row.departmentMemberships}
           roleAssignments={row.roleAssignments}
-          orgNode={orgNode}
+          orgTree={tree}
+          departmentDisplay={
+            row.profile?.department_display
+            || row.profile?.departmentDisplay
+            || null
+          }
         />
       ),
     },

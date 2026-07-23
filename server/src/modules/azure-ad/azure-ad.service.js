@@ -254,6 +254,32 @@ async function clearCache() {
   await cacheService.deletePattern('bh:ad:*');
 }
 
+// ── Sync helpers (Graph fetch for Entra → BrightNow sync) ─────────────────────
+const SYNC_SELECT = [
+  'id', 'displayName', 'givenName', 'surname',
+  'userPrincipalName', 'mail', 'jobTitle', 'department',
+  'officeLocation', 'employeeId', 'employeeHireDate',
+  'businessPhones', 'mobilePhone', 'accountEnabled',
+].join(',');
+
+async function fetchGraphUsersForSync({ onlyEnabled = true } = {}) {
+  const raw = await fetchAllPages(
+    `/users?$select=${SYNC_SELECT}&$expand=manager($select=id,displayName)&$top=999&$orderby=displayName`
+  );
+  return raw
+    .filter((u) => (onlyEnabled ? u.accountEnabled !== false : true))
+    .map(({ manager, ...u }) => ({
+      ...u,
+      _managerId: manager?.id || null,
+      _managerName: manager?.displayName || null,
+    }));
+}
+
+function syncUsersFromEntra(options, actorUserId) {
+  // Lazy require avoids circular load with entra-sync.js
+  return require('./entra-sync').syncUsersFromEntra(options, actorUserId);
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -261,4 +287,6 @@ module.exports = {
   getOrgTreeRoots,
   getDepartments,
   clearCache,
+  fetchGraphUsersForSync,
+  syncUsersFromEntra,
 };

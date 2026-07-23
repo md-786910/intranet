@@ -3,6 +3,9 @@
 const router = require('express').Router();
 const controller = require('./azure-ad.controller');
 const authenticate = require('../../middleware/authenticate');
+const authorize = require('../../middleware/authorize');
+const validate = require('../../middleware/validate');
+const { syncUsersSchema } = require('./azure-ad.validation');
 
 // All routes require a valid session
 router.use(authenticate);
@@ -22,6 +25,14 @@ router.get('/users/:id/direct-reports', controller.getUserDirectReports);
 
 // ── Org hierarchy ─────────────────────────────────────────────────────────────
 router.get('/org-tree/roots',  controller.getOrgTreeRoots);
+
+// ── Sync Entra users → BrightNow (password create / email update, no email) ───
+router.post(
+  '/sync-users',
+  authorize('ADMIN', 'MANAGE_USERS'),
+  validate(syncUsersSchema),
+  controller.syncUsers
+);
 
 // ── Cache management ──────────────────────────────────────────────────────────
 router.delete('/cache', controller.clearCache);
