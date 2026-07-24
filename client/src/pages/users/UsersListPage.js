@@ -16,6 +16,24 @@ import { formatDate } from "../../utils/formatters";
 import { useCurrentOrganisation } from "../../hooks/useCurrentOrganisation";
 import { findScopePath } from "../../utils/scopeLabel";
 
+const AVATAR_COLORS = [
+  "bg-indigo-600", "bg-violet-600", "bg-sky-600", "bg-teal-600",
+  "bg-emerald-600", "bg-amber-600", "bg-rose-600", "bg-fuchsia-600",
+];
+
+function hashColor(str = "") {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+
+function getInitials(name = "") {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 const STATUS_OPTIONS = [
   { value: "ACTIVE", label: "Active" },
   { value: "INVITED", label: "Invited" },
@@ -278,14 +296,23 @@ export default function UsersListPage() {
       key: "name",
       label: "Name",
       sortable: true,
-      render: (row) => (
-        <div>
-          <div className="font-medium text-gray-900">
-            {row.first_name} {row.last_name}
+      render: (row) => {
+        const name = `${row.first_name || ""} ${row.last_name || ""}`.trim() || row.email || "?";
+        return (
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className={`w-8 h-8 rounded-full ${hashColor(name)} flex items-center justify-center text-white text-xs font-bold shrink-0`}
+              aria-hidden
+            >
+              {getInitials(name)}
+            </div>
+            <div className="min-w-0">
+              <div className="font-medium text-gray-900 truncate">{name}</div>
+              <div className="text-xs text-gray-500 truncate">{row.email}</div>
+            </div>
           </div>
-          <div className="text-xs text-gray-500">{row.email}</div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: "org",

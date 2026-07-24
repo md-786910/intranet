@@ -553,12 +553,16 @@ const orgService = {
   },
 
   // ── My Vertical (logged-in user's organisational neighbourhood) ──
+  // Prefer org_node + node_membership (authoritative after Entra sync), then
+  // fall back to legacy department_membership. Scope slices come from
+  // visibility.config keyContacts.level / homeOrgChart.level:
+  //   ORGANISATION | OFFICE_LOCATION | VERTICAL | DEPARTMENT
 
   async getMyVertical(userId, { peopleLimit = 8 } = {}) {
-    const { Op, fn, col, literal } = require('sequelize');
+    const { Op, fn, literal } = require('sequelize');
     const {
       DepartmentMembership, Department, Vertical, OfficeLocation,
-      UserAccount, PersonProfile,
+      UserAccount, PersonProfile, NodeMembership, OrgNode,
     } = require('../../database/models');
     const visibilityConfig = require('../../config/visibility.config');
 
@@ -573,11 +577,258 @@ const orgService = {
     const empty = {
       vertical: null,
       departments: [],
+      rootMembers: [],
       people: [],
       peopleScope: keyContactsLevel,
       departmentsScope: homeOrgChartLevel,
     };
 
+    /** path: root → leaf. Pick the anchor node for a visibility level. */
+    const pickAnchor = (pathRootToLeaf, level) => {
+      if (!pathRootToLeaf?.length) return null;
+      const nearest = (types) => {
+        for (let i = pathRootToLeaf.length - 1; i >= 0; i -= 1) {
+          if (types.includes(pathRootToLeaf[i].node_type)) return pathRootToLeaf[i];
+        }
+        return null;
+      };
+      if (level === 'DEPARTMENT') {
+        return nearest(['DEPARTMENT', 'ADMIN_UNIT']) || pathRootToLeaf[pathRootToLeaf.length - 1];
+      }
+      if (level === 'VERTICAL') {
+        return nearest(['VERTICAL']) || nearest(['DEPARTMENT', 'ADMIN_UNIT'])
+          || pathRootToLeaf[pathRootToLeaf.length - 1];
+      }
+      if (level === 'OFFICE_LOCATION') {
+        return nearest(['OFFICE_LOCATION']) || nearest(['VERTICAL'])
+          || pathRootToLeaf[pathRootToLeaf.length - 1];
+      }
+      // ORGANISATION — company/group root
+      return nearest(['GROUP', 'COMPANY']) || pathRootToLeaf[0];
+    };
+
+    const loadSubtreeNodes = async (anchor) => {
+      if (!anchor) return [];
+      const where = anchor.path
+        ? {
+          [Op.or]: [
+            { id: anchor.id },
+            { path: { [Op.like]: `${anchor.path}%` } },
+          ],
+        }
+        : { id: anchor.id };
+      return OrgNode.findAll({
+        where,
+        attributes: ['id', 'name', 'node_type', 'parent_id', 'path', 'sort_order'],
+        order: [['sort_order', 'ASC'], ['name', 'ASC']],
+      });
+    };
+
+    const buildAncestorMap = async (nodes) => {
+      const needed = new Set();
+      nodes.forEach((n) => {
+        String(n.path || '')
+          .split('/')
+          .filter(Boolean)
+          .forEach((id) => needed.add(Number(id)));
+        needed.add(Number(n.id));
+      });
+      if (needed.size === 0) return new Map();
+      const rows = await OrgNode.findAll({
+        where: { id: [...needed] },
+        attributes: ['id', 'name', 'node_type'],
+      });
+      return new Map(rows.map((r) => [Number(r.id), r]));
+    };
+
+    // ── Primary: org_node memberships ─────────────────────────────────────
+    const nodeMemberships = await NodeMembership.findAll({
+      where: { user_id: userId },
+      order: [['is_primary', 'DESC'], ['joined_at', 'ASC'], ['membership_id', 'ASC']],
+      include: [{
+        model: OrgNode,
+        as: 'node',
+        required: true,
+        attributes: ['id', 'name', 'node_type', 'parent_id', 'organisation_id', 'path'],
+      }],
+    });
+
+    if (nodeMemberships.length > 0) {
+      const leaf = nodeMemberships[0].node;
+      const ancestorIds = String(leaf.path || '')
+        .split('/')
+        .map((s) => Number(s))
+        .filter((n) => Number.isInteger(n) && n > 0);
+      const ids = ancestorIds.length > 0 ? ancestorIds : [Number(leaf.id)];
+      const ancestors = await OrgNode.findAll({
+        where: { id: ids },
+        attributes: ['id', 'name', 'node_type', 'parent_id', 'organisation_id', 'path'],
+      });
+      const byId = new Map(ancestors.map((n) => [Number(n.id), n]));
+      const pathRootToLeaf = ids.map((id) => byId.get(id)).filter(Boolean);
+
+      const chartAnchor = pickAnchor(pathRootToLeaf, homeOrgChartLevel);
+      const peopleAnchor = pickAnchor(pathRootToLeaf, keyContactsLevel);
+
+      const chartSubtree = await loadSubtreeNodes(chartAnchor);
+      const peopleSubtree = peopleAnchor && chartAnchor
+        && Number(peopleAnchor.id) === Number(chartAnchor.id)
+        ? chartSubtree
+        : await loadSubtreeNodes(peopleAnchor);
+
+      // Home "Organisation Chart" lists department-like units in scope
+      const unitNodes = chartSubtree.filter((n) => (
+        n.node_type === 'DEPARTMENT' || n.node_type === 'ADMIN_UNIT'
+      ));
+      // If the viewer is only attached at org/office/vertical with no dept
+      // children yet, still surface the anchor when it is member-bearing.
+      const listNodes = unitNodes.length > 0
+        ? unitNodes
+        : (chartAnchor && ['DEPARTMENT', 'ADMIN_UNIT', 'VERTICAL', 'OFFICE_LOCATION', 'COMPANY', 'GROUP']
+          .includes(chartAnchor.node_type)
+          ? [chartAnchor]
+          : []);
+
+      const ancestorById = await buildAncestorMap(listNodes);
+      const unitIds = listNodes.map((n) => Number(n.id));
+
+      let countsByNode = new Map();
+      if (unitIds.length > 0) {
+        const countRows = await NodeMembership.findAll({
+          attributes: [
+            'node_id',
+            [fn('COUNT', literal('DISTINCT "NodeMembership"."user_id"')), 'count'],
+          ],
+          where: { node_id: unitIds },
+          include: [{
+            model: UserAccount,
+            as: 'user',
+            attributes: [],
+            required: true,
+            where: { deleted_at: null, status: 'ACTIVE' },
+          }],
+          group: ['NodeMembership.node_id'],
+          raw: true,
+        });
+        countsByNode = new Map(countRows.map((r) => [Number(r.node_id), Number(r.count)]));
+      }
+
+      const departments = listNodes.map((n) => {
+        const chain = String(n.path || '')
+          .split('/')
+          .filter(Boolean)
+          .map((id) => ancestorById.get(Number(id)))
+          .filter(Boolean);
+        const office = [...chain].reverse().find((x) => x.node_type === 'OFFICE_LOCATION');
+        const vert = [...chain].reverse().find((x) => x.node_type === 'VERTICAL');
+        return {
+          id: n.id,
+          name: n.name,
+          memberCount: countsByNode.get(Number(n.id)) || 0,
+          verticalName: vert?.name || null,
+          officeLocationName: office?.name || null,
+        };
+      });
+
+      // Users attached directly on the chart root/anchor (office/company/vertical),
+      // not only via a child department — surface them in the Home org widget.
+      const blockedIdSet = await chatBlockService.getBlockedIdSet(userId);
+      let rootMembers = [];
+      if (chartAnchor?.id) {
+        const rootMemberRows = await UserAccount.findAll({
+          where: {
+            deleted_at: null,
+            status: 'ACTIVE',
+            user_id: { [Op.ne]: userId },
+          },
+          include: [
+            { model: PersonProfile, as: 'profile', required: false },
+            {
+              model: NodeMembership,
+              as: 'nodeMemberships',
+              required: true,
+              where: { node_id: chartAnchor.id },
+            },
+          ],
+          order: [['first_name', 'ASC'], ['last_name', 'ASC']],
+          subQuery: false,
+          limit: 50,
+        });
+        rootMembers = rootMemberRows.map((u) => ({
+          userId: u.user_id,
+          firstName: u.first_name,
+          lastName: u.last_name,
+          jobTitle: u.profile?.job_title || null,
+          avatarUrl: u.avatar_url || null,
+          nodeName: chartAnchor.name || null,
+          canChat: !blockedIdSet.has(Number(u.user_id)),
+        }));
+      }
+
+      const peopleNodeIds = peopleSubtree.map((n) => Number(n.id));
+
+      const peopleRows = peopleNodeIds.length === 0 ? [] : await UserAccount.findAll({
+        where: {
+          deleted_at: null,
+          status: 'ACTIVE',
+          user_id: { [Op.ne]: userId },
+        },
+        include: [
+          { model: PersonProfile, as: 'profile', required: false },
+          {
+            model: NodeMembership,
+            as: 'nodeMemberships',
+            required: true,
+            where: { node_id: peopleNodeIds },
+            include: [{
+              model: OrgNode,
+              as: 'node',
+              attributes: ['id', 'name', 'node_type'],
+              required: true,
+            }],
+          },
+        ],
+        order: [['first_name', 'ASC'], ['last_name', 'ASC']],
+        subQuery: false,
+        limit: peopleLimit,
+      });
+
+      const people = peopleRows.map((u) => {
+        const primary = (u.nodeMemberships || []).find((m) => m.is_primary)
+          || (u.nodeMemberships || [])[0];
+        return {
+          userId: u.user_id,
+          firstName: u.first_name,
+          lastName: u.last_name,
+          jobTitle: u.profile?.job_title || null,
+          avatarUrl: u.avatar_url || null,
+          departmentName: primary?.node?.name || null,
+          canChat: !blockedIdSet.has(Number(u.user_id)),
+        };
+      });
+
+      const vertNode = [...pathRootToLeaf].reverse().find((n) => n.node_type === 'VERTICAL');
+      const officeNode = [...pathRootToLeaf].reverse().find((n) => n.node_type === 'OFFICE_LOCATION');
+
+      return {
+        vertical: vertNode
+          ? {
+            id: vertNode.id,
+            name: vertNode.name,
+            officeLocation: officeNode
+              ? { id: officeNode.id, name: officeNode.name }
+              : null,
+          }
+          : null,
+        departments,
+        rootMembers,
+        people,
+        peopleScope: keyContactsLevel,
+        departmentsScope: homeOrgChartLevel,
+      };
+    }
+
+    // ── Fallback: legacy department_membership ────────────────────────────
     const membership = await DepartmentMembership.findOne({
       where: { user_id: userId },
       order: [['is_primary', 'DESC'], ['joined_at', 'ASC']],
@@ -607,8 +858,6 @@ const orgService = {
 
     const vertical = membership.department.vertical;
 
-    // Resolve which departments to show in the home page "Organisation Chart"
-    // widget, based on visibilityConfig.homeOrgChart.level.
     let departmentsWhere;
     if (homeOrgChartLevel === 'DEPARTMENT') {
       departmentsWhere = { id: membership.department.id, deleted_at: null };
@@ -622,7 +871,6 @@ const orgService = {
     } else if (homeOrgChartLevel === 'ORGANISATION') {
       departmentsWhere = { deleted_at: null };
     } else {
-      // VERTICAL (default fallback) — sibling departments under the user's vertical
       departmentsWhere = { vertical_id: vertical.id, deleted_at: null };
     }
 
@@ -678,10 +926,7 @@ const orgService = {
       };
     });
 
-    // Resolve the department-id pool the "Key Contacts" people are drawn from,
-    // based on visibilityConfig.keyContacts.level. DEPARTMENT (default) keeps
-    // it tight to the user's own department(s); broader levels fan out.
-    let peopleDeptIds = deptIds; // VERTICAL — sibling departments (existing default)
+    let peopleDeptIds = deptIds;
     if (keyContactsLevel === 'DEPARTMENT') {
       const myMemberships = await DepartmentMembership.findAll({
         where: { user_id: userId },
@@ -707,10 +952,6 @@ const orgService = {
       peopleDeptIds = allDepts.map((d) => Number(d.id));
     }
 
-    // Resolve the viewer's admin-configured chat blocklist. Used below to
-    // surface a `canChat` flag per person — the row still renders (so the
-    // employee sees who's in their org), but the Chat button is suppressed
-    // client-side when they aren't allowed to message that person.
     const blockedIdSet = await chatBlockService.getBlockedIdSet(userId);
 
     const peopleRows = peopleDeptIds.length === 0 ? [] : await UserAccount.findAll({
@@ -763,6 +1004,7 @@ const orgService = {
         } : null,
       },
       departments,
+      rootMembers: [],
       people,
       peopleScope: keyContactsLevel,
       departmentsScope: homeOrgChartLevel,
@@ -962,7 +1204,7 @@ const orgService = {
     };
   },
 
-  async getPeopleTree() {
+  async getPeopleTree(viewerUserId) {
     const { QueryTypes } = require('sequelize');
     const { sequelize, Organisation } = require('../../database/models');
 
@@ -971,9 +1213,13 @@ const orgService = {
       order: [['id', 'ASC']],
     });
 
+    const blockedIdSet = await chatBlockService.getBlockedIdSet(viewerUserId);
+    const viewerId = Number(viewerUserId) || null;
+
     const rows = await sequelize.query(
       `SELECT
          ua.user_id,
+         ua.azure_object_id,
          ua.first_name,
          ua.last_name,
          ua.email,
@@ -984,7 +1230,9 @@ const orgService = {
          rc.name    AS role_category_name,
          rc.rank    AS role_category_rank,
          d.id       AS department_id,
-         d.name     AS department_name
+         d.name     AS department_name,
+         primary_nm.node_id,
+         primary_nm.node_name
        FROM user_account ua
        LEFT JOIN person_profile pp ON pp.user_id = ua.user_id
        LEFT JOIN role_category   rc ON rc.id     = pp.role_category_id
@@ -996,27 +1244,44 @@ const orgService = {
          LIMIT 1
        ) primary_dm ON TRUE
        LEFT JOIN department d ON d.id = primary_dm.department_id
+       LEFT JOIN LATERAL (
+         SELECT onode.id AS node_id, onode.name AS node_name
+         FROM node_membership nm
+         JOIN org_node onode ON onode.id = nm.node_id AND onode.deleted_at IS NULL
+         WHERE nm.user_id = ua.user_id
+         ORDER BY nm.is_primary DESC, nm.joined_at ASC NULLS LAST, nm.membership_id ASC
+         LIMIT 1
+       ) primary_nm ON TRUE
        WHERE ua.deleted_at IS NULL
-         AND EXISTS (SELECT 1 FROM department_membership dm WHERE dm.user_id = ua.user_id)
+         AND (
+           EXISTS (SELECT 1 FROM department_membership dm WHERE dm.user_id = ua.user_id)
+           OR EXISTS (SELECT 1 FROM node_membership nm WHERE nm.user_id = ua.user_id)
+         )
        ORDER BY rc.rank NULLS LAST, ua.first_name, ua.last_name`,
       { type: QueryTypes.SELECT },
     );
 
-    const nodes = rows.map((r) => ({
-      user_id: r.user_id,
-      first_name: r.first_name,
-      last_name: r.last_name,
-      email: r.email,
-      avatar_url: r.avatar_url,
-      job_title: r.job_title,
-      reports_to_user_id: r.reports_to_user_id,
-      role_category: r.role_category_id
-        ? { id: r.role_category_id, name: r.role_category_name, rank: r.role_category_rank }
-        : null,
-      primary_department: r.department_id
-        ? { id: r.department_id, name: r.department_name }
-        : null,
-    }));
+    const nodes = rows.map((r) => {
+      const uid = Number(r.user_id);
+      return {
+        user_id: r.user_id,
+        azure_object_id: r.azure_object_id || null,
+        first_name: r.first_name,
+        last_name: r.last_name,
+        email: r.email,
+        avatar_url: r.avatar_url,
+        job_title: r.job_title,
+        reports_to_user_id: r.reports_to_user_id,
+        role_category: r.role_category_id
+          ? { id: r.role_category_id, name: r.role_category_name, rank: r.role_category_rank }
+          : null,
+        primary_department: r.department_id
+          ? { id: r.department_id, name: r.department_name }
+          : (r.node_id ? { id: r.node_id, name: r.node_name } : null),
+        // Chat only if viewer may message this user (not self, not blocked).
+        can_chat: Boolean(viewerId) && uid !== viewerId && !blockedIdSet.has(uid),
+      };
+    });
 
     return {
       organisation: organisation ? { id: organisation.id, name: organisation.name } : null,

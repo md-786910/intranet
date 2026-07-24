@@ -64,7 +64,7 @@ export default function OrgHierarchyView() {
       <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 shrink-0 flex items-center justify-between">
         <p className="text-sm font-medium text-gray-700">Reporting Hierarchy</p>
         <p className="text-xs text-gray-400">
-          Drag to pan · scroll to navigate · click card to view profile · +/− to expand
+          Drag to pan · scroll to navigate · click card to open user profile · +/− to expand
         </p>
       </div>
 

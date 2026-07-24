@@ -8,6 +8,7 @@ import { ToastProvider } from './contexts/ToastContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import { useAuth } from './hooks/useAuth';
 import AdminLayout from './components/layout/AdminLayout';
+import { SocketProvider } from './contexts/SocketContext';
 
 // Auth
 import LoginPage from './pages/auth/LoginPage';
@@ -26,7 +27,6 @@ import EmployeesListPage from './pages/employees/EmployeesListPage';
 import EmployeeCreatePage from './pages/employees/EmployeeCreatePage';
 import EmployeeDetailPage from './pages/employees/EmployeeDetailPage';
 import EmployeeEditPage from './pages/employees/EmployeeEditPage';
-import RoleCategoriesPage from './pages/role-categories/RoleCategoriesPage';
 import JobTitlesPage from './pages/job-titles/JobTitlesPage';
 import RolesListPage from './pages/roles/RolesListPage';
 import RoleCreatePage from './pages/roles/RoleCreatePage';
@@ -104,7 +104,9 @@ function App() {
               <Route
                 element={
                   <ProtectedRoute>
-                    <AdminLayout />
+                    <SocketProvider>
+                      <AdminLayout />
+                    </SocketProvider>
                   </ProtectedRoute>
                 }
               >
@@ -127,9 +129,6 @@ function App() {
                 <Route path="/employees/create" element={<EmployeeCreatePage />} />
                 <Route path="/employees/:id" element={<EmployeeDetailPage />} />
                 <Route path="/employees/:id/edit" element={<EmployeeEditPage />} />
-
-                {/* Role Categories */}
-                <Route path="/role-categories" element={<RoleCategoriesPage />} />
 
                 {/* Job Titles */}
                 <Route path="/job-titles" element={<JobTitlesPage />} />

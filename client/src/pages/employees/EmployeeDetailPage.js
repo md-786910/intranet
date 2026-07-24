@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
@@ -8,16 +8,24 @@ import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { employeeService } from '../../services/employeeService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
+import ChatDrawer from '../../components/chat/ChatDrawer';
+
+function mediaUrl(path) {
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path)) return path;
+  const apiBase = (process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1').replace(/\/api\/v1\/?$/, '');
+  return `${apiBase}${path.startsWith('/') ? path : `/${path}`}`;
+}
 
 function initials(first, last) {
-  return `${(first || '').charAt(0)}${(last || '').charAt(0)}`.toUpperCase();
+  return `${(first || '').charAt(0)}${(last || '').charAt(0)}`.toUpperCase() || '?';
 }
 
 function Field({ label, children }) {
   return (
     <div>
       <dt className="text-xs uppercase tracking-wide text-gray-500 font-medium">{label}</dt>
-      <dd className="mt-1 text-sm text-gray-900">{children}</dd>
+      <dd className="mt-1 text-sm text-gray-900">{children || <span className="text-gray-400">—</span>}</dd>
     </div>
   );
 }
@@ -31,6 +39,7 @@ export default function EmployeeDetailPage() {
   const [resending, setResending] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const fetchEmployee = useCallback(() => {
     setLoading(true);
@@ -41,17 +50,6 @@ export default function EmployeeDetailPage() {
   }, [id, addToast]);
 
   useEffect(() => { fetchEmployee(); }, [fetchEmployee]);
-
-  // Build a quick lookup so role assignments can show real department names
-  // instead of "DEPARTMENT #12".
-  const departmentNameById = useMemo(() => {
-    const map = new Map();
-    (employee?.departmentMemberships || []).forEach((m) => {
-      const dept = m.department;
-      if (dept?.id) map.set(Number(dept.id), dept.name);
-    });
-    return map;
-  }, [employee]);
 
   const handleResend = async () => {
     setResending(true);
@@ -83,8 +81,14 @@ export default function EmployeeDetailPage() {
   if (loading) return <div className="animate-pulse h-96 bg-gray-100 rounded-xl" />;
   if (!employee) return <div className="text-center py-12 text-gray-500">Employee not found</div>;
 
-  const roleCategoryName = employee.profile?.roleCategory?.name;
+  const displayName = [employee.first_name, employee.last_name].filter(Boolean).join(' ');
   const manager = employee.profile?.manager;
+  const avatarSrc = mediaUrl(employee.avatar_url);
+  const jobDeptLine = [employee.profile?.job_title, employee.profile?.department_display]
+    .filter(Boolean)
+    .join(' · ');
+  const company = employee.profile?.companyNode?.name || employee.profile?.company_name;
+  const office = employee.profile?.officeNode?.name || employee.profile?.location;
 
   return (
     <div>
@@ -104,30 +108,45 @@ export default function EmployeeDetailPage() {
         }
       />
 
-      {/* Identity card */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 mb-4">
-        <div className="flex items-start gap-5">
-          <div className="w-16 h-16 rounded-full bg-primary-50 text-primary-700 flex items-center justify-center text-xl font-semibold shrink-0">
-            {initials(employee.first_name, employee.last_name)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-xl font-semibold text-gray-900 truncate">
-                {employee.first_name} {employee.last_name}
-              </h2>
-              <StatusBadge status={employee.status} />
-              {roleCategoryName && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-primary-50 text-primary-700 text-xs font-medium border border-primary-100">
-                  {roleCategoryName}
-                </span>
-              )}
+        <div className="flex flex-col sm:flex-row sm:items-start gap-5">
+          {avatarSrc ? (
+            <img
+              src={avatarSrc}
+              alt={displayName}
+              className="w-16 h-16 rounded-full object-cover shrink-0 border border-gray-100"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-primary-50 text-primary-700 flex items-center justify-center text-xl font-semibold shrink-0">
+              {initials(employee.first_name, employee.last_name)}
             </div>
-            <div className="mt-1 text-sm text-gray-500">{employee.email}</div>
-            {employee.profile?.job_title && (
-              <div className="mt-1 text-sm text-gray-700">{employee.profile.job_title}</div>
-            )}
+          )}
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xl font-semibold text-gray-900 truncate">{displayName}</h2>
+              <StatusBadge status={employee.status} />
+            </div>
+            {jobDeptLine && <p className="text-sm text-gray-600">{jobDeptLine}</p>}
+            <p className="text-sm text-gray-500">{employee.email}</p>
+            <div className="flex flex-wrap gap-2 pt-2">
+              {employee.email && (
+                <a
+                  href={`mailto:${employee.email}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                >
+                  Email
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setChatOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+              >
+                Chat
+              </button>
+            </div>
             {employee.invitation_pending && (
-              <div className="mt-3 text-xs inline-flex items-center gap-2 px-2 py-1 rounded-md bg-amber-50 text-amber-800 border border-amber-100">
+              <div className="mt-2 text-xs inline-flex items-center gap-2 px-2 py-1 rounded-md bg-amber-50 text-amber-800 border border-amber-100">
                 Invitation pending — expires {formatDate(employee.invitation_expires_at)}
               </div>
             )}
@@ -135,109 +154,63 @@ export default function EmployeeDetailPage() {
         </div>
       </div>
 
-      {/* Profile + Hierarchy */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <section className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Profile</h3>
-          <dl className="grid grid-cols-2 gap-4">
-            <Field label="Phone">{employee.phone || <span className="text-gray-400">—</span>}</Field>
-            <Field label="Employee ID">{employee.profile?.employee_id || <span className="text-gray-400">—</span>}</Field>
-            <Field label="Job Title">{employee.profile?.job_title || <span className="text-gray-400">—</span>}</Field>
-            <Field label="Created">{formatDate(employee.created_at)}</Field>
-          </dl>
-        </section>
-
-        <section className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Hierarchy</h3>
-          <dl className="grid grid-cols-2 gap-4">
-            <Field label="Role Category">
-              {roleCategoryName ? (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-primary-50 text-primary-700 text-xs font-medium border border-primary-100">
-                  {roleCategoryName}
-                </span>
-              ) : <span className="text-gray-400">—</span>}
-            </Field>
-            <Field label="Reporting To">
-              {manager ? (
-                <Link to={`/employees/${manager.user_id}`} className="text-primary-700 hover:underline font-medium">
-                  {manager.first_name} {manager.last_name}
-                </Link>
-              ) : <span className="text-gray-400">—</span>}
-            </Field>
-          </dl>
-        </section>
-      </div>
-
-      {/* Organisation Assignments */}
       <section className="bg-white rounded-xl border border-gray-200 p-6 mb-4">
-        <div className="flex items-baseline justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-700">Organisation Assignments</h3>
-          <span className="text-xs text-gray-500">{employee.departmentMemberships?.length || 0} total</span>
-        </div>
-        {(!employee.departmentMemberships || employee.departmentMemberships.length === 0) ? (
-          <p className="text-sm text-gray-500">No department memberships.</p>
-        ) : (
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">Profile</h3>
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Job Title">{employee.profile?.job_title}</Field>
+          <Field label="Department">{employee.profile?.department_display}</Field>
+          <Field label="Company">{company}</Field>
+          <Field label="Email">{employee.email}</Field>
+          <Field label="Phone">{employee.phone}</Field>
+          <Field label="Mobile">{employee.mobile_phone}</Field>
+          <Field label="Office Location">{office}</Field>
+          <Field label="Manager">
+            {manager ? (
+              <Link to={`/employees/${manager.user_id}`} className="text-primary-700 hover:underline font-medium">
+                {manager.first_name} {manager.last_name}
+              </Link>
+            ) : null}
+          </Field>
+        </dl>
+      </section>
+
+      {(employee.roleAssignments?.length > 0) && (
+        <section className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-baseline justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-700">Roles</h3>
+            <span className="text-xs text-gray-500">{employee.roleAssignments.length} total</span>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {employee.departmentMemberships.map((membership) => (
+            {employee.roleAssignments.map((assignment) => (
               <div
-                key={membership.membership_id || membership.department_id}
-                className={`flex items-start justify-between gap-3 p-3 rounded-lg border ${
-                  membership.is_primary
-                    ? 'bg-emerald-50/40 border-emerald-100'
-                    : 'bg-gray-50 border-gray-100'
-                }`}
+                key={assignment.assignment_id}
+                className="flex items-start justify-between gap-3 p-3 bg-gray-50 border border-gray-100 rounded-lg"
               >
                 <div className="min-w-0">
-                  <div className="font-medium text-gray-900 truncate">{membership.department?.name}</div>
-                  <div className="text-xs text-gray-500 truncate">{membership.path}</div>
+                  <div className="font-medium text-gray-900 truncate">{assignment.role?.name}</div>
+                  <div className="text-xs text-gray-500 truncate uppercase tracking-wide">
+                    {assignment.scope_type?.replace(/_/g, ' ').toLowerCase()}
+                  </div>
                 </div>
-                {membership.is_primary && <Badge variant="success" size="sm">Primary</Badge>}
+                {assignment.role?.is_system && <Badge variant="info" size="sm">System</Badge>}
               </div>
             ))}
           </div>
-        )}
-      </section>
-
-      {/* Roles */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex items-baseline justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-700">Roles</h3>
-          <span className="text-xs text-gray-500">{employee.roleAssignments?.length || 0} total</span>
-        </div>
-        {(!employee.roleAssignments || employee.roleAssignments.length === 0) ? (
-          <p className="text-sm text-gray-500">No roles assigned.</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {employee.roleAssignments.map((assignment) => {
-              const scopeLabel = assignment.scope_type === 'DEPARTMENT'
-                && departmentNameById.get(Number(assignment.scope_id))
-                  ? departmentNameById.get(Number(assignment.scope_id))
-                  : `${assignment.scope_type.replace(/_/g, ' ')} #${assignment.scope_id}`;
-              return (
-                <div
-                  key={assignment.assignment_id}
-                  className="flex items-start justify-between gap-3 p-3 bg-gray-50 border border-gray-100 rounded-lg"
-                >
-                  <div className="min-w-0">
-                    <div className="font-medium text-gray-900 truncate">{assignment.role?.name}</div>
-                    <div className="text-xs text-gray-500 truncate">
-                      <span className="uppercase tracking-wide text-[10px] text-gray-400 mr-1">
-                        {assignment.scope_type.replace(/_/g, ' ').toLowerCase()}
-                      </span>
-                      {scopeLabel}
-                    </div>
-                  </div>
-                  {assignment.role?.is_system && <Badge variant="info" size="sm">System</Badge>}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+        </section>
+      )}
 
       <ConfirmDialog isOpen={deleteOpen} onCancel={() => setDeleteOpen(false)} onConfirm={handleDelete}
         loading={deleting} title="Remove Employee"
         message={`Remove "${employee.first_name} ${employee.last_name}"? They will lose access immediately.`} />
+
+      <ChatDrawer
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        userId={employee.user_id || id}
+        displayName={displayName}
+        jobTitle={employee.profile?.job_title}
+        avatarUrl={employee.avatar_url}
+      />
     </div>
   );
 }

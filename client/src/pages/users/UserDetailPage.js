@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import PageHeader from '../../components/common/PageHeader';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import Button from '../../components/common/Button';
 import Select from '../../components/common/Select';
 import ScopePicker from '../../components/common/ScopePicker';
@@ -8,38 +7,96 @@ import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelect
 import StatusBadge from '../../components/common/StatusBadge';
 import Badge from '../../components/common/Badge';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import Table from '../../components/common/Table';
+import InlineEditableSelect from '../../components/common/InlineEditableSelect';
 import PermissionMatrix from '../../components/roles/PermissionMatrix';
 import { getPermLabel } from '../../components/roles/PermissionMatrix';
 import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
+import { azureAdService } from '../../services/azureAdService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate, formatDateTime, formatRelativeTime } from '../../utils/formatters';
 import { findScopeLabel, findScopePath } from '../../utils/scopeLabel';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { useOrgTree } from '../../hooks/useOrgTree';
+import { getErrorMessage } from '../../utils/errorUtils';
+import ChatDrawer from '../../components/chat/ChatDrawer';
 
 const DEFAULT_ORGANISATION_ID = 1;
 
-// Em-dash placeholders read as "missing data" — replace with "Not set" in
-// italic gray to signal a known-empty optional field that can be filled
-// via Edit.
-function Field({ label, value, hint }) {
-  const empty = value === null || value === undefined || value === '';
+const AVATAR_COLORS = [
+  'bg-indigo-600', 'bg-violet-600', 'bg-sky-600', 'bg-teal-600',
+  'bg-emerald-600', 'bg-amber-600', 'bg-rose-600', 'bg-fuchsia-600',
+];
+
+function hashColor(str = '') {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+
+function getInitials(name = '') {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function mediaUrl(path) {
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path)) return path;
+  const apiBase = (process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1').replace(/\/api\/v1\/?$/, '');
+  return `${apiBase}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+function Avatar({ name, src, size = 'lg' }) {
+  const dim = size === 'lg' ? 'w-16 h-16 text-xl' : 'w-9 h-9 text-sm';
+  const resolved = mediaUrl(src);
+  if (resolved) {
+    return (
+      <img
+        src={resolved}
+        alt={name}
+        className={`${dim} rounded-full object-cover shrink-0 border border-gray-100`}
+      />
+    );
+  }
   return (
-    <div className="py-2.5">
-      <dt className="text-xs uppercase tracking-wide text-gray-500">{label}</dt>
-      <dd className={`mt-1 text-sm ${empty ? 'text-gray-400 italic font-normal' : 'text-gray-900 font-medium'}`}>
-        {empty ? (hint || 'Not set') : value}
-      </dd>
+    <div className={`${dim} rounded-full ${hashColor(name)} flex items-center justify-center text-white font-bold shrink-0`}>
+      {getInitials(name)}
     </div>
   );
 }
 
-function initialsOf(firstName, lastName, email) {
-  const a = (firstName || '').charAt(0);
-  const b = (lastName || '').charAt(0);
-  if (a || b) return `${a}${b}`.toUpperCase();
-  return (email || '?').slice(0, 2).toUpperCase();
+/** Entra-style labelled field row (label left, value right). */
+function Field({ label, value, hint, mono = false }) {
+  const empty = value === null || value === undefined || value === '';
+  const display = empty ? (
+    <span className="text-gray-400 italic">{hint || 'Not set'}</span>
+  ) : React.isValidElement(value) ? (
+    value
+  ) : (
+    <span className={`${mono ? 'font-mono text-xs' : ''} break-all`}>{String(value)}</span>
+  );
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-start gap-0.5 sm:gap-4 py-2.5 border-b border-gray-100 last:border-0">
+      <dt className="w-full sm:w-52 shrink-0 text-xs font-medium text-gray-500 uppercase tracking-wide pt-0.5">
+        {label}
+      </dt>
+      <dd className="text-sm text-gray-800">{display}</dd>
+    </div>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
+        <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
+      </div>
+      <dl className="px-5 py-1">{children}</dl>
+    </div>
+  );
 }
 
 function extractPermissionIds(role) {
@@ -165,34 +222,43 @@ function DirectPermissionRow({ perm, onRemove, removing, scopeLabel }) {
   );
 }
 
-function OrgNode({ person, isSelf, onClick }) {
-  const initials = `${(person.first_name || '').charAt(0)}${(person.last_name || '').charAt(0)}`.toUpperCase() || '?';
-  return (
-    <div
-      onClick={onClick}
-      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors w-full ${
-        isSelf
-          ? 'bg-primary-50 border border-primary-200 ring-1 ring-primary-300'
-          : onClick ? 'cursor-pointer hover:bg-gray-50 border border-gray-200' : 'border border-gray-200'
-      }`}
-    >
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${
-        isSelf ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
-      }`}>
-        {initials}
-      </div>
-      <div className="min-w-0">
-        <div className={`text-sm font-medium truncate ${isSelf ? 'text-primary-700' : 'text-gray-900'}`}>
-          {person.first_name} {person.last_name}
-          {isSelf && <span className="ml-1.5 text-xs font-normal text-primary-500">(you)</span>}
+const REPORT_COLS = [
+  {
+    key: 'name',
+    label: 'Name',
+    render: (row) => {
+      const name = `${row.first_name || ''} ${row.last_name || ''}`.trim();
+      return (
+        <div className="flex items-center gap-2.5">
+          <div className={`w-7 h-7 rounded-full ${hashColor(name)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+            {getInitials(name)}
+          </div>
+          <span className="font-medium text-gray-900">{name}</span>
         </div>
-        <div className="text-xs text-gray-500 truncate">
-          {[person.role_category?.name, person.job_title].filter(Boolean).join(' · ') || 'No role assigned'}
-        </div>
-      </div>
-    </div>
-  );
-}
+      );
+    },
+  },
+  {
+    key: 'job_title',
+    label: 'Job Title',
+    render: (r) => r.job_title || <span className="text-gray-300">—</span>,
+  },
+  {
+    key: 'department_display',
+    label: 'Department',
+    render: (r) => r.department_display || <span className="text-gray-300">—</span>,
+  },
+  {
+    key: 'email',
+    label: 'Email',
+    render: (r) => r.email || <span className="text-gray-300">—</span>,
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    render: (r) => <StatusBadge status={r.status} />,
+  },
+];
 
 export default function UserDetailPage() {
   const { id } = useParams();
@@ -211,6 +277,11 @@ export default function UserDetailPage() {
   const [permDeleteOpen, setPermDeleteOpen] = useState(false);
   const [permDeleting, setPermDeleting] = useState(false);
   const [resending, setResending] = useState(false);
+  const [editingOrgLink, setEditingOrgLink] = useState(null); // 'company' | 'office' | null
+  const [savingOrgLink, setSavingOrgLink] = useState(null);
+  const [syncingEntra, setSyncingEntra] = useState(false);
+  const [showAdminMeta, setShowAdminMeta] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
 
   // Prefer ?from= when opened from another screen (e.g. Organisation tree).
   // Only allow same-app relative paths.
@@ -248,7 +319,11 @@ export default function UserDetailPage() {
   const fetchUser = useCallback(() => {
     setLoading(true);
     userService.getUser(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
-      .then((res) => setUser(res.data?.data))
+      .then((res) => {
+        const next = res.data?.data;
+        setUser(next);
+        setEditingOrgLink(null);
+      })
       .catch(() => addToast('Failed to load user', 'error'))
       .finally(() => setLoading(false));
   }, [id, addToast]);
@@ -261,14 +336,14 @@ export default function UserDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (!user || tab !== 'profile') return;
+    if (!user) return;
+    setOrgChain(null);
     setOrgChainLoading(true);
     userService.getOrgChain(id)
       .then((res) => setOrgChain(res.data?.data || null))
-      .catch(() => {})
+      .catch(() => setOrgChain(null))
       .finally(() => setOrgChainLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, tab, id]);
+  }, [user, id]);
 
   const handleDeactivate = async () => {
     setDeleting(true);
@@ -397,7 +472,92 @@ export default function UserDetailPage() {
     } finally { setRemovingPerm(null); }
   };
 
+  const handleSaveOrgLink = async (kind, rawValue) => {
+    const field = kind === 'company' ? 'company_node_id' : 'office_node_id';
+    const current = kind === 'company'
+      ? (user?.profile?.company_node_id ? String(user.profile.company_node_id) : '')
+      : (user?.profile?.office_node_id ? String(user.profile.office_node_id) : '');
+    const next = rawValue || '';
+    if (next === current) {
+      setEditingOrgLink(null);
+      return;
+    }
+    const nodeId = next ? Number(next) : null;
+    setSavingOrgLink(kind);
+    try {
+      await userService.updateUser(id, {
+        profile: { [field]: nodeId },
+      });
+      addToast(kind === 'company' ? 'Company updated' : 'Office updated', 'success');
+      setEditingOrgLink(null);
+      fetchUser();
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to update org link', 'error');
+    } finally {
+      setSavingOrgLink(null);
+    }
+  };
+
+  const handleSyncFromEntra = async () => {
+    if (!user?.azure_object_id) {
+      addToast('User is not linked to Entra', 'error');
+      return;
+    }
+    setSyncingEntra(true);
+    try {
+      await azureAdService.syncLocalUser(id);
+      addToast('Synced from Entra', 'success');
+      fetchUser();
+    } catch (err) {
+      addToast(getErrorMessage(err, 'Failed to sync from Entra'), 'error');
+    } finally {
+      setSyncingEntra(false);
+    }
+  };
+
   // Derived
+  // Root GROUP (organisation) + companies under it
+  const companyOptions = useMemo(() => {
+    const out = [];
+    (orgTree || []).forEach((root) => {
+      if (root.type === 'GROUP') {
+        out.push({
+          value: String(root.id),
+          label: `${root.name} (Organisation)`,
+        });
+      }
+      (root.children || []).forEach((n) => {
+        if (n.type === 'COMPANY') {
+          out.push({ value: String(n.id), label: n.name });
+        }
+      });
+    });
+    return out;
+  }, [orgTree]);
+
+  const officeOptions = useMemo(() => {
+    const out = [];
+    const walkOffices = (nodes, companyName) => {
+      (nodes || []).forEach((n) => {
+        if (n.type === 'OFFICE_LOCATION') {
+          out.push({
+            value: String(n.id),
+            label: companyName ? `${companyName} · ${n.name}` : n.name,
+          });
+        }
+        if (n.children?.length) walkOffices(n.children, companyName);
+      });
+    };
+    (orgTree || []).forEach((root) => {
+      (root.children || []).forEach((company) => {
+        if (company.type === 'COMPANY') {
+          walkOffices(company.children, company.name);
+        }
+      });
+    });
+    return out.sort((a, b) => a.label.localeCompare(b.label));
+  }, [orgTree]);
+
   const assignableRoleOptions = useMemo(() => {
     const assigned = new Set((user?.roleAssignments || []).map((a) => a.role_id || a.role?.role_id));
     return allRoles.filter((r) => !assigned.has(r.role_id))
@@ -418,38 +578,152 @@ export default function UserDetailPage() {
 
   const directPermCount = user?.directPermissions?.length || 0;
 
+  const orgMemberships = useMemo(() => {
+    const rows = [...(user?.departmentMemberships || [])]
+      .filter((m) => !String(m.membership_id || '').startsWith('derived-'))
+      .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0));
+    return rows.map((m) => {
+      const scopeId = m.node_id || m.department?.org_node_id || m.department?.id || m.department_id;
+      const scopeType = m.node_type || m.department?.node_type || 'DEPARTMENT';
+      const treePath = findScopePath(orgTree, scopeType, scopeId);
+      let crumbs;
+      if (treePath?.length) {
+        crumbs = treePath.map((c) => c.name);
+      } else {
+        const dept = m.department;
+        crumbs = [
+          dept?.vertical?.officeLocation?.organisation?.name,
+          dept?.vertical?.officeLocation?.name,
+          dept?.vertical?.name,
+          dept?.name || m.path,
+        ].filter(Boolean);
+      }
+      return {
+        key: m.membership_id || `${scopeType}-${scopeId}`,
+        crumbs: crumbs.length > 0 ? crumbs : [m.department?.name || 'Unknown unit'],
+        nodeType: treePath?.length
+          ? treePath[treePath.length - 1].type
+          : (String(scopeType).replace(/_/g, ' ')),
+        isPrimary: Boolean(m.is_primary),
+        source: m.source,
+      };
+    });
+  }, [user?.departmentMemberships, orgTree]);
+
   if (loading) return <div className="animate-pulse h-96 bg-gray-100 rounded-xl" />;
   if (!user) return <div className="text-center py-12 text-gray-500">User not found</div>;
 
+  const displayName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email;
+  const jobTitle = user.profile?.job_title || null;
+  const departmentDisplay = user.profile?.department_display || null;
+  const jobDeptLine = [jobTitle, departmentDisplay].filter(Boolean).join(' · ');
+  const manager = user.profile?.manager;
+
   const tabs = [
     { key: 'profile', label: 'Profile' },
-    { key: 'roles', label: `Roles (${user.roleAssignments?.length || 0})` },
-    { key: 'permissions', label: `Extra Permissions (${directPermCount})` },
-    { key: 'departments', label: `Departments (${user.departmentMemberships?.length || 0})` },
+    { key: 'reports', label: 'Direct Reports', count: orgChain?.direct_reports?.length },
+    { key: 'orgpath', label: 'Org Path' },
+    { key: 'roles', label: 'Roles', count: user.roleAssignments?.length || 0 },
+    { key: 'permissions', label: 'Extra Permissions', count: directPermCount },
   ];
 
   return (
-    <div>
-      <PageHeader
-        title={`${user.first_name} ${user.last_name}`}
-        subtitle={user.email}
-        backTo={backTo}
-        actions={
-          <div className="flex gap-2 items-center">
-            {user.status === 'ACTIVE' && (
-              <Button variant="secondary" size="sm" onClick={() => {
-                const qs = searchParams.get('from')
-                  ? `?from=${encodeURIComponent(searchParams.get('from'))}`
-                  : '';
-                navigate(`/users/${id}/edit${qs}`);
-              }}>Edit</Button>
+    <div className="space-y-6">
+      <Link
+        to={backTo}
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+        </svg>
+        Back
+      </Link>
+
+      {/* Single profile header: identity + people actions */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+          <Avatar name={displayName} src={user.avatar_url} size="lg" />
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-semibold text-gray-900 tracking-tight">{displayName}</h1>
+              <StatusBadge status={user.status} />
+              {user.azure_object_id && (
+                <Badge variant="info" size="sm">Entra linked</Badge>
+              )}
+            </div>
+            {jobDeptLine && (
+              <p className="text-sm text-gray-600">{jobDeptLine}</p>
+            )}
+            <p className="text-sm text-gray-500">{user.email}</p>
+            {manager && (
+              <p className="text-sm text-gray-500">
+                Reports to{' '}
+                <button
+                  type="button"
+                  onClick={() => navigate(`/users/${manager.user_id}`)}
+                  className="text-primary-600 font-medium hover:underline"
+                >
+                  {[manager.first_name, manager.last_name].filter(Boolean).join(' ')}
+                </button>
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2 pt-2">
+              {user.email && (
+                <a
+                  href={`mailto:${user.email}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                  </svg>
+                  Email
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setChatOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.75 15.75v-1.5A5.25 5.25 0 0111 9h.008c.192.168.2.3.242.042A8.25 8.25 0 0121 12z" />
+                </svg>
+                Chat
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 shrink-0 sm:pt-0.5">
+            {user.azure_object_id && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleSyncFromEntra}
+                loading={syncingEntra}
+                title="Pull latest profile data from Entra / Azure AD"
+              >
+                Sync from Entra
+              </Button>
             )}
             {user.status === 'ACTIVE' && (
-              <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>Deactivate</Button>
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const qs = searchParams.get('from')
+                      ? `?from=${encodeURIComponent(searchParams.get('from'))}`
+                      : '';
+                    navigate(`/users/${id}/edit${qs}`);
+                  }}
+                >
+                  Edit
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>
+                  Deactivate
+                </Button>
+              </>
             )}
             {user.status === 'INACTIVE' && (
               <>
-                <span className="text-xs text-gray-400 font-medium px-1">Inactive user</span>
                 <Button variant="secondary" size="sm" onClick={() => setReactivateOpen(true)} loading={reactivating}>
                   Reactivate
                 </Button>
@@ -459,28 +733,35 @@ export default function UserDetailPage() {
               </>
             )}
           </div>
-        }
-      />
+        </div>
+      </div>
 
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="border-b border-gray-200 px-6">
-          <nav className="flex gap-6">
-            {tabs.map((t) => (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                className={`py-3 text-sm font-medium border-b-2 transition-colors ${
-                  tab === t.key ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}>
-                {t.label}
-              </button>
-            ))}
-          </nav>
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="flex border-b border-gray-200 px-5 pt-1 gap-1 overflow-x-auto">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
+                tab === t.key
+                  ? 'border-primary-600 text-primary-700'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t.label}
+              {typeof t.count === 'number' && (
+                <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
+                  {t.count}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
-        <div className="p-6">
+        <div className="p-5">
           {/* ═══ PROFILE ═══ */}
           {tab === 'profile' && (
-            <div className="space-y-6">
-              {/* Invitation pending banner */}
+            <div className="space-y-5">
               {user.invitation_pending && (
                 <div className="flex items-center justify-between rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
                   <p className="text-xs text-amber-800">
@@ -493,161 +774,272 @@ export default function UserDetailPage() {
                 </div>
               )}
 
-              {/* Identity strip */}
-              <div className="flex items-center gap-4 pb-5 border-b border-gray-100">
-                <div className="inline-flex w-14 h-14 rounded-full bg-primary-100 text-primary-700 items-center justify-center text-lg font-semibold flex-shrink-0">
-                  {initialsOf(user.first_name, user.last_name, user.email)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-lg font-semibold text-gray-900 truncate">
-                    {user.first_name} {user.last_name}
-                  </div>
-                  <div className="text-sm text-gray-500 truncate flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zm0 0c0 1.657 1.007 3 2.25 3S21 13.657 21 12a9 9 0 10-2.636 6.364M16.5 12V8.25" />
-                    </svg>
-                    {user.email}
-                  </div>
-                </div>
-                <StatusBadge status={user.status} />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Personal info card */}
-                <section className="rounded-lg border border-gray-200 bg-gray-50/40 px-5 py-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Personal info</h3>
-                  <dl className="divide-y divide-gray-100">
-                    <Field label="Job title" value={user.profile?.job_title} />
-                    <Field label="Employee ID" value={user.profile?.employee_id} />
-                    <Field label="Phone" value={user.phone} />
-                    <Field label="Role Category" value={user.profile?.roleCategory?.name} />
-                    <Field
-                      label="Reporting To"
-                      value={
-                        user.profile?.manager
-                          ? <button type="button" onClick={() => navigate(`/users/${user.profile.manager.user_id}`)} className="text-primary-600 hover:text-primary-700 hover:underline font-medium">
-                              {user.profile.manager.first_name} {user.profile.manager.last_name}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Section title="Profile">
+                  <Field label="Job Title" value={user.profile?.job_title} />
+                  <Field label="Department" value={user.profile?.department_display} />
+                  <InlineEditableSelect
+                    label="Company"
+                    valueLabel={user.profile?.companyNode?.name || user.profile?.company_name}
+                    status={
+                      user.profile?.companyNode
+                        ? 'linked'
+                        : user.profile?.company_name
+                          ? 'unmatched'
+                          : 'empty'
+                    }
+                    unmatchedSource={user.profile?.company_name}
+                    options={companyOptions}
+                    value={user.profile?.company_node_id ? String(user.profile.company_node_id) : ''}
+                    editing={editingOrgLink === 'company'}
+                    saving={savingOrgLink === 'company'}
+                    editTitle="Change company"
+                    onStartEdit={() => setEditingOrgLink('company')}
+                    onCancel={() => setEditingOrgLink(null)}
+                    onSelect={(v) => handleSaveOrgLink('company', v)}
+                  />
+                  <Field label="Email" value={user.email} />
+                  <Field label="Phone" value={user.phone} />
+                  <Field label="Mobile" value={user.mobile_phone} />
+                  <InlineEditableSelect
+                    label="Office Location"
+                    valueLabel={user.profile?.officeNode?.name || user.profile?.location}
+                    status={
+                      user.profile?.officeNode
+                        ? 'linked'
+                        : user.profile?.location
+                          ? 'unmatched'
+                          : 'empty'
+                    }
+                    unmatchedSource={user.profile?.location}
+                    options={officeOptions}
+                    value={user.profile?.office_node_id ? String(user.profile.office_node_id) : ''}
+                    editing={editingOrgLink === 'office'}
+                    saving={savingOrgLink === 'office'}
+                    editTitle="Change office"
+                    onStartEdit={() => setEditingOrgLink('office')}
+                    onCancel={() => setEditingOrgLink(null)}
+                    onSelect={(v) => handleSaveOrgLink('office', v)}
+                  />
+                  <Field
+                    label="Manager"
+                    value={
+                      manager
+                        ? (
+                          <span>
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/users/${manager.user_id}`)}
+                              className="text-primary-600 hover:text-primary-700 hover:underline font-medium"
+                            >
+                              {manager.first_name} {manager.last_name}
                             </button>
-                          : null
-                      }
-                    />
-                  </dl>
-                </section>
-
-                {/* Account card */}
-                <section className="rounded-lg border border-gray-200 bg-gray-50/40 px-5 py-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Account</h3>
-                  <dl className="divide-y divide-gray-100">
-                    <Field
-                      label="Email"
-                      value={
-                        <span className="inline-flex items-center gap-1.5">
-                          <span>{user.email}</span>
-                          <svg className="w-3 h-3 text-gray-400" title="Email is the login identity and can't be changed" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                          </svg>
-                        </span>
-                      }
-                    />
-                    <Field
-                      label="Email verified"
-                      value={
-                        user.email_verified
-                          ? <span className="inline-flex items-center gap-1 text-emerald-600">✓ Verified</span>
-                          : <span className="inline-flex items-center gap-1 text-amber-600">Pending</span>
-                      }
-                    />
-                    <Field
-                      label="Member since"
-                      value={formatDate(user.created_at || user.createdAt)}
-                    />
-                    <Field
-                      label="Last login"
-                      value={(user.last_login_at || user.lastLoginAt) ? formatDateTime(user.last_login_at || user.lastLoginAt) : null}
-                      hint="Never signed in"
-                    />
-                    <Field
-                      label="Last seen"
-                      value={(user.last_seen_at || user.lastSeenAt) ? formatRelativeTime(user.last_seen_at || user.lastSeenAt) : null}
-                      hint="—"
-                    />
-                  </dl>
-                </section>
-              </div>
-
-              {/* Org Position — breadcrumb path(s) through the tree */}
-              {user.departmentMemberships?.length > 0 && (
-                <section className="rounded-lg border border-gray-200 bg-gray-50/40 px-5 py-4">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Organisation Position</h3>
-                  <div className="flex flex-col gap-2">
-                    {[...user.departmentMemberships]
-                      .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
-                      .map((m) => {
-                        const dept = m.department;
-                        const crumbs = [
-                          dept?.vertical?.officeLocation?.organisation?.name,
-                          dept?.vertical?.officeLocation?.name,
-                          dept?.vertical?.name,
-                          dept?.name,
-                        ].filter(Boolean);
-                        return (
-                          <div key={m.membership_id || m.department_id} className="flex items-center gap-2 flex-wrap">
-                            {crumbs.map((crumb, i) => (
-                              <React.Fragment key={i}>
-                                {i > 0 && (
-                                  <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                                  </svg>
-                                )}
-                                <span className={`text-sm ${i === crumbs.length - 1 ? 'font-semibold text-gray-900' : 'text-gray-500'}`}>
-                                  {crumb}
-                                </span>
-                              </React.Fragment>
-                            ))}
-                            {m.is_primary && (
-                              <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
-                                Primary
-                              </span>
+                            {manager.email && (
+                              <span className="block text-xs text-gray-400 font-mono mt-0.5">{manager.email}</span>
                             )}
-                          </div>
-                        );
-                      })}
-                  </div>
-                </section>
-              )}
+                          </span>
+                        )
+                        : null
+                    }
+                  />
+                </Section>
 
-              {/* Org Hierarchy */}
-              {orgChainLoading ? (
-                <div className="rounded-lg border border-gray-200 bg-gray-50/40 p-5 flex justify-center">
-                  <div className="w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : orgChain && (orgChain.ancestors.length > 0 || orgChain.direct_reports.length > 0) ? (
-                <section className="rounded-lg border border-gray-200 bg-gray-50/40 px-5 py-4">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-4">Org Hierarchy</h3>
-                  <div className="flex flex-col items-start max-w-sm">
-                    {orgChain.ancestors.map((person) => (
-                      <React.Fragment key={person.user_id}>
-                        <OrgNode person={person} isSelf={false} onClick={() => navigate(`/users/${person.user_id}`)} />
-                        <div className="ml-7 w-px h-4 bg-gray-300 flex-shrink-0" />
-                      </React.Fragment>
-                    ))}
-                    <OrgNode person={orgChain.self} isSelf />
-                    {orgChain.direct_reports.length > 0 && (
-                      <>
-                        <div className="ml-7 w-px h-4 bg-gray-300 flex-shrink-0" />
-                        <p className="text-xs text-gray-500 font-medium ml-1 mb-2">
-                          Direct reports ({orgChain.direct_reports.length})
-                        </p>
-                        <div className="flex flex-col gap-1.5 w-full pl-4 border-l-2 border-gray-200">
-                          {orgChain.direct_reports.map((person) => (
-                            <OrgNode key={person.user_id} person={person} isSelf={false} onClick={() => navigate(`/users/${person.user_id}`)} />
-                          ))}
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden self-start">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminMeta((v) => !v)}
+                    className="w-full flex items-center justify-between px-5 py-3 text-left bg-gray-50 hover:bg-gray-100 transition-colors border-b border-gray-200"
+                  >
+                    <span className="text-sm font-semibold text-gray-700">Admin</span>
+                    <svg
+                      className={`w-4 h-4 text-gray-500 transition-transform ${showAdminMeta ? 'rotate-180' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </button>
+                  {showAdminMeta && (
+                    <div className="px-5 pb-3">
+                      <dl>
+                        <Field
+                          label="Azure Object ID"
+                          value={
+                            user.azure_object_id ? (
+                              <span className="inline-flex flex-wrap items-center gap-2">
+                                <span className="font-mono text-xs break-all">{user.azure_object_id}</span>
+                                <button
+                                  type="button"
+                                  onClick={handleSyncFromEntra}
+                                  disabled={syncingEntra}
+                                  className="text-xs font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50"
+                                >
+                                  {syncingEntra ? 'Syncing…' : 'Sync now'}
+                                </button>
+                              </span>
+                            ) : null
+                          }
+                          mono={false}
+                          hint="Not linked"
+                        />
+                        <Field
+                          label="Email verified"
+                          value={
+                            user.email_verified
+                              ? <span className="inline-flex items-center gap-1 text-emerald-600">✓ Verified</span>
+                              : <span className="inline-flex items-center gap-1 text-amber-600">Pending</span>
+                          }
+                        />
+                        <Field
+                          label="Member since"
+                          value={formatDate(user.created_at || user.createdAt)}
+                        />
+                        <Field
+                          label="Last login"
+                          value={(user.last_login_at || user.lastLoginAt) ? formatDateTime(user.last_login_at || user.lastLoginAt) : null}
+                          hint="Never signed in"
+                        />
+                        <Field
+                          label="Last seen"
+                          value={(user.last_seen_at || user.lastSeenAt) ? formatRelativeTime(user.last_seen_at || user.lastSeenAt) : null}
+                          hint="—"
+                        />
+                        <div className="flex flex-col sm:flex-row sm:items-start gap-0.5 sm:gap-4 py-2.5">
+                          <dt className="w-full sm:w-36 shrink-0 text-xs font-medium text-gray-500 uppercase tracking-wide pt-0.5">
+                            Organisation
+                          </dt>
+                          <dd className="text-sm text-gray-800 min-w-0 flex-1">
+                            {orgMemberships.length === 0 ? (
+                              <span className="text-gray-400 italic">Not assigned</span>
+                            ) : (
+                              <ul className="space-y-3">
+                                {orgMemberships.map((m) => (
+                                  <li key={m.key} className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                                      <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
+                                        {m.nodeType}
+                                      </span>
+                                      {m.isPrimary && (
+                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
+                                          Primary
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      {m.crumbs.map((crumb, i) => (
+                                        <React.Fragment key={`${m.key}-${i}`}>
+                                          {i > 0 && (
+                                            <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                                            </svg>
+                                          )}
+                                          <span className={`text-sm ${i === m.crumbs.length - 1 ? 'font-semibold text-gray-900' : 'text-gray-500'}`}>
+                                            {crumb}
+                                          </span>
+                                        </React.Fragment>
+                                      ))}
+                                    </div>
+                                    {m.source && (
+                                      <p className="text-xs text-gray-400 mt-0.5">{m.source}</p>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </dd>
                         </div>
-                      </>
-                    )}
+                      </dl>
+                      <p className="text-xs text-gray-400 pb-2">
+                        Incomplete AD data (office, job title, department) yields empty Firma/Büro/Abteilung until On-Prem AD is cleaned. Sync pulls whatever Entra currently has.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ DIRECT REPORTS ═══ */}
+          {tab === 'reports' && (
+            <div>
+              {orgChainLoading ? (
+                <div className="animate-pulse space-y-3">
+                  {[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-gray-100 rounded" />)}
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-500 mb-4">
+                    {orgChain?.direct_reports?.length || 0} direct report
+                    {(orgChain?.direct_reports?.length || 0) !== 1 ? 's' : ''}
+                  </p>
+                  <Table
+                    columns={REPORT_COLS}
+                    data={orgChain?.direct_reports || []}
+                    emptyMessage="No direct reports"
+                    onRowClick={(row) => navigate(`/users/${row.user_id}`)}
+                  />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ═══ ORG PATH ═══ */}
+          {tab === 'orgpath' && (
+            <div>
+              {orgChainLoading ? (
+                <div className="animate-pulse space-y-3">
+                  {[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-gray-100 rounded" />)}
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {(!orgChain?.ancestors || orgChain.ancestors.length === 0) && !manager && (
+                    <p className="text-sm text-gray-400 mb-3">
+                      No manager chain — this user is at the top of the hierarchy.
+                    </p>
+                  )}
+                  {(orgChain?.ancestors || []).map((person, idx) => {
+                    const name = `${person.first_name || ''} ${person.last_name || ''}`.trim();
+                    return (
+                      <div key={person.user_id} className="flex items-center gap-3" style={{ paddingLeft: `${idx * 24}px` }}>
+                        {idx > 0 && (
+                          <svg className="w-4 h-4 text-gray-300 shrink-0 -ml-6" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                          </svg>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/users/${person.user_id}`)}
+                          className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors group min-w-0 text-left"
+                        >
+                          <div className={`w-8 h-8 rounded-full ${hashColor(name)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                            {getInitials(name)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 group-hover:text-primary-700">{name}</p>
+                            <p className="text-xs text-gray-400">{person.job_title}</p>
+                          </div>
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  <div
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary-50 border border-primary-200"
+                    style={{ paddingLeft: `${(orgChain?.ancestors?.length || 0) * 24 + 12}px` }}
+                  >
+                    <Avatar name={displayName} size="sm" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-primary-800">
+                        {displayName}{' '}
+                        <span className="text-xs font-normal text-primary-500">(You are here)</span>
+                      </p>
+                      <p className="text-xs text-primary-600">{jobTitle}</p>
+                    </div>
                   </div>
-                </section>
-              ) : null}
+                </div>
+              )}
             </div>
           )}
 
@@ -767,26 +1159,6 @@ export default function UserDetailPage() {
               )}
             </div>
           )}
-
-          {/* ═══ DEPARTMENTS ═══ */}
-          {tab === 'departments' && (
-            <div className="space-y-3">
-              {user.departmentMemberships?.length === 0 ? (
-                <p className="text-sm text-gray-500">No department memberships</p>
-              ) : (
-                user.departmentMemberships.map((m) => (
-                  <div key={m.membership_id || m.department_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="font-medium text-gray-900">{m.department?.name}</div>
-                      <div className="text-xs text-gray-500">{m.path || m.department?.path || 'Department scope'}</div>
-                      {m.source && <div className="text-xs text-gray-400 mt-1">{m.source}</div>}
-                    </div>
-                    {m.is_primary && <Badge variant="success" size="sm">Primary</Badge>}
-                  </div>
-                ))
-              )}
-            </div>
-          )}
         </div>
       </div>
 
@@ -804,6 +1176,15 @@ export default function UserDetailPage() {
       <ConfirmDialog isOpen={permDeleteOpen} onCancel={() => setPermDeleteOpen(false)} onConfirm={handlePermanentDelete}
         loading={permDeleting} title="Permanently Delete User"
         message={`Permanently delete "${user.first_name} ${user.last_name}"? This cannot be undone — they will be removed from all lists and cannot be reactivated.`} />
+
+      <ChatDrawer
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        userId={user.user_id}
+        displayName={displayName}
+        jobTitle={user.profile?.job_title}
+        avatarUrl={user.avatar_url}
+      />
     </div>
   );
 }

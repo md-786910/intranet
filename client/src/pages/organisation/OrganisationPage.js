@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
@@ -28,6 +29,7 @@ const EMPTY_FORM = { name: '', code: '', address: '', city: '', country: '', tim
 
 export default function OrganisationPage() {
   const { addToast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   // The generic node API is gated on MANAGE_OFFICE_LOCATIONS server-side.
   const { hasPermission: canManageNodes } = usePermission('ADMIN', 'MANAGE_OFFICE_LOCATIONS');
 
@@ -69,6 +71,39 @@ export default function OrganisationPage() {
   }, [addToast]);
 
   useEffect(() => { fetchTree(); }, [fetchTree]);
+
+  // Deep-link: /organisation?node=<id>&edit=1
+  useEffect(() => {
+    if (loading || tree.length === 0) return;
+    const nodeId = Number(searchParams.get('node'));
+    if (!nodeId) return;
+
+    const findNode = (nodes) => {
+      for (const n of nodes || []) {
+        if (Number(n.id) === nodeId) return n;
+        const nested = findNode(n.children);
+        if (nested) return nested;
+      }
+      return null;
+    };
+
+    const target = findNode(tree);
+    if (!target) return;
+
+    const wantsEdit = searchParams.get('edit') === '1';
+    if (wantsEdit && target.type !== 'GROUP' && canManageNodes) {
+      openEdit(target);
+    } else {
+      openView(target);
+    }
+
+    // Clear params so re-selecting the same node later still works
+    const next = new URLSearchParams(searchParams);
+    next.delete('node');
+    next.delete('edit');
+    setSearchParams(next, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, tree, searchParams, canManageNodes]);
 
   const fetchNodeMembers = useCallback(async (nodeId) => {
     if (!nodeId) return;

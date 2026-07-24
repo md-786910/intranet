@@ -39,6 +39,13 @@ router.get(
   controller.getOrgChain
 );
 
+// GET /api/v1/users/:id/directory-profile — employee-facing people fields
+router.get(
+  '/:id/directory-profile',
+  validate(schemas.idParam),
+  controller.getDirectoryProfile
+);
+
 // GET /api/v1/users/:id
 router.get(
   '/:id',

@@ -68,12 +68,14 @@ module.exports = {
 
   // "Key Contacts" card on the home page (employee-client/src/pages/home/MainContentGrid.js)
   keyContacts: {
-    level: "ORGANISATION",
+    level: "OFFICE_LOCATION",
   },
 
   // "Organisation Chart" card on the home page (departments shown to the user)
+  // Scoped to the logged-in user's office so they only see their location
+  // (e.g. Delhi), not other offices under the same company (e.g. Austria).
   homeOrgChart: {
-    level: "ORGANISATION",
+    level: "OFFICE_LOCATION",
   },
 
   // "Recent Activity" card on the home page (employee-client BottomRow.js).

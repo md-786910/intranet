@@ -5,7 +5,7 @@ const controller = require('./azure-ad.controller');
 const authenticate = require('../../middleware/authenticate');
 const authorize = require('../../middleware/authorize');
 const validate = require('../../middleware/validate');
-const { syncUsersSchema } = require('./azure-ad.validation');
+const { syncUsersSchema, syncLocalUserSchema } = require('./azure-ad.validation');
 
 // All routes require a valid session
 router.use(authenticate);
@@ -32,6 +32,14 @@ router.post(
   authorize('ADMIN', 'MANAGE_USERS'),
   validate(syncUsersSchema),
   controller.syncUsers
+);
+
+// ── Sync one BrightNow user from Entra by local user_id ───────────────────────
+router.post(
+  '/sync-local-user/:userId',
+  authorize('ADMIN', 'MANAGE_USERS'),
+  validate(syncLocalUserSchema),
+  controller.syncLocalUser
 );
 
 // ── Cache management ──────────────────────────────────────────────────────────

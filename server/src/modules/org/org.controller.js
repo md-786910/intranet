@@ -33,7 +33,7 @@ const getMyHierarchy = catchAsync(async (req, res) => {
 });
 
 const getPeopleTree = catchAsync(async (req, res) => {
-  const result = await orgService.getPeopleTree();
+  const result = await orgService.getPeopleTree(req.user.user_id);
   res.status(200).json({ status: 'success', data: result });
 });
 

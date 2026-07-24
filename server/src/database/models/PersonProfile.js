@@ -38,6 +38,22 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(64),
       allowNull: true,
     },
+    company_name: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    employee_type: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    company_node_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    office_node_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     role_category_id: {
       type: DataTypes.INTEGER,
       allowNull: true,
@@ -62,6 +78,14 @@ module.exports = (sequelize, DataTypes) => {
     PersonProfile.belongsTo(models.UserAccount, {
       foreignKey: 'reports_to_user_id',
       as: 'manager',
+    });
+    PersonProfile.belongsTo(models.OrgNode, {
+      foreignKey: 'company_node_id',
+      as: 'companyNode',
+    });
+    PersonProfile.belongsTo(models.OrgNode, {
+      foreignKey: 'office_node_id',
+      as: 'officeNode',
     });
   };
 

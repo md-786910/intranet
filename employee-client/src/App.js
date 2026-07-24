@@ -20,6 +20,7 @@ import DocumentsPage from './pages/documents/DocumentsPage';
 import CategoryDetailPage from './pages/documents/CategoryDetailPage';
 import PoliciesPage from './pages/policies/PoliciesPage';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
+import DirectoryProfilePage from './pages/directory/DirectoryProfilePage';
 import SettingsPage from './pages/settings/SettingsPage';
 
 export default function App() {
@@ -53,6 +54,7 @@ export default function App() {
               <Route path="/documents/categories/:id" element={<CategoryDetailPage />} />
               <Route path="/policies" element={<PoliciesPage />} />
               <Route path="/org-chart" element={<OrgChartPage />} />
+              <Route path="/directory/:userId" element={<DirectoryProfilePage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/" element={<Navigate to="/home" replace />} />
             </Route>

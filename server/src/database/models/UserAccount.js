@@ -21,10 +21,13 @@ module.exports = (sequelize, DataTypes) => {
     },
     last_name: {
       type: DataTypes.STRING(100),
-      allowNull: false,
-      validate: { notEmpty: true },
+      allowNull: true,
     },
     phone: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    mobile_phone: {
       type: DataTypes.STRING(20),
       allowNull: true,
     },
@@ -103,6 +106,10 @@ module.exports = (sequelize, DataTypes) => {
     UserAccount.hasMany(models.DepartmentMembership, {
       foreignKey: 'user_id',
       as: 'departmentMemberships',
+    });
+    UserAccount.hasMany(models.NodeMembership, {
+      foreignKey: 'user_id',
+      as: 'nodeMemberships',
     });
     UserAccount.hasMany(models.UserPermission, {
       foreignKey: 'user_id',

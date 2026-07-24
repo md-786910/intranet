@@ -9,7 +9,10 @@ import { NODE_TYPE_LABELS } from '../../utils/constants';
 
 function haveSameScopes(left, right) {
   if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
-  const normalize = (scopes) => [...scopes].map((s) => `${s.scope_type}:${s.scope_id}`).sort();
+  // Compare by scope_id only — parent forms may label a node as DEPARTMENT while
+  // the tree emits the real node_type (e.g. OFFICE_LOCATION), which must not
+  // thrash onChange / wipe the selection.
+  const normalize = (scopes) => [...scopes].map((s) => String(s.scope_id)).sort();
   const l = normalize(left);
   const r = normalize(right);
   return l.every((v, i) => v === r[i]);

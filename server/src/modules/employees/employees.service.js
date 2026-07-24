@@ -366,7 +366,10 @@ const employeesService = {
 
   async getById(id) {
     const models = require('../../database/models');
-    const { UserAccount, PersonProfile, DepartmentMembership, UserRoleAssignment, Role, RoleCategory, EmployeeInvitation } = models;
+    const {
+      UserAccount, PersonProfile, DepartmentMembership, UserRoleAssignment,
+      Role, RoleCategory, EmployeeInvitation, OrgNode,
+    } = models;
 
     const invitationMarker = await EmployeeInvitation.findOne({
       where: { user_id: id },
@@ -383,6 +386,8 @@ const employeesService = {
           include: [
             { model: RoleCategory, as: 'roleCategory', attributes: ['id', 'name', 'rank'], required: false },
             { model: UserAccount, as: 'manager', attributes: ['user_id', 'first_name', 'last_name', 'email'], required: false },
+            { model: OrgNode, as: 'companyNode', attributes: ['id', 'name', 'node_type'], required: false },
+            { model: OrgNode, as: 'officeNode', attributes: ['id', 'name', 'node_type'], required: false },
           ],
         },
         {
@@ -487,7 +492,7 @@ const employeesService = {
         email,
         password_hash: placeholderHash,
         first_name: data.first_name,
-        last_name: data.last_name,
+        last_name: data.last_name || null,
         phone: data.phone || null,
         status: 'INVITED',
       }, { transaction });

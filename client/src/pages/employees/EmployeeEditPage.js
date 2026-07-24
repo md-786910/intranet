@@ -8,7 +8,6 @@ import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelect
 import ChatAccessSelector from '../../components/common/ChatAccessSelector';
 import ReportsToPicker from './ReportsToPicker';
 import { employeeService } from '../../services/employeeService';
-import { roleCategoryService } from '../../services/roleCategoryService';
 import { useToast } from '../../hooks/useToast';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
 
@@ -41,22 +40,15 @@ export default function EmployeeEditPage() {
   const [employee, setEmployee] = useState(null);
   const [form, setForm] = useState({
     first_name: '', last_name: '', phone: '', status: 'ACTIVE',
-    job_title: '', employee_id: '', role_category_id: '',
+    job_title: '', employee_id: '',
   });
   const [reportsTo, setReportsTo] = useState(null);
-  const [roleCategories, setRoleCategories] = useState([]);
   const [scopes, setScopes] = useState([]);
   const [primaryDeptId, setPrimaryDeptId] = useState('');
   const [errors, setErrors] = useState({});
   const [chatCandidates, setChatCandidates] = useState([]);
   const [chatCandidatesLoading, setChatCandidatesLoading] = useState(true);
   const [chatBlockedIds, setChatBlockedIds] = useState([]);
-
-  useEffect(() => {
-    roleCategoryService.list()
-      .then((res) => setRoleCategories(res.data?.data || []))
-      .catch(() => addToast('Failed to load role categories', 'error'));
-  }, [addToast]);
 
   useEffect(() => {
     employeeService.listChatCandidates()
@@ -75,7 +67,6 @@ export default function EmployeeEditPage() {
           first_name: e.first_name || '', last_name: e.last_name || '',
           phone: e.phone || '', status: e.status === 'INVITED' ? 'INVITED' : (e.status || 'ACTIVE'),
           job_title: e.profile?.job_title || '', employee_id: e.profile?.employee_id || '',
-          role_category_id: e.profile?.role_category_id ? String(e.profile.role_category_id) : '',
         });
         if (e.profile?.manager) {
           setReportsTo({
@@ -97,11 +88,6 @@ export default function EmployeeEditPage() {
   }, [id, addToast]);
 
   useEffect(() => { fetchEmployee(); }, [fetchEmployee]);
-
-  const roleCategoryOptions = useMemo(
-    () => roleCategories.map((c) => ({ value: String(c.id), label: c.name })),
-    [roleCategories],
-  );
 
   const departmentScopes = useMemo(
     () => scopes.filter((scope) => scope.scope_type === 'DEPARTMENT'),
@@ -138,7 +124,6 @@ export default function EmployeeEditPage() {
   const handleSave = async () => {
     const newErrors = {};
     if (!form.first_name) newErrors.first_name = 'First name is required';
-    if (!form.last_name) newErrors.last_name = 'Last name is required';
     if (departmentScopes.length === 0) {
       newErrors.scopes = 'Select at least one department.';
     }
@@ -149,11 +134,10 @@ export default function EmployeeEditPage() {
       const department_ids = departmentScopes.map((scope) => Number(scope.scope_id));
       const payload = {
         first_name: form.first_name,
-        last_name: form.last_name,
+        last_name: form.last_name || null,
         phone: form.phone || undefined,
         job_title: form.job_title || undefined,
         employee_id: form.employee_id || undefined,
-        role_category_id: form.role_category_id ? Number(form.role_category_id) : null,
         reports_to_user_id: reportsTo ? reportsTo.user_id : null,
         department_ids,
         primary_department_id: primaryDeptId ? Number(primaryDeptId) : department_ids[0],
@@ -185,7 +169,7 @@ export default function EmployeeEditPage() {
           <div className="grid grid-cols-2 gap-4">
             <Input label="First Name" name="first_name" required value={form.first_name}
               error={errors.first_name} onChange={handleChange} />
-            <Input label="Last Name" name="last_name" required value={form.last_name}
+            <Input label="Last Name" name="last_name" value={form.last_name}
               error={errors.last_name} onChange={handleChange} />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -201,16 +185,7 @@ export default function EmployeeEditPage() {
               <Input label="Job Title" name="job_title" value={form.job_title} onChange={handleChange} />
               <Input label="Employee ID" name="employee_id" value={form.employee_id} onChange={handleChange} />
             </div>
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <Select
-                label="Role Category"
-                name="role_category_id"
-                value={form.role_category_id}
-                onChange={handleChange}
-                options={roleCategoryOptions}
-                placeholder="Select a category"
-                error={errors.role_category_id}
-              />
+            <div className="mt-4">
               <ReportsToPicker
                 label="Reporting To"
                 value={reportsTo}

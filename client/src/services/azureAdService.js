@@ -19,6 +19,9 @@ export const azureAdService = {
   /** Sync Entra users into BrightNow (password create / email update, no email) */
   syncUsers: (body) => api.post('/azure-ad/sync-users', body),
 
+  /** Sync one BrightNow user from Entra by local user_id */
+  syncLocalUser: (userId) => api.post(`/azure-ad/sync-local-user/${userId}`),
+
   /** Clear all Azure AD Redis cache keys */
   clearCache: () => api.delete('/azure-ad/cache'),
 };

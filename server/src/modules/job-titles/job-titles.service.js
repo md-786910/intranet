@@ -27,8 +27,17 @@ const service = {
       });
       if (clash) throw ApiError.conflict('A job title with this name already exists');
 
+      const maxRank = await JobTitle.max('rank', {
+        where: { tenant_id: DEFAULT_TENANT_ID },
+        transaction: tx,
+      });
       const created = await JobTitle.create(
-        { tenant_id: DEFAULT_TENANT_ID, name: data.name },
+        {
+          tenant_id: DEFAULT_TENANT_ID,
+          name: data.name,
+          rank: data.rank || (maxRank || 0) + 1,
+          description: data.description || null,
+        },
         { transaction: tx },
       );
       await tx.commit();

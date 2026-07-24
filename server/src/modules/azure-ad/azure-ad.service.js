@@ -186,7 +186,9 @@ async function getUserDirectReports(id) {
   const cacheKey = `ad:reports:${id}`;
   const cached = await cacheService.get(cacheKey);
   if (cached) {
-    try { return JSON.parse(cached); } catch (_) {}
+    try {
+      return attachLocalUserIds(JSON.parse(cached));
+    } catch (_) {}
   }
 
   const raw = await fetchAllPages(
@@ -195,7 +197,7 @@ async function getUserDirectReports(id) {
   const reports = raw.filter((u) => u.accountEnabled !== false);
 
   await cacheService.set(cacheKey, JSON.stringify(reports), TTL_LIST);
-  return reports;
+  return attachLocalUserIds(reports);
 }
 
 // ── 4. getOrgTreeRoots — users whose manager is not in this org ───────────────
@@ -205,7 +207,9 @@ async function getOrgTreeRoots() {
   const cacheKey = 'ad:org-roots:v4';
   const cached = await cacheService.get(cacheKey);
   if (cached) {
-    try { return JSON.parse(cached); } catch (_) {}
+    try {
+      return attachLocalUserIds(JSON.parse(cached));
+    } catch (_) {}
   }
 
   // Fetch all users with their manager's ID expanded inline; exclude disabled accounts
@@ -230,7 +234,27 @@ async function getOrgTreeRoots() {
     .map(({ manager, ...rest }) => rest); // strip expanded manager before caching
 
   await cacheService.set(cacheKey, JSON.stringify(roots), TTL_TREE);
-  return roots;
+  return attachLocalUserIds(roots);
+}
+
+/** Map Entra azure object ids → BrightNow user_id for synced accounts. */
+async function attachLocalUserIds(users) {
+  if (!Array.isArray(users) || users.length === 0) return users || [];
+  const { UserAccount } = require('../../database/models');
+  const { Op } = require('sequelize');
+  const azureIds = [...new Set(users.map((u) => u.id).filter(Boolean))];
+  if (azureIds.length === 0) return users;
+
+  const locals = await UserAccount.findAll({
+    where: { azure_object_id: { [Op.in]: azureIds }, deleted_at: null },
+    attributes: ['user_id', 'azure_object_id'],
+  });
+  const byAzure = new Map(locals.map((row) => [row.azure_object_id, row.user_id]));
+
+  return users.map((u) => ({
+    ...u,
+    local_user_id: byAzure.get(u.id) || null,
+  }));
 }
 
 // ── 5. getDepartments — distinct department list for filter dropdown ───────────
@@ -258,13 +282,13 @@ async function clearCache() {
 const SYNC_SELECT = [
   'id', 'displayName', 'givenName', 'surname',
   'userPrincipalName', 'mail', 'jobTitle', 'department',
-  'officeLocation', 'employeeId', 'employeeHireDate',
+  'companyName', 'officeLocation', 'employeeId', 'employeeType', 'employeeHireDate',
   'businessPhones', 'mobilePhone', 'accountEnabled',
 ].join(',');
 
 async function fetchGraphUsersForSync({ onlyEnabled = true } = {}) {
   const raw = await fetchAllPages(
-    `/users?$select=${SYNC_SELECT}&$expand=manager($select=id,displayName)&$top=999&$orderby=displayName`
+    `/users?$select=${SYNC_SELECT}&$expand=manager($select=id,displayName,mail,userPrincipalName)&$top=999&$orderby=displayName`
   );
   return raw
     .filter((u) => (onlyEnabled ? u.accountEnabled !== false : true))
@@ -272,12 +296,59 @@ async function fetchGraphUsersForSync({ onlyEnabled = true } = {}) {
       ...u,
       _managerId: manager?.id || null,
       _managerName: manager?.displayName || null,
+      _managerEmail: (manager?.mail || manager?.userPrincipalName || '').trim().toLowerCase() || null,
     }));
+}
+
+async function fetchGraphUserForSync(azureObjectId) {
+  const client = getGraphClient();
+  try {
+    const raw = await client
+      .api(`/users/${azureObjectId}?$select=${SYNC_SELECT}&$expand=manager($select=id,displayName,mail,userPrincipalName)`)
+      .get();
+    const { manager, ...u } = raw;
+    return {
+      ...u,
+      _managerId: manager?.id || null,
+      _managerName: manager?.displayName || null,
+      _managerEmail: (manager?.mail || manager?.userPrincipalName || '').trim().toLowerCase() || null,
+    };
+  } catch (err) {
+    throw wrapGraphError(err);
+  }
+}
+
+/**
+ * Download profile photo binary from Graph. Returns null when the user has no photo.
+ * @returns {Promise<{ buffer: Buffer, contentType: string }|null>}
+ */
+async function fetchUserPhoto(azureObjectId) {
+  const client = getGraphClient();
+  try {
+    const res = await client
+      .api(`/users/${azureObjectId}/photo/$value`)
+      .responseType('arraybuffer')
+      .get();
+    const buffer = Buffer.isBuffer(res) ? res : Buffer.from(res);
+    if (!buffer.length) return null;
+    return { buffer, contentType: 'image/jpeg' };
+  } catch (err) {
+    const code = err.statusCode || err.code;
+    if (code === 404 || code === 'ImageNotFound' || String(err.message || '').includes('404')) {
+      return null;
+    }
+    logger.warn(`Graph photo fetch failed for ${azureObjectId}: ${err.message}`);
+    return null;
+  }
 }
 
 function syncUsersFromEntra(options, actorUserId) {
   // Lazy require avoids circular load with entra-sync.js
   return require('./entra-sync').syncUsersFromEntra(options, actorUserId);
+}
+
+function syncLocalUserFromEntra(options, actorUserId) {
+  return require('./entra-sync').syncLocalUserFromEntra(options, actorUserId);
 }
 
 module.exports = {
@@ -288,5 +359,8 @@ module.exports = {
   getDepartments,
   clearCache,
   fetchGraphUsersForSync,
+  fetchGraphUserForSync,
+  fetchUserPhoto,
   syncUsersFromEntra,
+  syncLocalUserFromEntra,
 };

@@ -33,6 +33,19 @@ async function validateDepartmentsExist(nodeIds) {
   if (bad) throw ApiError.badRequest(`Members cannot be attached to a ${bad.node_type}`);
 }
 
+async function validateOrgNodeOfType(nodeId, expectedType) {
+  if (nodeId === null || nodeId === undefined || nodeId === '') return;
+  const { OrgNode } = require('../../database/models');
+  const allowed = Array.isArray(expectedType) ? expectedType : [expectedType];
+  const node = await OrgNode.findByPk(Number(nodeId), { attributes: ['id', 'node_type', 'status'] });
+  if (!node || node.status !== 'ACTIVE') {
+    throw ApiError.badRequest(`Invalid ${allowed[0].toLowerCase().replace(/_/g, ' ')}`);
+  }
+  if (!allowed.includes(node.node_type)) {
+    throw ApiError.badRequest(`Selected node must be a ${allowed.join(' or ')}`);
+  }
+}
+
 /**
  * Mirror a set of member-bearing node ids into legacy department_membership for
  * the nodes that map to a legacy department, so department-centric readers keep
@@ -194,6 +207,45 @@ async function ensureEmployeeAtNode({ userId, nodeId, actorUserId, transaction }
     if (ownTx) await tx.rollback();
     throw err;
   }
+}
+
+async function findAncestorOfTypes(nodeId, types, transaction) {
+  const { OrgNode } = require('../../database/models');
+  const wanted = new Set(types);
+  let current = await OrgNode.findByPk(Number(nodeId), {
+    attributes: ['id', 'parent_id', 'node_type'],
+    transaction,
+  });
+  for (let i = 0; i < 40 && current; i += 1) {
+    if (wanted.has(current.node_type)) return current;
+    if (!current.parent_id) break;
+    // eslint-disable-next-line no-await-in-loop
+    current = await OrgNode.findByPk(Number(current.parent_id), {
+      attributes: ['id', 'parent_id', 'node_type'],
+      transaction,
+    });
+  }
+  return null;
+}
+
+/** Replace all org memberships + EMPLOYEE scopes with a single node (pencil Company/Office). */
+async function replaceOrgAssignmentAtNode({ userId, nodeId, actorUserId, transaction }) {
+  const ids = [Number(nodeId)];
+  await validateDepartmentsExist(ids);
+  await syncDepartmentMemberships({
+    userId,
+    departmentIds: ids,
+    primaryDepartmentId: ids[0],
+    transaction,
+  });
+  const roleId = await resolveEmployeeRoleId();
+  await syncEmployeeRoleAssignments({
+    userId,
+    roleId,
+    departmentIds: ids,
+    actorUserId,
+    transaction,
+  });
 }
 
 async function syncChatBlocks({ userId, blockedIds, actorUserId, transaction }) {
@@ -500,6 +552,7 @@ const usersService = {
           attributes: [
             'profile_id', 'user_id', 'job_title', 'bio', 'department_display',
             'location', 'date_of_birth', 'date_of_joining', 'employee_id',
+            'company_name', 'employee_type', 'company_node_id', 'office_node_id',
             'role_category_id', 'reports_to_user_id',
           ],
           include: [
@@ -550,6 +603,8 @@ const usersService = {
       Vertical,
       OfficeLocation,
       Organisation,
+      NodeMembership,
+      OrgNode,
       UserPermission,
       ModuleAction,
       Module,
@@ -567,6 +622,8 @@ const usersService = {
           include: [
             { model: RoleCategory, as: 'roleCategory', attributes: ['id', 'name', 'rank'], required: false },
             { model: UserAccount, as: 'manager', attributes: ['user_id', 'first_name', 'last_name', 'email'], required: false },
+            { model: OrgNode, as: 'companyNode', attributes: ['id', 'name', 'node_type'], required: false },
+            { model: OrgNode, as: 'officeNode', attributes: ['id', 'name', 'node_type'], required: false },
           ],
         },
         {
@@ -605,6 +662,17 @@ const usersService = {
           ],
         },
         {
+          model: NodeMembership,
+          as: 'nodeMemberships',
+          include: [
+            {
+              model: OrgNode,
+              as: 'node',
+              attributes: ['id', 'name', 'node_type', 'path', 'legacy_ref'],
+            },
+          ],
+        },
+        {
           model: UserPermission,
           as: 'directPermissions',
           include: [{
@@ -639,7 +707,60 @@ const usersService = {
     }));
 
     const existingDepartmentIds = new Set(existingMemberships.map((m) => Number(m.department_id)));
-    const derivedDepartmentIds = [...scopedDepartmentIds].filter((dId) => !existingDepartmentIds.has(dId));
+    const seenNodeIds = new Set();
+
+    // Org-tree memberships (authoritative for Entra sync / modern attach)
+    (user.nodeMemberships || []).forEach((nm) => {
+      const node = nm.node;
+      if (!node || node.node_type === 'GROUP') return;
+      const nodeId = Number(node.id);
+      if (seenNodeIds.has(nodeId)) return;
+      seenNodeIds.add(nodeId);
+
+      const legacyDeptId = node.node_type === 'DEPARTMENT' && node.legacy_ref
+        ? Number(String(node.legacy_ref).split(':')[1])
+        : null;
+
+      if (legacyDeptId && existingDepartmentIds.has(legacyDeptId)) {
+        // Enrich the legacy membership with org_node identity for the edit selector.
+        const legacyRow = existingMemberships.find((m) => Number(m.department_id) === legacyDeptId);
+        if (legacyRow && !legacyRow.node_id) {
+          legacyRow.node_id = nodeId;
+          legacyRow.node_type = node.node_type;
+          if (legacyRow.department) {
+            legacyRow.department = {
+              ...legacyRow.department,
+              org_node_id: nodeId,
+              node_type: node.node_type,
+            };
+          }
+        }
+        return;
+      }
+
+      existingMemberships.push({
+        membership_id: `node-${nm.membership_id}`,
+        department_id: legacyDeptId || nodeId,
+        node_id: nodeId,
+        node_type: node.node_type,
+        is_primary: Boolean(nm.is_primary),
+        joined_at: nm.joined_at || null,
+        source: nm.is_primary ? 'Primary membership' : 'Org membership',
+        department: {
+          id: nodeId,
+          name: node.name,
+          code: null,
+          node_type: node.node_type,
+          org_node_id: nodeId,
+        },
+        path: node.name,
+      });
+      if (legacyDeptId) existingDepartmentIds.add(legacyDeptId);
+    });
+
+    const derivedDepartmentIds = [...scopedDepartmentIds].filter(
+      (dId) => !existingDepartmentIds.has(dId) && !seenNodeIds.has(dId)
+    );
 
     if (derivedDepartmentIds.length > 0) {
       const derivedDepartments = await Department.findAll({
@@ -664,6 +785,28 @@ const usersService = {
           path: buildDepartmentPath(department),
         });
       });
+
+      // Remaining ids are org_node DEPARTMENT scopes (not legacy department rows)
+      const foundLegacyIds = new Set(derivedDepartments.map((d) => Number(d.id)));
+      const missingNodeIds = derivedDepartmentIds.filter((dId) => !foundLegacyIds.has(dId) && !seenNodeIds.has(dId));
+      if (missingNodeIds.length > 0) {
+        const nodes = await OrgNode.findAll({
+          where: { id: missingNodeIds },
+          attributes: ['id', 'name', 'node_type'],
+        });
+        nodes.forEach((node) => {
+          if (node.node_type === 'GROUP') return;
+          existingMemberships.push({
+            membership_id: `scope-node-${node.id}`,
+            department_id: node.id,
+            is_primary: false,
+            joined_at: null,
+            source: 'Inherited from scoped assignment',
+            department: { id: node.id, name: node.name, code: null },
+            path: node.name,
+          });
+        });
+      }
     }
 
     // Invitation status
@@ -726,8 +869,9 @@ const usersService = {
         email: data.email.toLowerCase(),
         password_hash: passwordHash,
         first_name: data.first_name,
-        last_name: data.last_name,
+        last_name: data.last_name || null,
         phone: data.phone || null,
+        mobile_phone: data.mobile_phone || null,
         azure_object_id: data.azure_object_id || null,
         status: isInviteFlow ? 'INVITED' : 'ACTIVE',
       }, { transaction });
@@ -737,13 +881,35 @@ const usersService = {
         ...(data.profile || {}),
         job_title: data.profile?.job_title || null,
         employee_id: data.profile?.employee_id || null,
+        employee_type: data.profile?.employee_type || null,
+        company_name: data.profile?.company_name || null,
+        company_node_id: data.profile?.company_node_id || null,
+        office_node_id: data.profile?.office_node_id || null,
         department_display: data.profile?.department_display || null,
         location: data.profile?.location || null,
         date_of_joining: data.profile?.date_of_joining || null,
         role_category_id: data.role_category_id || null,
         reports_to_user_id: data.reports_to_user_id || null,
       };
+      if (profileData.company_node_id) await validateOrgNodeOfType(profileData.company_node_id, ['COMPANY', 'GROUP']);
+      if (profileData.office_node_id) await validateOrgNodeOfType(profileData.office_node_id, 'OFFICE_LOCATION');
       await PersonProfile.create({ user_id: user.user_id, ...profileData }, { transaction });
+      if (profileData.company_node_id) {
+        await ensureEmployeeAtNode({
+          userId: user.user_id,
+          nodeId: Number(profileData.company_node_id),
+          actorUserId,
+          transaction,
+        });
+      }
+      if (profileData.office_node_id) {
+        await ensureEmployeeAtNode({
+          userId: user.user_id,
+          nodeId: Number(profileData.office_node_id),
+          actorUserId,
+          transaction,
+        });
+      }
 
       // Employee-style: sync department memberships + EMPLOYEE role assignments
       if (Array.isArray(data.department_ids) && data.department_ids.length > 0) {
@@ -831,7 +997,7 @@ const usersService = {
       const user = await UserAccount.findByPk(id, { transaction });
       if (!user) throw ApiError.notFound('User not found');
 
-      const userFields = ['first_name', 'last_name', 'phone', 'status', 'azure_object_id'];
+      const userFields = ['first_name', 'last_name', 'phone', 'mobile_phone', 'status', 'azure_object_id', 'avatar_url'];
       userFields.forEach((field) => {
         if (data[field] !== undefined) user[field] = data[field];
       });
@@ -844,14 +1010,60 @@ const usersService = {
       if (data.role_category_id !== undefined) profilePatch.role_category_id = data.role_category_id || null;
       if (data.reports_to_user_id !== undefined) profilePatch.reports_to_user_id = data.reports_to_user_id || null;
 
+      const companyNodeIdTouched = Object.prototype.hasOwnProperty.call(profilePatch, 'company_node_id');
+      const officeNodeIdTouched = Object.prototype.hasOwnProperty.call(profilePatch, 'office_node_id');
+
       if (Object.keys(profilePatch).length > 0) {
         if (profilePatch.role_category_id) await validateRoleCategoryExists(profilePatch.role_category_id);
         if (profilePatch.reports_to_user_id) await validateReportsTo({ reportsToUserId: profilePatch.reports_to_user_id, selfUserId: id });
+        if (companyNodeIdTouched) {
+          profilePatch.company_node_id = profilePatch.company_node_id || null;
+          await validateOrgNodeOfType(profilePatch.company_node_id, ['COMPANY', 'GROUP']);
+        }
+        if (officeNodeIdTouched) {
+          profilePatch.office_node_id = profilePatch.office_node_id || null;
+          await validateOrgNodeOfType(profilePatch.office_node_id, 'OFFICE_LOCATION');
+        }
+
+        // Pencil Company/Office: one linked unit becomes the sole org assignment.
+        // Company pick clears office; office pick also sets company from its ancestor.
+        if (companyNodeIdTouched && profilePatch.company_node_id && !officeNodeIdTouched) {
+          profilePatch.office_node_id = null;
+        }
+        if (officeNodeIdTouched && profilePatch.office_node_id) {
+          const companyAncestor = await findAncestorOfTypes(
+            profilePatch.office_node_id,
+            ['COMPANY', 'GROUP'],
+            transaction,
+          );
+          if (companyAncestor && !companyNodeIdTouched) {
+            profilePatch.company_node_id = companyAncestor.id;
+          }
+        }
+
         let profile = await PersonProfile.findOne({ where: { user_id: id }, transaction });
         if (profile) {
           await profile.update(profilePatch, { transaction });
         } else {
           await PersonProfile.create({ user_id: id, ...profilePatch }, { transaction });
+          profile = await PersonProfile.findOne({ where: { user_id: id }, transaction });
+        }
+
+        // Skip soft-add when department_ids also provided — that path is authoritative.
+        const hasDepartmentSync = Array.isArray(data.department_ids) && data.department_ids.length > 0;
+        if (!hasDepartmentSync && (companyNodeIdTouched || officeNodeIdTouched)) {
+          const officeId = profile?.office_node_id || null;
+          const companyId = profile?.company_node_id || null;
+          // Prefer the more specific unit when replacing.
+          const assignNodeId = officeId || companyId;
+          if (assignNodeId) {
+            await replaceOrgAssignmentAtNode({
+              userId: id,
+              nodeId: Number(assignNodeId),
+              actorUserId,
+              transaction,
+            });
+          }
         }
       }
 
@@ -1201,8 +1413,10 @@ const usersService = {
 
     const fetchNode = async (uid) => {
       const rows = await sequelize.query(
-        `SELECT ua.user_id, ua.first_name, ua.last_name, ua.avatar_url,
-                pp.job_title, rc.id AS rc_id, rc.name AS rc_name, rc.rank AS rc_rank
+        `SELECT ua.user_id, ua.first_name, ua.last_name, ua.email, ua.status, ua.avatar_url,
+                ua.phone, ua.mobile_phone,
+                pp.job_title, pp.department_display,
+                rc.id AS rc_id, rc.name AS rc_name, rc.rank AS rc_rank
          FROM user_account ua
          LEFT JOIN person_profile pp ON pp.user_id = ua.user_id
          LEFT JOIN role_category rc ON rc.id = pp.role_category_id
@@ -1215,8 +1429,13 @@ const usersService = {
         user_id: r.user_id,
         first_name: r.first_name,
         last_name: r.last_name,
+        email: r.email || null,
+        status: r.status || null,
         avatar_url: r.avatar_url || null,
+        phone: r.phone || null,
+        mobile_phone: r.mobile_phone || null,
         job_title: r.job_title || null,
+        department_display: r.department_display || null,
         role_category: r.rc_id ? { id: r.rc_id, name: r.rc_name, rank: r.rc_rank } : null,
       };
     };
@@ -1247,8 +1466,10 @@ const usersService = {
     const self = await fetchNode(userId);
 
     const reportRows = await sequelize.query(
-      `SELECT ua.user_id, ua.first_name, ua.last_name, ua.avatar_url,
-              pp.job_title, rc.id AS rc_id, rc.name AS rc_name, rc.rank AS rc_rank
+      `SELECT ua.user_id, ua.first_name, ua.last_name, ua.email, ua.status, ua.avatar_url,
+              ua.phone, ua.mobile_phone,
+              pp.job_title, pp.department_display,
+              rc.id AS rc_id, rc.name AS rc_name, rc.rank AS rc_rank
        FROM user_account ua
        LEFT JOIN person_profile pp ON pp.user_id = ua.user_id
        LEFT JOIN role_category rc ON rc.id = pp.role_category_id
@@ -1261,12 +1482,116 @@ const usersService = {
       user_id: r.user_id,
       first_name: r.first_name,
       last_name: r.last_name,
+      email: r.email || null,
+      status: r.status || null,
       avatar_url: r.avatar_url || null,
+      phone: r.phone || null,
+      mobile_phone: r.mobile_phone || null,
       job_title: r.job_title || null,
+      department_display: r.department_display || null,
       role_category: r.rc_id ? { id: r.rc_id, name: r.rc_name, rank: r.rc_rank } : null,
     }));
 
     return { ancestors, self, direct_reports };
+  },
+
+  /**
+   * People-directory projection for any authenticated employee.
+   * Omits Azure/HR/admin fields (azure_object_id, hire date, roles, etc.).
+   */
+  async getDirectoryProfile(id) {
+    const {
+      UserAccount,
+      PersonProfile,
+      OrgNode,
+    } = require('../../database/models');
+
+    const user = await UserAccount.findByPk(id, {
+      attributes: [
+        'user_id',
+        'first_name',
+        'last_name',
+        'email',
+        'phone',
+        'mobile_phone',
+        'avatar_url',
+        'status',
+      ],
+      include: [
+        {
+          model: PersonProfile,
+          as: 'profile',
+          required: false,
+          attributes: [
+            'job_title',
+            'department_display',
+            'company_name',
+            'location',
+            'company_node_id',
+            'office_node_id',
+          ],
+          include: [
+            {
+              model: UserAccount,
+              as: 'manager',
+              attributes: ['user_id', 'first_name', 'last_name', 'email', 'avatar_url'],
+              required: false,
+            },
+            {
+              model: OrgNode,
+              as: 'companyNode',
+              attributes: ['id', 'name', 'node_type'],
+              required: false,
+            },
+            {
+              model: OrgNode,
+              as: 'officeNode',
+              attributes: ['id', 'name', 'node_type'],
+              required: false,
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!user) throw ApiError.notFound('User not found');
+    if (user.status === 'INACTIVE') {
+      throw ApiError.notFound('User not found');
+    }
+
+    const chain = await this.getOrgChain(Number(id));
+    const data = user.toJSON();
+
+    return {
+      user_id: data.user_id,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      email: data.email || null,
+      phone: data.phone || null,
+      mobile_phone: data.mobile_phone || null,
+      avatar_url: data.avatar_url || null,
+      status: data.status,
+      profile: data.profile
+        ? {
+            job_title: data.profile.job_title || null,
+            department_display: data.profile.department_display || null,
+            company_name: data.profile.companyNode?.name || data.profile.company_name || null,
+            location: data.profile.officeNode?.name || data.profile.location || null,
+            companyNode: data.profile.companyNode || null,
+            officeNode: data.profile.officeNode || null,
+            manager: data.profile.manager || null,
+          }
+        : null,
+      direct_reports: (chain.direct_reports || []).map((r) => ({
+        user_id: r.user_id,
+        first_name: r.first_name,
+        last_name: r.last_name,
+        email: r.email || null,
+        avatar_url: r.avatar_url || null,
+        job_title: r.job_title || null,
+        department_display: r.department_display || null,
+      })),
+    };
   },
 
   ensureEmployeeAtNode,

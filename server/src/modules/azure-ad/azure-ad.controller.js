@@ -93,6 +93,14 @@ const syncUsers = catchAsync(async (req, res) => {
   res.json({ status: 'success', data: result });
 });
 
+// POST /azure-ad/sync-local-user/:userId — refresh one BrightNow user from Entra
+const syncLocalUser = catchAsync(async (req, res) => {
+  const result = await service.syncLocalUserFromEntra({
+    userId: Number(req.params.userId),
+  }, req.user.user_id);
+  res.json({ status: 'success', data: result });
+});
+
 module.exports = {
   listUsers,
   getUser,
@@ -102,4 +110,5 @@ module.exports = {
   testConnection,
   clearCache,
   syncUsers,
+  syncLocalUser,
 };

@@ -19,6 +19,13 @@ const syncUsersSchema = {
   }),
 };
 
+const syncLocalUserSchema = {
+  params: Joi.object({
+    userId: Joi.number().integer().positive().required(),
+  }),
+};
+
 module.exports = {
   syncUsersSchema,
+  syncLocalUserSchema,
 };

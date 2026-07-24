@@ -11,7 +11,6 @@ import { getPermLabel } from '../../components/roles/PermissionMatrix';
 import ReportsToPicker from '../employees/ReportsToPicker';
 import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
-import { roleCategoryService } from '../../services/roleCategoryService';
 import { jobTitleService } from '../../services/jobTitleService';
 import { useToast } from '../../hooks/useToast';
 import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
@@ -104,7 +103,7 @@ export default function UserCreatePage({
 
   const [form, setForm] = useState({
     email: '', password: '', first_name: '', last_name: '', phone: '',
-    job_title: '', employee_id: '', role_category_id: '',
+    job_title: '', employee_id: '',
   });
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
@@ -114,7 +113,6 @@ export default function UserCreatePage({
   // Employee-specific state
   const [reportsTo, setReportsTo] = useState(null);
   const [primaryDeptId, setPrimaryDeptId] = useState('');
-  const [roleCategories, setRoleCategories] = useState([]);
   const [jobTitles, setJobTitles] = useState([]);
   const [chatCandidates, setChatCandidates] = useState([]);
   const [chatCandidatesLoading, setChatCandidatesLoading] = useState(true);
@@ -143,7 +141,6 @@ export default function UserCreatePage({
   useEffect(() => {
     roleService.getRoles({ limit: 100 }).then((res) => setAllRoles(res.data?.data?.roles || [])).catch(() => {});
     roleService.getModules().then((res) => setModules(res.data?.data || [])).catch(() => {});
-    roleCategoryService.list().then((res) => setRoleCategories(res.data?.data || [])).catch(() => {});
     jobTitleService.list().then((res) => setJobTitles(res.data?.data || [])).catch(() => {});
     userService.listChatCandidates()
       .then((res) => setChatCandidates(res.data?.data || []))
@@ -152,21 +149,10 @@ export default function UserCreatePage({
   }, []);
 
   // ── Derived ──
-  const roleCategoryOptions = useMemo(
-    () => roleCategories.map((c) => ({ value: String(c.id), label: c.name })),
-    [roleCategories],
-  );
-
   const jobTitleOptions = useMemo(
     () => jobTitles.map((t) => ({ value: t.name, label: t.name })),
     [jobTitles],
   );
-
-  const selectedCategoryRank = useMemo(() => {
-    if (!form.role_category_id) return null;
-    const cat = roleCategories.find((c) => String(c.id) === form.role_category_id);
-    return cat?.rank ?? null;
-  }, [form.role_category_id, roleCategories]);
 
   // Collect unique department-level scopes from all assigned roles
   const departmentScopes = useMemo(() => {
@@ -250,10 +236,7 @@ export default function UserCreatePage({
 
   // ── Handlers ──
   const handleChange = (e) => {
-    const next = { ...form, [e.target.name]: e.target.value };
-    // Clear manager when role category changes — the previous pick may no longer be valid
-    if (e.target.name === 'role_category_id') setReportsTo(null);
-    setForm(next);
+    setForm({ ...form, [e.target.name]: e.target.value });
     if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: null });
   };
 
@@ -332,7 +315,6 @@ export default function UserCreatePage({
     const newErrors = {};
     if (!form.email) newErrors.email = 'Email is required';
     if (!form.first_name) newErrors.first_name = 'First name is required';
-    if (!form.last_name) newErrors.last_name = 'Last name is required';
     if (!currentOrganisationId) newErrors.organisation = 'Active organisation is required';
     if (setPasswordManually && !form.password.trim()) {
       newErrors.password = 'Password is required';
@@ -402,7 +384,7 @@ export default function UserCreatePage({
         email: form.email,
         password: (setPasswordManually && form.password.trim()) ? form.password.trim() : undefined,
         first_name: form.first_name,
-        last_name: form.last_name,
+        last_name: form.last_name || null,
         phone: form.phone || undefined,
         scope_type: 'ORGANISATION',
         scope_id: currentOrganisationId,
@@ -410,7 +392,6 @@ export default function UserCreatePage({
           job_title: form.job_title || undefined,
           employee_id: form.employee_id || undefined,
         },
-        role_category_id: form.role_category_id ? Number(form.role_category_id) : undefined,
         reports_to_user_id: reportsTo?.user_id || undefined,
         department_ids: department_ids.length > 0 ? department_ids : undefined,
         primary_department_id: primaryDeptId ? Number(primaryDeptId) : undefined,
@@ -457,7 +438,7 @@ export default function UserCreatePage({
           <div className="grid grid-cols-2 gap-4">
             <Input label="First Name" name="first_name" required value={form.first_name}
               error={errors.first_name} onChange={handleChange} />
-            <Input label="Last Name" name="last_name" required value={form.last_name}
+            <Input label="Last Name" name="last_name" value={form.last_name}
               error={errors.last_name} onChange={handleChange} />
           </div>
           <Input label="Email" name="email" type="email" required value={form.email}
@@ -503,11 +484,8 @@ export default function UserCreatePage({
                 onChange={handleChange} options={jobTitleOptions} placeholder="Select a job title" />
               <Input label="Employee ID" name="employee_id" value={form.employee_id} onChange={handleChange} />
             </div>
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <Select label="Role Category" name="role_category_id" value={form.role_category_id}
-                onChange={handleChange} options={roleCategoryOptions} placeholder="Select a category" />
+            <div className="mt-4">
               <ReportsToPicker label="Reporting To" value={reportsTo} onChange={setReportsTo}
-                roleCategoryRank={selectedCategoryRank}
                 helpText="Search by name or email." />
             </div>
           </div>

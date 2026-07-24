@@ -26,7 +26,7 @@ function OrgCard({ user, depth, onNavigate }) {
     <div
       className="bg-white rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow w-52 shrink-0"
       style={{ borderTop: `3px solid ${color}` }}
-      onClick={() => onNavigate(user.id)}
+      onClick={() => onNavigate()}
     >
       <div className="flex items-center gap-3 px-4 py-3">
         <div className={`w-9 h-9 rounded-full ${avatarBg} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
@@ -204,7 +204,17 @@ export default function AzureOrgChart({ user, depth = 0, pathIds = new Set(), au
 
   return (
     <div className="flex flex-col items-center">
-      <OrgCard user={user} depth={depth} onNavigate={(id) => navigate(`/active-directory/${id}`)} />
+      <OrgCard
+        user={user}
+        depth={depth}
+        onNavigate={() => {
+          if (user.local_user_id) {
+            navigate(`/users/${user.local_user_id}`);
+          } else {
+            navigate(`/active-directory/${user.id}`);
+          }
+        }}
+      />
 
       {!noReports && (
         <div className="flex flex-col items-center">

@@ -12,7 +12,6 @@ import { getPermLabel } from '../../components/roles/PermissionMatrix';
 import ReportsToPicker from '../employees/ReportsToPicker';
 import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
-import { roleCategoryService } from '../../services/roleCategoryService';
 import { jobTitleService } from '../../services/jobTitleService';
 import { useToast } from '../../hooks/useToast';
 import { useOrgTree } from '../../hooks/useOrgTree';
@@ -32,14 +31,20 @@ function buildScopesFromMemberships(memberships = []) {
     .filter((m) => !String(m.membership_id || '').startsWith('derived-'))
     .map((m) => {
       const dept = m.department;
+      const scopeType = m.node_type || dept?.node_type || 'DEPARTMENT';
+      // Prefer org_node id (authoritative for HierarchyScopeSelector + department_ids).
+      const scopeId = m.node_id || dept?.org_node_id || dept?.id || m.department_id;
+      const typeLabel = scopeType.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
       const verticalName = dept?.vertical?.name;
       const officeName = dept?.vertical?.officeLocation?.name;
+      const pathBits = [dept?.name, verticalName, officeName].filter(Boolean);
       return {
-        scope_type: 'DEPARTMENT',
-        scope_id: dept?.id || m.department_id,
-        scope_label: `Department: ${dept?.name}${verticalName ? ` · ${verticalName}` : ''}${officeName ? ` · ${officeName}` : ''}`,
+        scope_type: scopeType,
+        scope_id: scopeId,
+        scope_label: `${typeLabel}: ${pathBits.join(' · ') || scopeId}`,
       };
-    });
+    })
+    .filter((s) => s.scope_id != null);
 }
 
 function extractPermissionIds(role) {
@@ -115,7 +120,7 @@ export default function UserEditPage() {
   // Profile form
   const [form, setForm] = useState({
     first_name: '', last_name: '', phone: '', status: 'ACTIVE',
-    job_title: '', employee_id: '', role_category_id: '',
+    job_title: '', employee_id: '',
   });
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
@@ -125,11 +130,11 @@ export default function UserEditPage() {
   const [reportsTo, setReportsTo] = useState(null);
   const [empScopes, setEmpScopes] = useState([]);
   const [primaryDeptId, setPrimaryDeptId] = useState('');
-  const [roleCategories, setRoleCategories] = useState([]);
   const [jobTitles, setJobTitles] = useState([]);
   const [chatCandidates, setChatCandidates] = useState([]);
   const [chatCandidatesLoading, setChatCandidatesLoading] = useState(true);
   const [chatBlockedIds, setChatBlockedIds] = useState([]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Roles + modules
   const [allRoles, setAllRoles] = useState([]);
@@ -150,6 +155,8 @@ export default function UserEditPage() {
   const [editingRoleId, setEditingRoleId] = useState(null);
   const [editScopes, setEditScopes] = useState([]);
   const [savingScope, setSavingScope] = useState(false);
+  const [hasDefaultedRole, setHasDefaultedRole] = useState(false);
+  const [showRolePermissions, setShowRolePermissions] = useState(false);
 
   // Direct permissions — same multi-scope shape as roles.
   const [showPermForm, setShowPermForm] = useState(false);
@@ -170,7 +177,6 @@ export default function UserEditPage() {
           first_name: u.first_name || '', last_name: u.last_name || '',
           phone: u.phone || '', status: u.status || 'ACTIVE',
           job_title: u.profile?.job_title || '', employee_id: u.profile?.employee_id || '',
-          role_category_id: u.profile?.role_category_id ? String(u.profile.role_category_id) : '',
         });
         if (u.profile?.manager) {
           setReportsTo({ user_id: u.profile.manager.user_id, first_name: u.profile.manager.first_name, last_name: u.profile.manager.last_name, email: u.profile.manager.email });
@@ -180,19 +186,71 @@ export default function UserEditPage() {
         const scopes = buildScopesFromMemberships(u.departmentMemberships);
         setEmpScopes(scopes);
         const primary = (u.departmentMemberships || []).find((m) => m.is_primary && !String(m.membership_id || '').startsWith('derived-'));
-        if (primary) setPrimaryDeptId(String(primary.department?.id || primary.department_id));
+        if (primary) {
+          setPrimaryDeptId(String(primary.node_id || primary.department?.org_node_id || primary.department?.id || primary.department_id));
+        }
         setChatBlockedIds(Array.isArray(u.chat_blocked_user_ids) ? u.chat_blocked_user_ids : []);
       })
       .catch(() => addToast('Failed to load user', 'error'))
       .finally(() => setLoading(false));
   }, [id, addToast]);
 
-  useEffect(() => { fetchUser(); }, [fetchUser]);
+  useEffect(() => {
+    fetchUser();
+    setAssignRoleId('');
+    setAssignScopes([]);
+    setEditingRoleId(null);
+    setEditScopes([]);
+    setHasDefaultedRole(false);
+    setShowRolePermissions(false);
+  }, [fetchUser]);
+
+  // Role picker at top — default Employee with current org scopes (Create-like, no duplicate card).
+  useEffect(() => {
+    if (hasDefaultedRole || loading || !user || allRoles.length === 0) return;
+    const employee = allRoles.find((r) => r.code === 'EMPLOYEE');
+    const preferred = employee
+      || allRoles.find((r) => (user.roleAssignments || []).some(
+        (a) => Number(a.role_id || a.role?.role_id) === Number(r.role_id),
+      ))
+      || allRoles[0];
+    if (!preferred) {
+      setHasDefaultedRole(true);
+      return;
+    }
+    setAssignRoleId(String(preferred.role_id));
+    if (preferred.code === 'EMPLOYEE') {
+      if (empScopes.length > 0) {
+        setAssignScopes(empScopes);
+      } else {
+        const fromRole = (user.roleAssignments || [])
+          .filter((a) => Number(a.role_id || a.role?.role_id) === Number(preferred.role_id))
+          .map((a) => ({
+            scope_type: a.scope_type,
+            scope_id: a.scope_id,
+            scope_label: findScopeLabel(orgTree, a.scope_type, a.scope_id)
+              || `${a.scope_type}: #${a.scope_id}`,
+          }));
+        setAssignScopes(fromRole);
+        if (fromRole.length > 0) setEmpScopes(fromRole);
+      }
+    } else {
+      const fromRole = (user.roleAssignments || [])
+        .filter((a) => Number(a.role_id || a.role?.role_id) === Number(preferred.role_id))
+        .map((a) => ({
+          scope_type: a.scope_type,
+          scope_id: a.scope_id,
+          scope_label: findScopeLabel(orgTree, a.scope_type, a.scope_id)
+            || `${a.scope_type}: #${a.scope_id}`,
+        }));
+      setAssignScopes(fromRole);
+    }
+    setHasDefaultedRole(true);
+  }, [hasDefaultedRole, loading, user, allRoles, empScopes, orgTree]);
 
   useEffect(() => {
     roleService.getRoles({ limit: 100 }).then((res) => setAllRoles(res.data?.data?.roles || [])).catch(() => {});
     roleService.getModules().then((res) => setModules(res.data?.data || [])).catch(() => {});
-    roleCategoryService.list().then((res) => setRoleCategories(res.data?.data || [])).catch(() => {});
     jobTitleService.list().then((res) => setJobTitles(res.data?.data || [])).catch(() => {});
     userService.listChatCandidates()
       .then((res) => setChatCandidates(res.data?.data || []))
@@ -202,46 +260,40 @@ export default function UserEditPage() {
 
   // ── Profile handlers ──
   const handleChange = (e) => {
-    if (e.target.name === 'role_category_id') setReportsTo(null);
     setForm({ ...form, [e.target.name]: e.target.value });
     if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: null });
   };
 
   // ── Employee derived ──
-  const roleCategoryOptions = useMemo(
-    () => roleCategories.map((c) => ({ value: String(c.id), label: c.name })),
-    [roleCategories],
-  );
-
   const jobTitleOptions = useMemo(
     () => jobTitles.map((t) => ({ value: t.name, label: t.name })),
     [jobTitles],
   );
 
-  const selectedCategoryRank = useMemo(() => {
-    if (!form.role_category_id) return null;
-    const cat = roleCategories.find((c) => String(c.id) === form.role_category_id);
-    return cat?.rank ?? null;
-  }, [form.role_category_id, roleCategories]);
-
-  const departmentScopes = useMemo(
-    () => empScopes.filter((s) => s.scope_type === 'DEPARTMENT'),
+  // All selected org units (company / office / vertical / department) — not just DEPARTMENT.
+  const orgAssignmentIds = useMemo(
+    () => empScopes
+      .filter((s) => s.scope_id != null && s.scope_type !== 'GROUP' && s.scope_type !== 'ORGANISATION')
+      .map((s) => Number(s.scope_id))
+      .filter((id) => Number.isFinite(id)),
     [empScopes],
   );
 
-  const departmentOptions = useMemo(
-    () => departmentScopes.map((s) => ({
-      value: String(s.scope_id),
-      label: s.scope_label?.replace(/^Department:\s*/, '') || String(s.scope_id),
-    })),
-    [departmentScopes],
+  const primaryUnitOptions = useMemo(
+    () => empScopes
+      .filter((s) => s.scope_id != null && s.scope_type !== 'GROUP' && s.scope_type !== 'ORGANISATION')
+      .map((s) => ({
+        value: String(s.scope_id),
+        label: s.scope_label?.replace(/^[^:]+:\s*/, '') || String(s.scope_id),
+      })),
+    [empScopes],
   );
 
   useEffect(() => {
-    if (primaryDeptId && !departmentScopes.some((s) => String(s.scope_id) === primaryDeptId)) {
+    if (primaryDeptId && !orgAssignmentIds.some((id) => String(id) === primaryDeptId)) {
       setPrimaryDeptId('');
     }
-  }, [departmentScopes, primaryDeptId]);
+  }, [orgAssignmentIds, primaryDeptId]);
 
   const statusOptions = useMemo(() => {
     if (user?.status === 'INVITED') {
@@ -253,22 +305,27 @@ export default function UserEditPage() {
   const handleSaveProfile = async () => {
     const newErrors = {};
     if (!form.first_name) newErrors.first_name = 'First name is required';
-    if (!form.last_name) newErrors.last_name = 'Last name is required';
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
-    const department_ids = departmentScopes.map((s) => Number(s.scope_id));
+    // Send every ticked org unit. Filtering to DEPARTMENT-only dropped office/company
+    // selections so edits never reached the server.
+    const department_ids = orgAssignmentIds.length > 0
+      ? orgAssignmentIds
+      : empScopes
+        .filter((s) => s.scope_type === 'GROUP' || s.scope_type === 'ORGANISATION')
+        .map((s) => Number(s.scope_id))
+        .filter((id) => Number.isFinite(id));
 
     setSaving(true);
     try {
       await userService.updateUser(id, {
-        first_name: form.first_name, last_name: form.last_name,
+        first_name: form.first_name, last_name: form.last_name || null,
         phone: form.phone || undefined,
         status: user?.status !== 'INVITED' ? form.status : undefined,
         profile: { job_title: form.job_title || undefined, employee_id: form.employee_id || undefined },
-        role_category_id: form.role_category_id ? Number(form.role_category_id) : null,
         reports_to_user_id: reportsTo ? reportsTo.user_id : null,
         department_ids: department_ids.length > 0 ? department_ids : undefined,
-        primary_department_id: primaryDeptId ? Number(primaryDeptId) : undefined,
+        primary_department_id: primaryDeptId ? Number(primaryDeptId) : (department_ids[0] || undefined),
         chat_blocked_user_ids: chatBlockedIds,
       });
       addToast('Profile updated', 'success');
@@ -295,6 +352,8 @@ export default function UserEditPage() {
   // ── Role handlers ──
   const handleAssignRole = async () => {
     if (!assignRoleId) return;
+    const roleId = Number(assignRoleId);
+    const role = allRoles.find((r) => r.role_id === roleId);
     // No scopes selected → default to Organisation (mirrors Create's behaviour).
     const scopes = assignScopes.length > 0
       ? assignScopes
@@ -302,17 +361,47 @@ export default function UserEditPage() {
 
     setAssigning(true);
     try {
-      for (const scope of scopes) {
-        // eslint-disable-next-line no-await-in-loop
-        await userService.assignRole(id, {
-          role_id: Number(assignRoleId),
-          scope_type: scope.scope_type,
-          scope_id: scope.scope_id || DEFAULT_ORGANISATION_ID,
-        });
+      const existing = (user?.roleAssignments || []).filter(
+        (a) => Number(a.role_id || a.role?.role_id) === roleId,
+      );
+      if (existing.length > 0) {
+        // Replace scopes for an already-assigned role (Create-like re-pick).
+        const keyOf = (s) => `${s.scope_type}:${s.scope_id}`;
+        const existingKeys = new Set(existing.map(keyOf));
+        const newKeys = new Set(scopes.map(keyOf));
+        const toRemove = existing.filter((a) => !newKeys.has(keyOf(a)));
+        const toAdd = scopes.filter((s) => !existingKeys.has(keyOf(s)));
+        for (const a of toRemove) {
+          // eslint-disable-next-line no-await-in-loop
+          await userService.removeRole(id, a.assignment_id);
+        }
+        for (const scope of toAdd) {
+          // eslint-disable-next-line no-await-in-loop
+          await userService.assignRole(id, {
+            role_id: roleId,
+            scope_type: scope.scope_type,
+            scope_id: scope.scope_id || DEFAULT_ORGANISATION_ID,
+          });
+        }
+        if (role?.code === 'EMPLOYEE') setEmpScopes(scopes);
+        addToast(
+          toRemove.length === 0 && toAdd.length === 0
+            ? 'No changes to save'
+            : `Saved — ${scopes.length} scope${scopes.length === 1 ? '' : 's'} for ${role?.name || 'role'}`,
+          toRemove.length === 0 && toAdd.length === 0 ? 'info' : 'success',
+        );
+      } else {
+        for (const scope of scopes) {
+          // eslint-disable-next-line no-await-in-loop
+          await userService.assignRole(id, {
+            role_id: roleId,
+            scope_type: scope.scope_type,
+            scope_id: scope.scope_id || DEFAULT_ORGANISATION_ID,
+          });
+        }
+        if (role?.code === 'EMPLOYEE') setEmpScopes(scopes);
+        addToast(scopes.length === 1 ? 'Role assigned' : `Role assigned at ${scopes.length} scopes`, 'success');
       }
-      addToast(scopes.length === 1 ? 'Role assigned' : `Role assigned at ${scopes.length} scopes`, 'success');
-      setAssignRoleId('');
-      setAssignScopes([]);
       setShowAssignForm(false);
       fetchUser();
     } catch (err) { addToast(err.response?.data?.message || 'Failed', 'error'); }
@@ -381,6 +470,10 @@ export default function UserEditPage() {
       } else {
         addToast(`Saved — ${editScopes.length} scope${editScopes.length === 1 ? '' : 's'} assigned`, 'success');
       }
+      if (group.role?.code === 'EMPLOYEE') {
+        setEmpScopes(editScopes);
+        if (Number(assignRoleId) === Number(roleId)) setAssignScopes(editScopes);
+      }
       cancelEditScope();
       fetchUser();
     } catch (err) {
@@ -426,15 +519,31 @@ export default function UserEditPage() {
     finally { setRemovingPerm(null); }
   };
 
-  // ── Derived ──
-  const assignableRoleOptions = useMemo(() => {
-    const assigned = new Set((user?.roleAssignments || []).map((a) => a.role_id || a.role?.role_id));
-    return allRoles.filter((r) => !assigned.has(r.role_id))
-      .map((r) => ({ value: String(r.role_id), label: `${r.name}${r.is_system ? ' (System)' : ''}` }));
+  // Role picker includes all roles; tick those already assigned on this user.
+  const roleOptions = useMemo(() => {
+    const assigned = new Set(
+      (user?.roleAssignments || []).map((a) => Number(a.role_id || a.role?.role_id)),
+    );
+    return allRoles.map((r) => {
+      const hasRole = assigned.has(Number(r.role_id));
+      const base = `${r.name}${r.is_system ? ' (System)' : ''}`;
+      return {
+        value: String(r.role_id),
+        label: hasRole ? `✓ ${base}` : base,
+      };
+    });
   }, [allRoles, user?.roleAssignments]);
 
   const assignPickerRole = assignRoleId ? allRoles.find((r) => r.role_id === Number(assignRoleId)) : null;
   const assignPickerPerms = useMemo(() => extractPermissionIds(assignPickerRole), [assignPickerRole]);
+
+  const handleAssignScopesChange = useCallback((scopes) => {
+    setAssignScopes(scopes);
+    // Employee scopes are also the org membership saved with the profile.
+    if (assignPickerRole?.code === 'EMPLOYEE') {
+      setEmpScopes(scopes);
+    }
+  }, [assignPickerRole?.code]);
 
   const moduleOptions = useMemo(() => modules.map((m) => ({ value: String(m.module_id), label: m.name })), [modules]);
   const actionOptions = useMemo(() => {
@@ -455,7 +564,6 @@ export default function UserEditPage() {
     { key: 'profile', label: 'Profile' },
     { key: 'roles', label: `Roles (${user.roleAssignments?.length || 0})` },
     { key: 'permissions', label: `Extra Permissions (${directPermCount})` },
-    { key: 'departments', label: `Departments (${user.departmentMemberships?.length || 0})` },
   ];
 
   const isInvited = user.status === 'INVITED';
@@ -501,7 +609,7 @@ export default function UserEditPage() {
               <div className="grid grid-cols-2 gap-4">
                 <Input label="First Name" name="first_name" required value={form.first_name}
                   error={errors.first_name} onChange={handleChange} />
-                <Input label="Last Name" name="last_name" required value={form.last_name}
+                <Input label="Last Name" name="last_name" value={form.last_name}
                   error={errors.last_name} onChange={handleChange} />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -518,127 +626,193 @@ export default function UserEditPage() {
                   <Input label="Employee ID" name="employee_id" value={form.employee_id} onChange={handleChange}
                     placeholder="e.g. EMP-00123" />
                 </div>
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <Select label="Role Category" name="role_category_id" value={form.role_category_id}
-                    onChange={handleChange} options={roleCategoryOptions} placeholder="Select a category" />
+                <div className="mt-4">
                   <ReportsToPicker label="Reporting To" value={reportsTo} onChange={setReportsTo}
-                    excludeUserId={Number(id)} roleCategoryRank={selectedCategoryRank}
+                    excludeUserId={Number(id)}
                     helpText="Search by name or email." />
                 </div>
               </div>
 
-              {/* ── Organisation Assignment ── */}
+              {/* ── Roles & Organisation (role picker at top, like Create) ── */}
               <div className="border-t border-gray-100 pt-5">
-                <h3 className="text-sm font-medium text-gray-700 mb-1">Organisation Assignment</h3>
-                <p className="text-xs text-gray-500 mb-3">Assign this user to departments. Sets Employee role and controls content access.</p>
-                <HierarchyScopeSelector value={empScopes} onChange={setEmpScopes} />
-                {errors.scopes && <p className="mt-2 text-xs text-red-600">{errors.scopes}</p>}
-                {departmentOptions.length > 1 && (
-                  <div className="mt-4">
-                    <Select label="Primary Department" name="primary_department" value={primaryDeptId}
-                      onChange={(e) => setPrimaryDeptId(e.target.value)}
-                      options={departmentOptions} placeholder="First selected (default)" />
+                <h3 className="text-sm font-semibold text-gray-800 mb-1">Roles &amp; Organisation</h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  Assign the Employee role at organisation units to create memberships and control content access.
+                </p>
+                {errors.scopes && (
+                  <p className="mb-3 text-xs text-red-600">{errors.scopes}</p>
+                )}
+
+                <div className="flex items-end gap-3">
+                  <Select
+                    label="Role"
+                    name="role"
+                    value={assignRoleId}
+                    onChange={(e) => {
+                      setAssignRoleId(e.target.value);
+                      setShowRolePermissions(false);
+                    }}
+                    options={roleOptions}
+                    placeholder="Select a role…"
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onClick={handleAssignRole}
+                    loading={assigning}
+                    disabled={!assignRoleId}
+                  >
+                    {assignPickerRole
+                      && (user.roleAssignments || []).some(
+                        (a) => Number(a.role_id || a.role?.role_id) === Number(assignRoleId),
+                      )
+                      ? 'Update'
+                      : 'Add'}
+                  </Button>
+                </div>
+
+                {assignRoleId && (
+                  <div className="mt-3 space-y-3">
+                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-xs text-gray-500 mb-3">Scope this role to one or more org nodes:</p>
+                      <HierarchyScopeSelector
+                        key={`assign-scopes-${id}`}
+                        value={assignScopes}
+                        onChange={handleAssignScopesChange}
+                      />
+                    </div>
+                    {primaryUnitOptions.length > 1 && assignPickerRole?.code === 'EMPLOYEE' && (
+                      <Select label="Primary Unit" name="primary_department" value={primaryDeptId}
+                        onChange={(e) => setPrimaryDeptId(e.target.value)}
+                        options={primaryUnitOptions} placeholder="First selected (default)" />
+                    )}
+                    {assignPickerRole && modules.length > 0 && (
+                      <div className="border border-dashed border-gray-300 rounded-lg bg-gray-50/30 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setShowRolePermissions((v) => !v)}
+                          className="w-full flex items-center gap-2 px-4 py-3 text-left"
+                        >
+                          <svg
+                            className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${showRolePermissions ? 'rotate-90' : ''}`}
+                            fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            Permissions — {assignPickerRole.name}
+                          </span>
+                          {assignPickerPerms.size > 0 && (
+                            <span className="ml-auto text-[10px] font-medium text-primary-700 bg-primary-100 px-1.5 py-0.5 rounded-full">
+                              {assignPickerPerms.size}
+                            </span>
+                          )}
+                        </button>
+                        {showRolePermissions && (
+                          <div className="px-4 pb-4">
+                            <PermissionMatrix modules={modules} selectedPermissions={assignPickerPerms} disabled />
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
 
-              {/* ── Chat Access ── */}
-              <div className="border-t border-gray-100 pt-5">
-                <h3 className="text-sm font-medium text-gray-700 mb-1">Chat Access</h3>
-                <p className="text-xs text-gray-500 mb-3">Uncheck anyone this user should not be able to find in chat — the block is bidirectional.</p>
-                <ChatAccessSelector candidates={chatCandidates} value={chatBlockedIds}
-                  onChange={setChatBlockedIds} loading={chatCandidatesLoading} excludeUserId={Number(id)} />
-              </div>
-
-              {/* Roles & org hierarchy — full width tree picker. */}
-              <div className="border-t border-gray-100 pt-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-gray-700">Roles &amp; org hierarchy</h3>
-                  <button
-                    type="button"
-                    onClick={() => setTab('roles')}
-                    className="text-xs font-medium text-primary-600 hover:text-primary-700"
-                  >
-                    Manage roles &rarr;
-                  </button>
-                </div>
-                {(user.roleAssignments || []).length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">No roles assigned yet — go to the Roles tab to assign one.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {(() => {
-                      // Group assignments by role so the user sees one row per
-                      // role with all its scopes listed (and edited) together.
-                      const groups = new Map();
-                      (user.roleAssignments || []).forEach((a) => {
-                        const roleId = a.role_id || a.role?.role_id;
-                        if (!roleId) return;
-                        if (!groups.has(roleId)) {
-                          groups.set(roleId, {
-                            roleId,
-                            role: a.role || null,
-                            isSystem: a.role?.is_system || false,
-                            assignments: [],
-                          });
-                        }
-                        groups.get(roleId).assignments.push(a);
+                {/* Other assigned roles (skip the one open in the picker above) */}
+                {(() => {
+                  const otherGroups = [];
+                  const groups = new Map();
+                  (user.roleAssignments || []).forEach((a) => {
+                    const roleId = a.role_id || a.role?.role_id;
+                    if (!roleId || Number(roleId) === Number(assignRoleId)) return;
+                    if (!groups.has(roleId)) {
+                      groups.set(roleId, {
+                        roleId,
+                        role: a.role || null,
+                        isSystem: a.role?.is_system || false,
+                        assignments: [],
                       });
-
-                      return Array.from(groups.values()).map((group) => {
+                      otherGroups.push(groups.get(roleId));
+                    }
+                    groups.get(roleId).assignments.push(a);
+                  });
+                  if (otherGroups.length === 0) return null;
+                  return (
+                    <ul className="space-y-2 mt-5 pt-5 border-t border-gray-100">
+                      {otherGroups.map((group) => {
                         const isEditing = editingRoleId === group.roleId;
                         return (
                           <li key={group.roleId} className="rounded-lg bg-gray-50 border border-gray-200">
-                            <div className="flex items-start gap-3 px-3 py-2">
-                              <Badge variant={group.isSystem ? 'info' : 'default'} size="sm">
-                                {group.role?.name || 'Role'}
-                              </Badge>
-                              <ul className="flex-1 min-w-0 space-y-0.5">
-                                {group.assignments.map((a) => {
-                                  const label = findScopeLabel(orgTree, a.scope_type, a.scope_id)
-                                    || `${a.scope_type.replace(/_/g, ' ')} #${a.scope_id}`;
-                                  return (
-                                    <li key={a.assignment_id} className="text-gray-700 text-xs truncate">
-                                      {label}
-                                    </li>
-                                  );
-                                })}
-                              </ul>
+                            <div className="flex items-start gap-3 px-3 py-2.5">
+                              <div className="min-w-0 flex-1">
+                                <span className="text-sm font-medium text-gray-900">{group.role?.name || 'Role'}</span>
+                                {group.isSystem && (
+                                  <span className="ml-2 text-xs text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full">System</span>
+                                )}
+                                <ul className="mt-0.5 space-y-0.5">
+                                  {group.assignments.map((a) => {
+                                    const label = findScopeLabel(orgTree, a.scope_type, a.scope_id)
+                                      || `${a.scope_type.replace(/_/g, ' ')} #${a.scope_id}`;
+                                    return (
+                                      <li key={a.assignment_id} className="text-xs text-gray-500 truncate">
+                                        {label}
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </div>
                               {!isEditing && (
                                 <button
                                   type="button"
-                                  onClick={() => beginEditScopesForRole(group)}
+                                  onClick={() => {
+                                    setAssignRoleId(String(group.roleId));
+                                    cancelEditScope();
+                                  }}
                                   className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 flex-shrink-0"
-                                  title="Edit office / vertical / department for this role"
                                 >
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zM19.5 7.125L16.875 4.5" />
-                                  </svg>
-                                  Change scope
+                                  Edit
                                 </button>
                               )}
                             </div>
-                            {isEditing && (
-                              <div className="border-t border-gray-200 bg-white px-3 py-3 space-y-3">
-                                <p className="text-xs text-gray-500">
-                                  Pick the office, vertical, or department scopes this role should apply at.
-                                  Removed scopes will be unassigned and new ones added.
-                                </p>
-                                <HierarchyScopeSelector value={editScopes} onChange={setEditScopes} />
-                                <div className="flex items-center justify-end gap-2">
-                                  <Button variant="secondary" size="sm" onClick={cancelEditScope} disabled={savingScope}>
-                                    Cancel
-                                  </Button>
-                                  <Button size="sm" onClick={() => handleSaveScope(group)} loading={savingScope}>
-                                    {editScopes.length > 1 ? `Save (${editScopes.length} scopes)` : 'Save scope'}
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
                           </li>
                         );
-                      });
-                    })()}
-                  </ul>
+                      })}
+                    </ul>
+                  );
+                })()}
+              </div>
+
+              {/* ── Advanced: Chat Access ── */}
+              <div className="border-t border-gray-100 pt-5">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced((v) => !v)}
+                  className="w-full flex items-center gap-2 text-sm font-semibold text-gray-800 hover:text-gray-900 transition-colors"
+                >
+                  <svg
+                    className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${showAdvanced ? 'rotate-180' : ''}`}
+                    fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                  Advanced
+                  <span className="ml-1 text-xs font-normal text-gray-400">Chat Access</span>
+                  {chatBlockedIds.length > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary-100 text-primary-700 text-[10px] font-semibold">
+                      1
+                    </span>
+                  )}
+                </button>
+                {showAdvanced && (
+                  <div className="mt-5">
+                    <h4 className="text-sm font-semibold text-gray-800 mb-1">Chat Access</h4>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Uncheck anyone this user should not be able to find in chat — the block is bidirectional.
+                    </p>
+                    <ChatAccessSelector candidates={chatCandidates} value={chatBlockedIds}
+                      onChange={setChatBlockedIds} loading={chatCandidatesLoading} excludeUserId={Number(id)} />
+                  </div>
                 )}
               </div>
 
@@ -665,7 +839,7 @@ export default function UserEditPage() {
                 <div className="border border-dashed border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-3">
                   <Select label="Role" name="assign_role" value={assignRoleId}
                     onChange={(e) => setAssignRoleId(e.target.value)}
-                    options={assignableRoleOptions} placeholder="Select a role..." />
+                    options={roleOptions} placeholder="Select a role..." />
                   {assignRoleId && (
                     <>
                       <div className="p-3 bg-white rounded-lg border border-gray-200">
@@ -775,37 +949,6 @@ export default function UserEditPage() {
             </div>
           )}
 
-          {/* ═══ DEPARTMENTS TAB ═══ */}
-          {tab === 'departments' && (
-            <div className="space-y-3">
-              <p className="text-xs text-gray-500">
-                Departments are derived from role assignments at the Department scope.
-                To add or remove a department, go to the <button
-                  type="button"
-                  onClick={() => setTab('roles')}
-                  className="text-primary-600 hover:text-primary-700 underline font-medium"
-                >Roles tab</button> and assign a role at the desired department.
-              </p>
-              {(user.departmentMemberships || []).length === 0 ? (
-                <p className="text-sm text-gray-400 py-4 text-center">No department memberships.</p>
-              ) : (
-                <div className="space-y-2">
-                  {user.departmentMemberships.map((m) => (
-                    <div key={m.membership_id || m.department_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="min-w-0">
-                        <div className="font-medium text-gray-900">{m.department?.name || 'Department'}</div>
-                        <div className="text-xs text-gray-500 mt-0.5">
-                          {m.path || m.department?.path || 'Department scope'}
-                        </div>
-                        {m.source && <div className="text-xs text-gray-400 mt-1">{m.source}</div>}
-                      </div>
-                      {m.is_primary && <Badge variant="success" size="sm">Primary</Badge>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </div>

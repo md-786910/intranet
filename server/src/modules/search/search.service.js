@@ -198,7 +198,8 @@ const searchService = {
 
     const wantsNews = type === 'all' || type === 'news';
     const wantsDocs = type === 'all' || type === 'document';
-    const wantsPeople = type === 'all' || type === 'contact';
+    // People/member search is disabled for employees — contacts stay empty.
+    const wantsPeople = false;
 
     try {
       const [news, documents, contacts] = await Promise.all([

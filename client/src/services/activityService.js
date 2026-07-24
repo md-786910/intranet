@@ -1,5 +1,5 @@
-import api from '../config/api';
+import api from "../config/api";
 
 export const activityService = {
-  list: (params) => api.get('/activity', { params }),
+  list: (params) => api.get("/activity", { params }),
 };

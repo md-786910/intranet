@@ -11,6 +11,11 @@ const getById = catchAsync(async (req, res) => {
   res.status(200).json({ status: 'success', data: user });
 });
 
+const getDirectoryProfile = catchAsync(async (req, res) => {
+  const user = await usersService.getDirectoryProfile(req.params.id);
+  res.status(200).json({ status: 'success', data: user });
+});
+
 const create = catchAsync(async (req, res) => {
   const user = await usersService.create(req.body, req.user.user_id);
   res.status(201).json({ status: 'success', data: user });
@@ -97,6 +102,7 @@ const getOrgChain = catchAsync(async (req, res) => {
 module.exports = {
   list,
   getById,
+  getDirectoryProfile,
   create,
   update,
   deactivate,

@@ -10,6 +10,8 @@ export default function MainContentGrid() {
   const navigate = useNavigate();
   const people = data?.people || [];
   const departments = data?.departments || [];
+  const rootMembers = data?.rootMembers || [];
+  const orgChartItemCount = rootMembers.length + departments.length;
   const peopleScope = data?.peopleScope || 'DEPARTMENT';
   const peopleEmptyMessage = {
     DEPARTMENT: 'No colleagues in your department yet.',
@@ -43,7 +45,9 @@ export default function MainContentGrid() {
         {/* Key Contacts */}
         <div className="bg-white border border-zinc-100 rounded-3xl p-unit-lg shadow-sm flex flex-col">
           <h3 className="font-h3 text-h3 mb-6">Key Contacts</h3>
-          <div className="space-y-3">
+          <div
+            className={`space-y-3 ${people.length > 5 ? 'max-h-[23rem] overflow-y-auto pr-1 -mr-1' : ''}`}
+          >
             {loading ? (
               <>
                 <Skeleton className="h-16 rounded-2xl" />
@@ -68,7 +72,7 @@ export default function MainContentGrid() {
           </div>
         </div>
 
-        {/* Organisation Chart */}
+        {/* Organisation Chart — local departments */}
         <div className="bg-white border border-zinc-100 rounded-3xl p-unit-lg shadow-sm flex flex-col flex-grow">
           <h3 className="font-h3 text-h3 mb-2">Organisation Chart</h3>
           <p className="text-body-sm text-on-surface-variant mb-6">
@@ -76,7 +80,7 @@ export default function MainContentGrid() {
             organization.
           </p>
           <div
-            className={`space-y-3 ${departments.length > 5 ? 'max-h-[420px] overflow-y-auto pr-1 -mr-1' : ''}`}
+            className={`space-y-3 ${orgChartItemCount > 5 ? 'max-h-[420px] overflow-y-auto pr-1 -mr-1' : ''}`}
           >
             {loading ? (
               <>
@@ -84,20 +88,30 @@ export default function MainContentGrid() {
                 <Skeleton className="h-16 rounded-2xl" />
                 <Skeleton className="h-16 rounded-2xl" />
               </>
-            ) : departments.length === 0 ? (
+            ) : orgChartItemCount === 0 ? (
               <p className="text-body-sm text-on-surface-variant px-3 py-4">
                 {departmentsEmptyMessage}
               </p>
             ) : (
-              departments.map((d) => (
-                <OrgRow
-                  key={d.id}
-                  name={d.name}
-                  path={[d.officeLocationName, d.verticalName].filter(Boolean).join(' › ')}
-                  count={`${d.memberCount} Team Member${d.memberCount === 1 ? '' : 's'}`}
-                  onView={() => navigate(`/org-chart?dept=${encodeURIComponent(d.name)}`)}
-                />
-              ))
+              <>
+                {rootMembers.map((m, idx) => (
+                  <OrgPersonRow
+                    key={`rm-${m.userId}`}
+                    avatar={renderAvatar(m, idx)}
+                    name={`${m.firstName} ${m.lastName}`.trim()}
+                    role={m.jobTitle || m.nodeName || ''}
+                  />
+                ))}
+                {departments.map((d) => (
+                  <OrgRow
+                    key={d.id}
+                    name={d.name}
+                    path={[d.officeLocationName, d.verticalName].filter(Boolean).join(' › ')}
+                    count={`${d.memberCount} Team Member${d.memberCount === 1 ? '' : 's'}`}
+                    onView={() => navigate(`/org-chart?deptId=${d.id}&dept=${encodeURIComponent(d.name)}`)}
+                  />
+                ))}
+              </>
             )}
           </div>
         </div>
@@ -154,6 +168,23 @@ function ContactRow({ avatar, name, role, onChat }) {
           Chat
         </button>
       )}
+    </div>
+  );
+}
+
+function OrgPersonRow({ avatar, name, role }) {
+  return (
+    <div className="bg-primary-container/10 rounded-2xl p-3 flex items-center gap-3 border border-primary-container/20">
+      {avatar}
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wide text-on-surface-variant truncate">
+          Direct member
+        </p>
+        <p className="font-semibold text-body-sm truncate">{name}</p>
+        {role ? (
+          <p className="text-[11px] text-on-surface-variant truncate">{role}</p>
+        ) : null}
+      </div>
     </div>
   );
 }

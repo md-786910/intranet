@@ -73,7 +73,13 @@ export default function AzureOrgTreeNode({
       {/* ── Node row ── */}
       <div
         className="flex items-center hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group py-0.5"
-        onClick={() => navigate(`/active-directory/${user.id}`)}
+        onClick={() => {
+          if (user.local_user_id) {
+            navigate(`/users/${user.local_user_id}`);
+          } else {
+            navigate(`/active-directory/${user.id}`);
+          }
+        }}
       >
         {/* ── Ancestor vertical lines ── */}
         {ancestorLines.map((hasLine, i) => (

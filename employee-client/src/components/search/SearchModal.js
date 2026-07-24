@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import MaterialIcon from '../common/MaterialIcon';
 import Skeleton from '../common/Skeleton';
-import Avatar from '../common/Avatar';
 import api from '../../config/api';
 import { searchService } from '../../services/searchService';
 import { loadHistory, pushHistory, clearHistory } from '../../utils/searchHistory';
@@ -14,7 +13,6 @@ const TYPE_OPTIONS = [
   { value: 'all',      label: 'All' },
   { value: 'news',     label: 'News' },
   { value: 'document', label: 'Documents' },
-  { value: 'contact',  label: 'People' },
 ];
 
 function formatRelative(iso) {
@@ -29,10 +27,6 @@ function formatRelative(iso) {
   const d = Math.floor(h / 24);
   if (d < 30) return `${d}d ago`;
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function fullName(c) {
-  return [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Unknown';
 }
 
 // ── Chip ─────────────────────────────────────────────────────────────────
@@ -106,25 +100,6 @@ function DocumentRow({ item, highlighted, onPick }) {
   );
 }
 
-function ContactRow({ item, highlighted, onPick }) {
-  const name = fullName(item);
-  return (
-    <button
-      type="button"
-      onClick={onPick}
-      className={`w-full text-left flex items-center gap-3 p-3 rounded-xl ${highlighted ? 'bg-primary-container/30' : 'hover:bg-surface-container-low'}`}
-    >
-      <Avatar src={item.avatar_url} name={name} size="md" />
-      <div className="flex-1 min-w-0">
-        <div className="font-body-md text-body-md text-on-background truncate">{name}</div>
-        <div className="text-body-sm text-on-surface-variant truncate">
-          {[item.job_title, item.department_name].filter(Boolean).join(' · ') || 'Team member'}
-        </div>
-      </div>
-    </button>
-  );
-}
-
 // ── Section header ───────────────────────────────────────────────────────
 function SectionHeader({ icon, label, count }) {
   return (
@@ -191,7 +166,9 @@ export default function SearchModal({ isOpen, onClose }) {
       .then((res) => {
         if (reqId !== reqIdRef.current) return; // stale
         const data = res.data?.data || {};
-        setResults(data.results || { news: [], documents: [], contacts: [] });
+        const next = data.results || { news: [], documents: [], contacts: [] };
+        // Never surface people/member hits in employee global search.
+        setResults({ news: next.news || [], documents: next.documents || [], contacts: [] });
         setHistory(pushHistory(debouncedQuery));
       })
       .catch(() => {
@@ -211,7 +188,6 @@ export default function SearchModal({ isOpen, onClose }) {
   // don't render, search still works fine without them.
   useEffect(() => {
     if (!isOpen) return;
-    if (type === 'contact') { setCategories([]); return; }
     const entityType = type === 'document' ? 'DOCUMENT' : 'NEWS';
     api.get('/categories', { params: { entity_type: entityType, limit: 50 } })
       .then((res) => setCategories(res.data?.data?.categories || []))
@@ -223,7 +199,6 @@ export default function SearchModal({ isOpen, onClose }) {
     const rows = [];
     (results.news || []).forEach((it) => rows.push({ kind: 'news', item: it }));
     (results.documents || []).forEach((it) => rows.push({ kind: 'document', item: it }));
-    (results.contacts || []).forEach((it) => rows.push({ kind: 'contact', item: it }));
     return rows;
   }, [results]);
 
@@ -234,7 +209,6 @@ export default function SearchModal({ isOpen, onClose }) {
     if (!row) return;
     if (row.kind === 'news')     navigate(`/news/${row.item.id}`);
     if (row.kind === 'document') navigate(`/documents?preview=${row.item.id}`);
-    // Contact navigation deferred — no people detail page yet.
     onClose();
   }, [navigate, onClose]);
 
@@ -256,7 +230,7 @@ export default function SearchModal({ isOpen, onClose }) {
 
   const trimmed = query.trim();
   const isEmpty = !trimmed;
-  const hasAnyResults = (results.news?.length || 0) + (results.documents?.length || 0) + (results.contacts?.length || 0) > 0;
+  const hasAnyResults = (results.news?.length || 0) + (results.documents?.length || 0) > 0;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4" onKeyDown={onKeyDown}>
@@ -274,7 +248,7 @@ export default function SearchModal({ isOpen, onClose }) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search news, documents, people…"
+            placeholder="Search news and documents…"
             className="flex-1 bg-transparent outline-none text-body-md text-on-background placeholder:text-on-surface-variant"
           />
           {query && (
@@ -309,7 +283,7 @@ export default function SearchModal({ isOpen, onClose }) {
               {opt.label}
             </Chip>
           ))}
-          {type !== 'contact' && categories.length > 0 && (
+          {categories.length > 0 && (
             <>
               <span className="text-zinc-300">|</span>
               {categories.slice(0, 8).map((c) => (
@@ -357,7 +331,7 @@ export default function SearchModal({ isOpen, onClose }) {
 
           {isEmpty && history.length === 0 && (
             <div className="px-5 py-12 text-center text-body-sm text-on-surface-variant">
-              Type to search news, documents, people.
+              Type to search news and documents.
             </div>
           )}
 
@@ -420,24 +394,6 @@ export default function SearchModal({ isOpen, onClose }) {
                           item={item}
                           highlighted={highlight === rowIndex}
                           onPick={() => handleOpen({ kind: 'document', item })}
-                        />
-                      );
-                    })}
-                  </div>
-                </section>
-              )}
-              {(results.contacts?.length || 0) > 0 && (
-                <section>
-                  <SectionHeader icon="group" label="People" count={results.contacts.length} />
-                  <div className="space-y-1">
-                    {results.contacts.map((item, idx) => {
-                      const rowIndex = (results.news?.length || 0) + (results.documents?.length || 0) + idx;
-                      return (
-                        <ContactRow
-                          key={`c-${item.user_id}`}
-                          item={item}
-                          highlighted={highlight === rowIndex}
-                          onPick={() => handleOpen({ kind: 'contact', item })}
                         />
                       );
                     })}
