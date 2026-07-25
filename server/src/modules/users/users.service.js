@@ -475,27 +475,9 @@ const usersService = {
       replacements.roleCategoryRankLte = Number(query.role_category_rank_lte);
     }
 
-    if (query.department_id || query.vertical_id || query.office_location_id) {
-      let orgExists = 'EXISTS (SELECT 1 FROM department_membership dm'
-        + ' JOIN department d ON d.id = dm.department_id'
-        + ' JOIN vertical v ON v.id = d.vertical_id'
-        + ' JOIN office_location ol ON ol.id = v.office_location_id'
-        + ' WHERE dm.user_id = ua.user_id';
-      if (query.department_id) {
-        orgExists += ' AND d.id = :departmentId';
-        replacements.departmentId = query.department_id;
-      }
-      if (query.vertical_id) {
-        orgExists += ' AND v.id = :verticalId';
-        replacements.verticalId = query.vertical_id;
-      }
-      if (query.office_location_id) {
-        orgExists += ' AND ol.id = :officeLocationId';
-        replacements.officeLocationId = query.office_location_id;
-      }
-      orgExists += ')';
-      conditions.push(orgExists);
-    }
+    // Flexible org tree: filter via node_membership + org_node.path (not legacy dept tables)
+    const { appendOrgNodeMembershipFilter } = require('../../utils/orgNodeListFilter');
+    appendOrgNodeMembershipFilter(conditions, replacements, query);
 
     const whereClause = conditions.join(' AND ');
 

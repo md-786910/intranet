@@ -19,6 +19,10 @@ const listUsersSchema = {
     limit: Joi.number().integer().min(1).max(100).default(20),
     search: Joi.string().trim().max(255).optional().allow(''),
     status: Joi.string().valid('ACTIVE', 'INACTIVE', 'LOCKED', 'INVITED').optional(),
+    // Flexible org tree filter (org_node.id); subtree included by default
+    node_id: idPattern.optional(),
+    include_subtree: Joi.boolean().default(true),
+    // Legacy aliases — treated as org_node ids (same path filter as node_id)
     department_id: idPattern.optional(),
     office_location_id: idPattern.optional(),
     vertical_id: idPattern.optional(),

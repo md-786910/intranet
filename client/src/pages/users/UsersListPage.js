@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import PageHeader from "../../components/common/PageHeader";
 import Button from "../../components/common/Button";
@@ -7,6 +7,7 @@ import Pagination from "../../components/common/Pagination";
 import SearchBar from "../../components/common/SearchBar";
 import StatusBadge from "../../components/common/StatusBadge";
 import Select from "../../components/common/Select";
+import OrgNodeFilterSelect from "../../components/common/OrgNodeFilterSelect";
 import { userService } from "../../services/userService";
 import { useToast } from "../../hooks/useToast";
 import { usePagination } from "../../hooks/usePagination";
@@ -179,57 +180,25 @@ export default function UsersListPage() {
   const { page, limit, setPage, setLimit } = usePagination();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [officeId, setOfficeId] = useState("");
-  const [verticalId, setVerticalId] = useState("");
-  const [departmentId, setDepartmentId] = useState("");
   const debouncedSearch = useDebounce(search);
   const [searchParams, setSearchParams] = useSearchParams();
   const sortBy  = searchParams.get('sort')  || 'created_at';
   const sortDir = searchParams.get('order') || 'desc';
+  const nodeId = searchParams.get('node_id') || '';
   const [data, setData] = useState({ users: [], pagination: {} });
   const [loading, setLoading] = useState(true);
   const { tree } = useOrgTree();
 
-  const orgNode = tree[0] || null;
-  const officeOptions = useMemo(
-    () =>
-      (orgNode?.children || []).map((o) => ({
-        value: String(o.id),
-        label: o.name,
-      })),
-    [orgNode],
-  );
-  const verticalOptions = useMemo(() => {
-    if (!officeId) return [];
-    const office = (orgNode?.children || []).find(
-      (o) => String(o.id) === officeId,
-    );
-    return (office?.children || []).map((v) => ({
-      value: String(v.id),
-      label: v.name,
-    }));
-  }, [orgNode, officeId]);
-  const departmentOptions = useMemo(() => {
-    if (!verticalId) return [];
-    const office = (orgNode?.children || []).find(
-      (o) => String(o.id) === officeId,
-    );
-    const vertical = (office?.children || []).find(
-      (v) => String(v.id) === verticalId,
-    );
-    return (vertical?.children || []).map((d) => ({
-      value: String(d.id),
-      label: d.name,
-    }));
-  }, [orgNode, officeId, verticalId]);
-
-  useEffect(() => {
-    setVerticalId("");
-    setDepartmentId("");
-  }, [officeId]);
-  useEffect(() => {
-    setDepartmentId("");
-  }, [verticalId]);
+  const setNodeId = useCallback((nextId) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (nextId) next.set('node_id', String(nextId));
+      else next.delete('node_id');
+      next.set('page', '1');
+      return next;
+    });
+    setPage(1);
+  }, [setSearchParams, setPage]);
 
   const handleSort = useCallback((col) => {
     setSearchParams((prev) => {
@@ -264,9 +233,10 @@ export default function UsersListPage() {
       };
       if (debouncedSearch) params.search = debouncedSearch;
       if (statusFilter) params.status = statusFilter;
-      if (officeId) params.office_location_id = officeId;
-      if (verticalId) params.vertical_id = verticalId;
-      if (departmentId) params.department_id = departmentId;
+      if (nodeId) {
+        params.node_id = nodeId;
+        params.include_subtree = true;
+      }
       const res = await userService.getUsers(params);
       setData(res.data?.data || { users: [], pagination: {} });
     } catch (err) {
@@ -279,9 +249,7 @@ export default function UsersListPage() {
     limit,
     debouncedSearch,
     statusFilter,
-    officeId,
-    verticalId,
-    departmentId,
+    nodeId,
     sortBy,
     sortDir,
     addToast,
@@ -375,16 +343,14 @@ export default function UsersListPage() {
     },
   ];
 
-  const hasActiveFilters = search || statusFilter || officeId || verticalId || departmentId;
+  const hasActiveFilters = search || statusFilter || nodeId;
 
   const clearAllFilters = useCallback(() => {
     setSearch('');
     setStatusFilter('');
-    setOfficeId('');
-    setVerticalId('');
-    setDepartmentId('');
+    setNodeId('');
     setPage(1);
-  }, [setPage]);
+  }, [setPage, setNodeId]);
 
   return (
     <div>
@@ -395,7 +361,7 @@ export default function UsersListPage() {
           <Button onClick={() => navigate("/users/create")}>Create User</Button>
         }
       />
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-2">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-2">
         <div className="md:col-span-2">
           <SearchBar
             value={search}
@@ -413,6 +379,7 @@ export default function UsersListPage() {
           />
           {statusFilter && (
             <button
+              type="button"
               onClick={() => { setStatusFilter(''); setPage(1); }}
               className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               title="Clear"
@@ -423,73 +390,15 @@ export default function UsersListPage() {
             </button>
           )}
         </div>
-        <div className="relative">
-          <Select
-            name="office"
-            value={officeId}
-            onChange={(e) => setOfficeId(e.target.value)}
-            placeholder="All offices"
-            options={officeOptions}
-          />
-          {officeId && (
-            <button
-              onClick={() => setOfficeId('')}
-              className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              title="Clear"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </div>
-        <div className="relative">
-          <Select
-            name="vertical"
-            value={verticalId}
-            onChange={(e) => setVerticalId(e.target.value)}
-            placeholder="All verticals"
-            options={verticalOptions}
-            disabled={!officeId}
-          />
-          {verticalId && (
-            <button
-              onClick={() => setVerticalId('')}
-              className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              title="Clear"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </div>
+        <OrgNodeFilterSelect
+          value={nodeId}
+          onChange={(e) => setNodeId(e.target.value)}
+        />
       </div>
       <div className="flex items-center gap-3 mb-4">
-        {verticalId && (
-          <div className="relative w-48">
-            <Select
-              name="department"
-              value={departmentId}
-              onChange={(e) => setDepartmentId(e.target.value)}
-              placeholder="All departments"
-              options={departmentOptions}
-            />
-            {departmentId && (
-              <button
-                onClick={() => setDepartmentId('')}
-                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                title="Clear"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        )}
         {hasActiveFilters && (
           <button
+            type="button"
             onClick={clearAllFilters}
             className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-500 transition-colors"
           >
