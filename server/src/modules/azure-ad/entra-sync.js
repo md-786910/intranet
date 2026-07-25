@@ -264,7 +264,12 @@ async function syncAvatarFromEntra(azureObjectId, userId) {
   return `/uploads/avatars/${fileName}`;
 }
 
-async function syncUsersFromEntra({ dryRun = false, onlyEnabled = true, password } = {}, actorUserId) {
+async function syncUsersFromEntra({
+  dryRun = false,
+  onlyEnabled = true,
+  password,
+  onProgress,
+} = {}, actorUserId) {
   const usersService = require('../users/users.service');
   const { UserAccount } = require('../../database/models');
   const { fetchGraphUsersForSync } = require('./azure-ad.service');
@@ -272,6 +277,26 @@ async function syncUsersFromEntra({ dryRun = false, onlyEnabled = true, password
   const plainPassword = (password && String(password).trim())
     ? String(password).trim()
     : DEFAULT_CREATE_PASSWORD;
+
+  const report = (payload) => {
+    if (typeof onProgress !== 'function') return;
+    try {
+      onProgress(payload);
+    } catch (err) {
+      logger.warn(`Entra sync progress callback failed: ${err.message}`);
+    }
+  };
+
+  report({
+    phase: 'fetching',
+    dry_run: Boolean(dryRun),
+    message: 'Loading users from Entra…',
+    current: 0,
+    total: 0,
+    created: 0,
+    updated: 0,
+    skipped: 0,
+  });
 
   const [graphUsers, roleCategoryId, employeeRoleId, groupRoot] = await Promise.all([
     fetchGraphUsersForSync({ onlyEnabled }),
@@ -296,6 +321,19 @@ async function syncUsersFromEntra({ dryRun = false, onlyEnabled = true, password
     samples: [],
   };
 
+  report({
+    phase: 'users',
+    dry_run: Boolean(dryRun),
+    message: graphUsers.length
+      ? `Processing ${graphUsers.length} users…`
+      : 'No users returned from Entra',
+    current: 0,
+    total: graphUsers.length,
+    created: 0,
+    updated: 0,
+    skipped: 0,
+  });
+
   const azureToLocal = new Map();
   const azureManager = new Map();
   const ensuredJobTitles = new Set();
@@ -313,6 +351,27 @@ async function syncUsersFromEntra({ dryRun = false, onlyEnabled = true, password
     namedNodeCache.set(key, node);
     return node;
   }
+
+  let processed = 0;
+  let lastProgressAt = 0;
+  const emitUserProgress = (label, force = false) => {
+    const now = Date.now();
+    const isLast = processed >= graphUsers.length;
+    // Throttle socket spam on large directories; always emit first/last.
+    if (!force && !isLast && processed > 1 && now - lastProgressAt < 120) return;
+    lastProgressAt = now;
+    report({
+      phase: 'users',
+      dry_run: Boolean(dryRun),
+      message: dryRun ? 'Previewing users…' : 'Syncing users…',
+      current: processed,
+      total: graphUsers.length,
+      created: summary.created,
+      updated: summary.updated,
+      skipped: summary.skipped,
+      label: label || null,
+    });
+  };
 
   for (const gu of graphUsers) {
     const email = resolveEmail(gu);
@@ -337,6 +396,8 @@ async function syncUsersFromEntra({ dryRun = false, onlyEnabled = true, password
       summary.errors.push({ azure_id: gu.id, reason: 'No usable email / UPN' });
       preview.action = 'skip';
       if (summary.samples.length < 25) summary.samples.push(preview);
+      processed += 1;
+      emitUserProgress(preview.displayName);
       continue;
     }
 
@@ -362,6 +423,8 @@ async function syncUsersFromEntra({ dryRun = false, onlyEnabled = true, password
       if (rawJobTitle) ensuredJobTitles.add(rawJobTitle.toLowerCase());
       if (deptName) preview.org_node = '(match or create DEPARTMENT)';
       if (summary.samples.length < 25) summary.samples.push(preview);
+      processed += 1;
+      emitUserProgress(preview.displayName);
       continue;
     }
 
@@ -525,6 +588,9 @@ async function syncUsersFromEntra({ dryRun = false, onlyEnabled = true, password
       });
       logger.warn(`Entra sync failed for ${email || gu.id}: ${err.message}`);
     }
+
+    processed += 1;
+    emitUserProgress(preview.displayName);
   }
 
   summary.job_titles_ensured = ensuredJobTitles.size;
@@ -551,31 +617,85 @@ async function syncUsersFromEntra({ dryRun = false, onlyEnabled = true, password
     return null;
   }
 
+  const managerEntries = [...azureManager.entries()];
+  if (managerEntries.length > 0) {
+    report({
+      phase: 'managers',
+      dry_run: Boolean(dryRun),
+      message: dryRun ? 'Estimating reporting links…' : 'Linking managers…',
+      current: 0,
+      total: managerEntries.length,
+      created: summary.created,
+      updated: summary.updated,
+      skipped: summary.skipped,
+      reporting_linked: 0,
+    });
+  }
+
   if (!dryRun) {
-    for (const [azureId, { managerAzureId, managerEmail }] of azureManager.entries()) {
+    let managerDone = 0;
+    for (const [azureId, { managerAzureId, managerEmail }] of managerEntries) {
       // eslint-disable-next-line no-await-in-loop
       const localId = await resolveLocalUserId(azureId, null);
       // eslint-disable-next-line no-await-in-loop
       const managerLocalId = await resolveLocalUserId(managerAzureId, managerEmail);
-      if (!localId || !managerLocalId || localId === managerLocalId) continue;
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        await usersService.update(localId, { reports_to_user_id: managerLocalId }, actorUserId);
-        summary.reporting_linked += 1;
-      } catch (err) {
-        summary.errors.push({
-          azure_id: azureId,
-          reason: `Reporting link failed: ${err.message}`,
-        });
+      if (localId && managerLocalId && localId !== managerLocalId) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await usersService.update(localId, { reports_to_user_id: managerLocalId }, actorUserId);
+          summary.reporting_linked += 1;
+        } catch (err) {
+          summary.errors.push({
+            azure_id: azureId,
+            reason: `Reporting link failed: ${err.message}`,
+          });
+        }
       }
+      managerDone += 1;
+      report({
+        phase: 'managers',
+        dry_run: false,
+        message: 'Linking managers…',
+        current: managerDone,
+        total: managerEntries.length,
+        created: summary.created,
+        updated: summary.updated,
+        skipped: summary.skipped,
+        reporting_linked: summary.reporting_linked,
+      });
     }
   } else {
-    for (const [azureId, { managerAzureId }] of azureManager.entries()) {
+    for (const [azureId, { managerAzureId }] of managerEntries) {
       if (azureToLocal.has(azureId) && azureToLocal.has(managerAzureId)) {
         summary.reporting_linked += 1;
       }
     }
+    if (managerEntries.length > 0) {
+      report({
+        phase: 'managers',
+        dry_run: true,
+        message: 'Estimating reporting links…',
+        current: managerEntries.length,
+        total: managerEntries.length,
+        created: summary.created,
+        updated: summary.updated,
+        skipped: summary.skipped,
+        reporting_linked: summary.reporting_linked,
+      });
+    }
   }
+
+  report({
+    phase: 'done',
+    dry_run: Boolean(dryRun),
+    message: dryRun ? 'Preview complete' : 'Sync complete',
+    current: graphUsers.length,
+    total: graphUsers.length,
+    created: summary.created,
+    updated: summary.updated,
+    skipped: summary.skipped,
+    reporting_linked: summary.reporting_linked,
+  });
 
   return summary;
 }

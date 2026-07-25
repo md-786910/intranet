@@ -342,9 +342,25 @@ async function fetchUserPhoto(azureObjectId) {
   }
 }
 
-function syncUsersFromEntra(options, actorUserId) {
+function syncUsersFromEntra(options = {}, actorUserId) {
   // Lazy require avoids circular load with entra-sync.js
-  return require('./entra-sync').syncUsersFromEntra(options, actorUserId);
+  let io = null;
+  try {
+    io = require('../../config/socket').getIO();
+  } catch {
+    io = null;
+  }
+
+  const onProgress = (payload) => {
+    if (!io || !actorUserId) return;
+    try {
+      io.to(`user:${actorUserId}`).emit('entra:sync-progress', payload);
+    } catch (err) {
+      logger.warn(`Failed to emit entra:sync-progress: ${err.message}`);
+    }
+  };
+
+  return require('./entra-sync').syncUsersFromEntra({ ...options, onProgress }, actorUserId);
 }
 
 function syncLocalUserFromEntra(options, actorUserId) {

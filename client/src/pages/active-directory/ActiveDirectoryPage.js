@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../components/common/PageHeader';
 import Badge from '../../components/common/Badge';
 import Modal from '../../components/common/Modal';
 import { azureAdService } from '../../services/azureAdService';
 import { useToast } from '../../hooks/useToast';
+import { useSocket } from '../../contexts/SocketContext';
 import OrgHierarchyView from '../../components/azure-ad/OrgHierarchyView';
 
 function StatPill({ label, value, tone = 'default' }) {
@@ -22,14 +23,92 @@ function StatPill({ label, value, tone = 'default' }) {
   );
 }
 
+function SyncProgress({ progress, busy }) {
+  if (!busy && !progress) return null;
+
+  const phase = progress?.phase || 'fetching';
+  const total = Number(progress?.total) || 0;
+  const current = Number(progress?.current) || 0;
+  const indeterminate = phase === 'fetching' || (busy && total <= 0);
+  const pct = !indeterminate && total > 0
+    ? Math.min(100, Math.round((current / total) * 100))
+    : phase === 'done'
+      ? 100
+      : 0;
+
+  const phaseLabel = {
+    fetching: 'Loading users from Entra…',
+    users: progress?.dry_run ? 'Previewing users…' : 'Syncing users…',
+    managers: progress?.dry_run ? 'Estimating reporting links…' : 'Linking managers…',
+    done: progress?.dry_run ? 'Preview complete' : 'Sync complete',
+  }[phase] || progress?.message || 'Working…';
+
+  return (
+    <div className="rounded-xl border border-primary-100 bg-primary-50/40 p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-gray-900">{phaseLabel}</p>
+          {progress?.label && phase === 'users' && (
+            <p className="mt-0.5 text-xs text-gray-500 truncate">
+              Current: <span className="font-medium text-gray-700">{progress.label}</span>
+            </p>
+          )}
+        </div>
+        <p className="text-xs font-semibold tabular-nums text-primary-700 shrink-0">
+          {indeterminate ? '…' : `${pct}%`}
+        </p>
+      </div>
+
+      <div className="h-2 rounded-full bg-white/80 border border-primary-100 overflow-hidden">
+        {indeterminate ? (
+          <div className="h-full w-1/3 rounded-full bg-primary-500 animate-pulse" />
+        ) : (
+          <div
+            className="h-full rounded-full bg-primary-600 transition-[width] duration-200 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
+        {!indeterminate && (
+          <span className="tabular-nums font-medium text-gray-800">
+            {current} / {total}
+          </span>
+        )}
+        <span className="tabular-nums">Created {progress?.created ?? 0}</span>
+        <span className="tabular-nums">Updated {progress?.updated ?? 0}</span>
+        <span className="tabular-nums">Skipped {progress?.skipped ?? 0}</span>
+        {phase === 'managers' || phase === 'done' ? (
+          <span className="tabular-nums">Managers {progress?.reporting_linked ?? 0}</span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function ActiveDirectoryPage() {
   const { addToast: showToast } = useToast();
+  const { socket } = useSocket();
 
   const [importOpen, setImportOpen] = useState(false);
   const [importPassword, setImportPassword] = useState('new@12345');
   const [showImportPassword, setShowImportPassword] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
+  const [importMode, setImportMode] = useState(null); // 'preview' | 'sync'
+  const [importProgress, setImportProgress] = useState(null);
   const [importResult, setImportResult] = useState(null);
+
+  useEffect(() => {
+    if (!socket || !importOpen) return undefined;
+    const onProgress = (payload) => {
+      setImportProgress(payload || null);
+    };
+    socket.on('entra:sync-progress', onProgress);
+    return () => {
+      socket.off('entra:sync-progress', onProgress);
+    };
+  }, [socket, importOpen]);
 
   const closeImport = () => {
     if (importBusy) return;
@@ -37,6 +116,8 @@ export default function ActiveDirectoryPage() {
     setImportPassword('new@12345');
     setShowImportPassword(false);
     setImportResult(null);
+    setImportProgress(null);
+    setImportMode(null);
   };
 
   const runImport = async ({ dryRun }) => {
@@ -46,6 +127,18 @@ export default function ActiveDirectoryPage() {
       return;
     }
     setImportBusy(true);
+    setImportMode(dryRun ? 'preview' : 'sync');
+    setImportResult(null);
+    setImportProgress({
+      phase: 'fetching',
+      dry_run: dryRun,
+      message: 'Loading users from Entra…',
+      current: 0,
+      total: 0,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+    });
     try {
       const res = await azureAdService.syncUsers({
         dry_run: dryRun,
@@ -54,6 +147,18 @@ export default function ActiveDirectoryPage() {
       });
       const data = res.data?.data || {};
       setImportResult(data);
+      setImportProgress((prev) => ({
+        ...(prev || {}),
+        phase: 'done',
+        dry_run: dryRun,
+        message: dryRun ? 'Preview complete' : 'Sync complete',
+        current: data.total_graph || prev?.current || 0,
+        total: data.total_graph || prev?.total || 0,
+        created: data.created || 0,
+        updated: data.updated || 0,
+        skipped: data.skipped || 0,
+        reporting_linked: data.reporting_linked || 0,
+      }));
       if (!dryRun) {
         showToast(
           `Sync complete: ${data.updated || 0} updated, ${data.created || 0} created`,
@@ -63,10 +168,18 @@ export default function ActiveDirectoryPage() {
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Sync failed';
       showToast(msg, 'error');
+      setImportProgress(null);
     } finally {
       setImportBusy(false);
+      setImportMode(null);
     }
   };
+
+  const busyLabel = useMemo(() => {
+    if (!importBusy) return null;
+    if (importMode === 'preview') return 'Previewing…';
+    return 'Syncing…';
+  }, [importBusy, importMode]);
 
   return (
     <div className="space-y-6">
@@ -86,7 +199,11 @@ export default function ActiveDirectoryPage() {
             </span>
             <button
               type="button"
-              onClick={() => { setImportResult(null); setImportOpen(true); }}
+              onClick={() => {
+                setImportResult(null);
+                setImportProgress(null);
+                setImportOpen(true);
+              }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-primary-200 bg-primary-50 text-primary-800 hover:bg-primary-100 transition-colors"
               title="Sync users from Entra"
             >
@@ -122,7 +239,7 @@ export default function ActiveDirectoryPage() {
               disabled={importBusy}
               className="px-3 py-1.5 text-xs font-medium text-gray-800 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
             >
-              {importBusy ? 'Working…' : 'Preview'}
+              {importBusy && importMode === 'preview' ? 'Previewing…' : 'Preview'}
             </button>
             <button
               type="button"
@@ -130,7 +247,7 @@ export default function ActiveDirectoryPage() {
               disabled={importBusy}
               className="px-3 py-1.5 text-xs font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
             >
-              {importBusy ? 'Syncing…' : 'Sync now'}
+              {importBusy && importMode === 'sync' ? 'Syncing…' : 'Sync now'}
             </button>
           </>
         )}
@@ -152,8 +269,9 @@ export default function ActiveDirectoryPage() {
                 autoComplete="new-password"
                 value={importPassword}
                 onChange={(e) => setImportPassword(e.target.value)}
+                disabled={importBusy}
                 placeholder="new@12345"
-                className="w-full pl-3 pr-10 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full pl-3 pr-10 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50"
               />
               <button
                 type="button"
@@ -178,6 +296,14 @@ export default function ActiveDirectoryPage() {
               Default <span className="font-mono">new@12345</span> · existing users keep their password
             </p>
           </div>
+
+          {(importBusy || importProgress) && (
+            <SyncProgress progress={importProgress} busy={importBusy} />
+          )}
+
+          {busyLabel && !importProgress && (
+            <p className="text-xs text-gray-500">{busyLabel}</p>
+          )}
 
           {importResult && (
             <div className="space-y-3 border-t border-gray-100 pt-4">
