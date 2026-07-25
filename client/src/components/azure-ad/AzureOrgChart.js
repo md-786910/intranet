@@ -1,6 +1,4 @@
-import React, { useState, useRef, useLayoutEffect, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { azureAdService } from '../../services/azureAdService';
+import React from 'react';
 
 const TOP_COLORS = [
   '#6366f1', '#8b5cf6', '#0ea5e9',
@@ -13,222 +11,244 @@ const AVATAR_BG = [
 ];
 
 function getInitials(name = '') {
-  const parts = name.trim().split(/\s+/);
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function OrgCard({ user, depth, onNavigate }) {
+/**
+ * Compact person card for the LTR org tree.
+ */
+export function OrgPersonCard({
+  user,
+  depth = 0,
+  size = 'md',
+  selected = false,
+  expanded = false,
+  loading = false,
+  noReports = false,
+  reportCount = null,
+  onToggleExpand,
+  onOpenProfile,
+}) {
   const color = TOP_COLORS[depth % TOP_COLORS.length];
   const avatarBg = AVATAR_BG[depth % AVATAR_BG.length];
+  const isLg = size === 'lg';
+  const title = user.jobTitle || user.department || user.userPrincipalName || '';
+  const knownCount = typeof reportCount === 'number' ? reportCount : null;
+  const hasReports = knownCount === null ? !noReports : knownCount > 0;
+  const canExpand = Boolean(onToggleExpand) && hasReports && !noReports;
+
+  let expandLabel = 'Expand';
+  if (loading) expandLabel = 'Loading…';
+  else if (expanded) {
+    expandLabel = knownCount > 0 ? `Collapse (${knownCount})` : 'Collapse';
+  } else if (knownCount > 0) {
+    expandLabel = `Expand (${knownCount})`;
+  }
 
   return (
     <div
-      className="bg-white rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow w-52 shrink-0"
+      className={`bg-white rounded-xl shadow-sm border shrink-0 transition-shadow ${
+        isLg ? 'w-60' : 'w-52'
+      } ${selected ? 'border-primary-400 ring-2 ring-primary-100' : 'border-gray-100'}`}
       style={{ borderTop: `3px solid ${color}` }}
-      onClick={() => onNavigate()}
     >
-      <div className="flex items-center gap-3 px-4 py-3">
-        <div className={`w-9 h-9 rounded-full ${avatarBg} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-          {getInitials(user.displayName || '?')}
+      <div className={`flex items-center gap-3 px-3 ${isLg ? 'py-3' : 'py-2.5'}`}>
+        <div
+          className={`${isLg ? 'w-10 h-10 text-sm' : 'w-8 h-8 text-xs'} rounded-full ${avatarBg} flex items-center justify-center text-white font-bold shrink-0`}
+        >
+          {getInitials(user.displayName)}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-gray-900 truncate leading-tight">
+          <p className={`${isLg ? 'text-sm' : 'text-sm'} font-semibold text-gray-900 truncate leading-tight`}>
             {user.displayName}
           </p>
-          <p className="text-xs text-gray-500 truncate leading-tight mt-0.5">
-            {user.jobTitle || user.department || user.userPrincipalName || ''}
-          </p>
+          {title && (
+            <p className="text-[11px] text-gray-500 truncate leading-tight mt-0.5">{title}</p>
+          )}
         </div>
+        {knownCount > 0 && !expanded && (
+          <span
+            className="shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary-50 text-primary-700 text-[10px] font-semibold tabular-nums flex items-center justify-center"
+            title={`${knownCount} direct report${knownCount === 1 ? '' : 's'}`}
+          >
+            {knownCount}
+          </span>
+        )}
         {user.accountEnabled === false && (
           <span className="w-2 h-2 rounded-full bg-gray-300 shrink-0" title="Disabled" />
+        )}
+      </div>
+
+      <div className="px-3 pb-2.5 flex gap-1.5">
+        {canExpand && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand(user);
+            }}
+            disabled={loading}
+            className="flex-1 text-[11px] font-medium text-primary-700 hover:bg-primary-50 border border-primary-100 rounded-lg py-1.5 transition-colors disabled:opacity-50"
+          >
+            {expandLabel}
+          </button>
+        )}
+        {(noReports || knownCount === 0) && (
+          <span className="flex-1 text-[11px] text-center text-gray-400 py-1.5">No reports</span>
+        )}
+        {onOpenProfile && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenProfile(user);
+            }}
+            className={`${canExpand || noReports || knownCount === 0 ? 'flex-1' : 'w-full'} text-[11px] font-medium text-gray-600 hover:text-primary-700 hover:bg-gray-50 border border-gray-100 rounded-lg py-1.5 transition-colors`}
+          >
+            Profile
+          </button>
         )}
       </div>
     </div>
   );
 }
 
-function ToggleBtn({ expanded, loading, onClick }) {
+/** Elbow / spine connectors for one child row in a vertical sibling stack. */
+function SiblingConnectors({ isFirst, isLast, single }) {
   return (
-    <button
-      onClick={onClick}
-      className="w-6 h-6 rounded-full border-2 border-gray-300 bg-white flex items-center justify-center text-gray-500 hover:border-primary-400 hover:text-primary-600 transition-colors shadow-sm z-10 text-sm font-bold leading-none"
-      aria-label={expanded ? 'Collapse' : 'Expand'}
-    >
-      {loading ? (
-        <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v8H4z" />
-        </svg>
-      ) : expanded ? '−' : '+'}
-    </button>
+    <div className="w-8 shrink-0 relative self-stretch min-h-[3rem]">
+      {single ? (
+        <div className="absolute inset-x-0 top-1/2 h-0.5 bg-gray-300 -translate-y-1/2" />
+      ) : (
+        <>
+          {isFirst && (
+            <div className="absolute left-0 top-1/2 h-0.5 bg-gray-300 -translate-y-1/2 w-1/2" />
+          )}
+          <div
+            className="absolute left-1/2 w-0.5 bg-gray-300 -translate-x-1/2"
+            style={{
+              top: isFirst ? '50%' : 0,
+              bottom: isLast ? '50%' : 0,
+            }}
+          />
+          <div className="absolute left-1/2 right-0 top-1/2 h-0.5 bg-gray-300 -translate-y-1/2" />
+        </>
+      )}
+    </div>
   );
 }
 
-function ChildrenRow({ nodes, depth, pathIds, autoExpand }) {
-  const wrapRef = useRef(null);
-  const barRef = useRef(null);
+/**
+ * Recursive left-to-right org node.
+ * Children render to the RIGHT of the card when expanded.
+ */
+export function OrgTreeNode({
+  user,
+  depth = 0,
+  isRoot = false,
+  pathIds,
+  expandedIds,
+  childrenById,
+  countById,
+  loadingIds,
+  noReportsIds,
+  selectedId,
+  onToggleExpand,
+  onOpenProfile,
+}) {
+  const expanded = expandedIds.has(user.id);
+  const children = childrenById[user.id];
+  const loading = loadingIds.has(user.id);
+  const noReports = noReportsIds.has(user.id);
+  const reportCount = countById?.[user.id];
+  const nextPath = pathIds.has(user.id) ? pathIds : new Set([...pathIds, user.id]);
+  const hasCycle = pathIds.has(user.id);
 
-  useLayoutEffect(() => {
-    const wrap = wrapRef.current;
-    const bar = barRef.current;
-    if (!wrap || !bar) return undefined;
+  if (hasCycle) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 text-xs text-gray-400">
+        <span>↺</span>
+        <span className="truncate max-w-[180px]">{user.displayName}</span>
+      </div>
+    );
+  }
 
-    const updateBar = () => {
-      const items = Array.from(wrap.querySelectorAll(':scope > ul > li'));
-      if (items.length < 2) {
-        bar.style.display = 'none';
-        return;
-      }
+  const card = (
+    <OrgPersonCard
+      user={user}
+      depth={depth}
+      size={isRoot ? 'lg' : 'md'}
+      selected={selectedId === user.id}
+      expanded={expanded}
+      loading={loading}
+      noReports={noReports}
+      reportCount={typeof reportCount === 'number' ? reportCount : null}
+      onToggleExpand={noReports || reportCount === 0 ? undefined : onToggleExpand}
+      onOpenProfile={onOpenProfile}
+    />
+  );
 
-      const wrapRect = wrap.getBoundingClientRect();
-      const firstRect = items[0].getBoundingClientRect();
-      const lastRect = items[items.length - 1].getBoundingClientRect();
-      const parentX = wrapRect.width / 2;
-
-      const firstCenter = firstRect.left + firstRect.width / 2 - wrapRect.left;
-      const lastCenter = lastRect.left + lastRect.width / 2 - wrapRect.left;
-
-      // Include the parent stem in the span so the line stays connected even
-      // when one expanded branch becomes wider than the others.
-      const left = Math.min(firstCenter, parentX);
-      const right = Math.max(lastCenter, parentX);
-
-      bar.style.display = 'block';
-      bar.style.left = `${left}px`;
-      bar.style.width = `${Math.max(right - left, 0)}px`;
-    };
-
-    const frameId = requestAnimationFrame(updateBar);
-    const resizeObserver = new ResizeObserver(updateBar);
-    const items = Array.from(wrap.querySelectorAll(':scope > ul > li'));
-
-    resizeObserver.observe(wrap);
-    items.forEach((item) => resizeObserver.observe(item));
-    window.addEventListener('resize', updateBar);
-
-    return () => {
-      cancelAnimationFrame(frameId);
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', updateBar);
-    };
-  }, [nodes]);
-
-  return (
-    <div ref={wrapRef} className="relative">
-      <div
-        ref={barRef}
-        className="absolute bg-gray-300"
-        style={{ top: 0, height: 2, display: 'none' }}
-      />
-
-      <ul className="flex list-none m-0 p-0 gap-0">
-        {nodes.map((child) => (
-          <li key={child.id} className="flex flex-col items-center px-3">
-            <div className="w-0.5 bg-gray-300" style={{ height: 14 }} />
-            <AzureOrgChart user={child} depth={depth} pathIds={pathIds} autoExpand={autoExpand} />
+  const childrenColumn = expanded && Array.isArray(children) && children.length > 0 && (
+    <div className="flex flex-row items-center">
+      <ul className="flex flex-col gap-3 list-none m-0 p-0">
+        {children.map((child, idx) => (
+          <li key={child.id} className="flex flex-row items-center">
+            <SiblingConnectors
+              isFirst={idx === 0}
+              isLast={idx === children.length - 1}
+              single={children.length === 1}
+            />
+            <OrgTreeNode
+              user={child}
+              depth={depth + 1}
+              pathIds={nextPath}
+              expandedIds={expandedIds}
+              childrenById={childrenById}
+              countById={countById}
+              loadingIds={loadingIds}
+              noReportsIds={noReportsIds}
+              selectedId={selectedId}
+              onToggleExpand={onToggleExpand}
+              onOpenProfile={onOpenProfile}
+            />
           </li>
         ))}
       </ul>
     </div>
   );
-}
 
-export default function AzureOrgChart({ user, depth = 0, pathIds = new Set(), autoExpand = false }) {
-  const navigate = useNavigate();
-  const [expanded, setExpanded] = useState(false);
-  const [children, setChildren] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [noReports, setNoReports] = useState(false);
-  const hasCycle = pathIds.has(user.id);
-
-  const nextPathIds = hasCycle ? pathIds : new Set([...pathIds, user.id]);
-
-  const loadChildren = useCallback(async ({ expandWhenLoaded = false } = {}) => {
-    if (hasCycle || noReports || loading) return;
-    if (children !== null) {
-      if (expandWhenLoaded) setExpanded(true);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await azureAdService.getDirectReports(user.id);
-      const reports = res.data?.data || [];
-      if (reports.length === 0) {
-        setNoReports(true);
-      } else {
-        setChildren(reports);
-        if (expandWhenLoaded) setExpanded(true);
-      }
-    } catch {
-      setError('Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, [children, hasCycle, loading, noReports, user.id]);
-
-  useEffect(() => {
-    if (hasCycle || !autoExpand || noReports || children !== null) return;
-    loadChildren({ expandWhenLoaded: true });
-  }, [autoExpand, children, hasCycle, loadChildren, noReports]);
-
-  if (hasCycle) {
+  if (isRoot) {
     return (
-      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 text-xs text-gray-400 w-52">
-        <span>↺</span>
-        <span className="truncate">{user.displayName}</span>
-        <span className="shrink-0 text-gray-300">(cycle)</span>
+      <div className="flex flex-row items-center">
+        {card}
+        {expanded && Array.isArray(children) && children.length > 0 && (
+          <>
+            {/* Stem from root into first-level spine */}
+            <div className="w-4 h-0.5 bg-gray-300 shrink-0" aria-hidden />
+            {childrenColumn}
+          </>
+        )}
       </div>
     );
   }
 
-  async function handleToggle(e) {
-    e.stopPropagation();
-    if (noReports) return;
-
-    if (expanded) {
-      setExpanded(false);
-      return;
-    }
-
-    if (children !== null) {
-      setExpanded(true);
-      return;
-    }
-
-    await loadChildren({ expandWhenLoaded: true });
-  }
-
+  // Nested node: card + optional children to the right (already wrapped by parent's connectors)
   return (
-    <div className="flex flex-col items-center">
-      <OrgCard
-        user={user}
-        depth={depth}
-        onNavigate={() => {
-          if (user.local_user_id) {
-            navigate(`/users/${user.local_user_id}`);
-          } else {
-            navigate(`/active-directory/${user.id}`);
-          }
-        }}
-      />
-
-      {!noReports && (
-        <div className="flex flex-col items-center">
-          <div className="w-0.5 bg-gray-300" style={{ height: 14 }} />
-          <ToggleBtn expanded={expanded} loading={loading} onClick={handleToggle} />
-          {expanded && <div className="w-0.5 bg-gray-300" style={{ height: 14 }} />}
-        </div>
-      )}
-
-      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
-
-      {expanded && children && (
-        <ChildrenRow nodes={children} depth={depth + 1} pathIds={nextPathIds} autoExpand={autoExpand} />
-      )}
+    <div className="flex flex-row items-center">
+      {card}
+      {childrenColumn}
     </div>
   );
+}
+
+/** @deprecated kept for import safety — use OrgTreeNode */
+export function OrgReportsBranch() {
+  return null;
+}
+
+export default function AzureOrgChart() {
+  return null;
 }

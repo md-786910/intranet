@@ -36,18 +36,18 @@ function enrichEntraUser(entraUser, localByAzureId) {
   const local = localByAzureId.get(entraUser.id);
   const names = splitDisplayName(entraUser.displayName);
 
+  // Entra public payload is name + job title only; never take mail/UPN/department from Graph here.
   if (local) {
     return {
       azure_id: entraUser.id,
       user_id: local.user_id,
       first_name: local.first_name || names.first_name,
       last_name: local.last_name || names.last_name,
-      email: local.email || entraUser.mail || entraUser.userPrincipalName || '',
+      email: local.email || '',
       avatar_url: local.avatar_url || null,
       job_title: local.job_title || entraUser.jobTitle || null,
       role_category: local.role_category || null,
-      primary_department: local.primary_department
-        || (entraUser.department ? { id: null, name: entraUser.department } : null),
+      primary_department: local.primary_department || null,
       canChat: Boolean(local.can_chat),
       children: [],
       childrenLoaded: false,
@@ -60,13 +60,11 @@ function enrichEntraUser(entraUser, localByAzureId) {
     user_id: entraUser.local_user_id || null,
     first_name: names.first_name,
     last_name: names.last_name,
-    email: entraUser.mail || entraUser.userPrincipalName || '',
+    email: '',
     avatar_url: null,
     job_title: entraUser.jobTitle || null,
     role_category: null,
-    primary_department: entraUser.department
-      ? { id: null, name: entraUser.department }
-      : null,
+    primary_department: null,
     canChat: false,
     children: [],
     childrenLoaded: false,
@@ -76,7 +74,7 @@ function enrichEntraUser(entraUser, localByAzureId) {
 
 function matchesQuery(node, q) {
   if (!q) return true;
-  const hay = `${fullName(node)} ${node.email || ''} ${node.job_title || ''} ${node.role_category?.name || ''} ${node.primary_department?.name || ''}`.toLowerCase();
+  const hay = `${fullName(node)} ${node.job_title || ''} ${node.role_category?.name || ''} ${node.primary_department?.name || ''}`.toLowerCase();
   return hay.includes(q);
 }
 

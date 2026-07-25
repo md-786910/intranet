@@ -16,6 +16,7 @@ import { ChatUnreadProvider } from './contexts/ChatUnreadContext';
 // Auth
 import LoginPage from './pages/auth/LoginPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import ChangePasswordPage from './pages/auth/ChangePasswordPage';
 import InvitationAcceptPage from './pages/auth/InvitationAcceptPage';
 
 // Pages
@@ -103,6 +104,15 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/invitations/:token" element={<InvitationAcceptPage />} />
+
+              <Route
+                path="/change-password"
+                element={
+                  <ProtectedRoute>
+                    <ChangePasswordPage />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Protected routes */}
               <Route

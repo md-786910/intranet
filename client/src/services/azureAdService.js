@@ -10,6 +10,9 @@ export const azureAdService = {
   /** Direct reports — used by org tree on-expand */
   getDirectReports: (id) => api.get(`/azure-ad/users/${id}/direct-reports`),
 
+  /** Enabled direct-report count — Expand badge without loading full list */
+  getDirectReportsCount: (id) => api.get(`/azure-ad/users/${id}/direct-reports/count`),
+
   /** Root nodes for the org hierarchy tree */
   getOrgTreeRoots: () => api.get('/azure-ad/org-tree/roots'),
 

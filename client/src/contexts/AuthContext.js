@@ -121,6 +121,7 @@ export function AuthProvider({ children }) {
 
   const value = {
     user,
+    setUser,
     permissions,
     roleAssignments,
     isOwner,

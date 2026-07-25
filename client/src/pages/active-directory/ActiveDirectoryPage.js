@@ -6,6 +6,7 @@ import { azureAdService } from '../../services/azureAdService';
 import { useToast } from '../../hooks/useToast';
 import { useSocket } from '../../contexts/SocketContext';
 import OrgHierarchyView from '../../components/azure-ad/OrgHierarchyView';
+import { validatePassword } from '../../utils/passwordValidation';
 
 function StatPill({ label, value, tone = 'default' }) {
   const tones = {
@@ -92,7 +93,7 @@ export default function ActiveDirectoryPage() {
   const { socket } = useSocket();
 
   const [importOpen, setImportOpen] = useState(false);
-  const [importPassword, setImportPassword] = useState('new@12345');
+  const [importPassword, setImportPassword] = useState('');
   const [showImportPassword, setShowImportPassword] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
   const [importMode, setImportMode] = useState(null); // 'preview' | 'sync'
@@ -113,7 +114,7 @@ export default function ActiveDirectoryPage() {
   const closeImport = () => {
     if (importBusy) return;
     setImportOpen(false);
-    setImportPassword('new@12345');
+    setImportPassword('');
     setShowImportPassword(false);
     setImportResult(null);
     setImportProgress(null);
@@ -121,10 +122,13 @@ export default function ActiveDirectoryPage() {
   };
 
   const runImport = async ({ dryRun }) => {
-    const pwd = importPassword.trim() || 'new@12345';
-    if (pwd.length < 6) {
-      showToast('Temporary password must be at least 6 characters', 'error');
-      return;
+    const pwd = importPassword.trim();
+    if (pwd) {
+      const pwdError = validatePassword(pwd);
+      if (pwdError) {
+        showToast(pwdError, 'error');
+        return;
+      }
     }
     setImportBusy(true);
     setImportMode(dryRun ? 'preview' : 'sync');
@@ -143,7 +147,7 @@ export default function ActiveDirectoryPage() {
       const res = await azureAdService.syncUsers({
         dry_run: dryRun,
         only_enabled: true,
-        password: pwd,
+        password: pwd || undefined,
       });
       const data = res.data?.data || {};
       setImportResult(data);
@@ -255,12 +259,12 @@ export default function ActiveDirectoryPage() {
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
             Match by Azure ID or email. Updates profile, job title, company/office links, and org membership.
-            New users get the password below — no emails are sent.
+            New users must change their password on first login — no emails are sent.
           </p>
 
           <div>
             <label htmlFor="entra-sync-password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password for new users
+              Temp password for new users <span className="font-normal text-gray-400">(optional)</span>
             </label>
             <div className="relative">
               <input
@@ -270,7 +274,7 @@ export default function ActiveDirectoryPage() {
                 value={importPassword}
                 onChange={(e) => setImportPassword(e.target.value)}
                 disabled={importBusy}
-                placeholder="new@12345"
+                placeholder="Leave blank to auto-generate"
                 className="w-full pl-3 pr-10 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50"
               />
               <button
@@ -293,7 +297,8 @@ export default function ActiveDirectoryPage() {
               </button>
             </div>
             <p className="mt-1 text-xs text-gray-400">
-              Default <span className="font-mono">new@12345</span> · existing users keep their password
+              Blank = strong auto-generated password per new user (shown once below).
+              Existing users keep their password.
             </p>
           </div>
 
@@ -349,6 +354,35 @@ export default function ActiveDirectoryPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {Array.isArray(importResult.temp_passwords) && importResult.temp_passwords.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-amber-900">
+                    Auto-generated temp passwords (copy now — not shown again)
+                  </p>
+                  <div className="max-h-40 overflow-auto">
+                    <table className="min-w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-amber-800/80">
+                          <th className="pr-3 py-1 font-medium">User</th>
+                          <th className="py-1 font-medium">Temp password</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importResult.temp_passwords.map((row) => (
+                          <tr key={row.email} className="border-t border-amber-100">
+                            <td className="pr-3 py-1.5">
+                              <div className="font-medium text-amber-950">{row.displayName || row.email}</div>
+                              <div className="text-amber-800/70">{row.email}</div>
+                            </td>
+                            <td className="py-1.5 font-mono text-amber-950 select-all">{row.password}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 

@@ -3,6 +3,32 @@
 const service = require('./azure-ad.service');
 const ApiError = require('../../utils/ApiError');
 const catchAsync = require('../../utils/catchAsync');
+const auditService = require('../../services/audit.service');
+const permissionService = require('../../services/permission.service');
+
+/**
+ * Public org-chart projection for employees (no email/phone/UPN/etc.).
+ * Admins with Manage Users still get the full Graph payload for AD tooling.
+ */
+function toPublicOrgPerson(user) {
+  if (!user) return user;
+  return {
+    id: user.id,
+    displayName: user.displayName || null,
+    jobTitle: user.jobTitle || null,
+    local_user_id: user.local_user_id || null,
+  };
+}
+
+async function canSeeDirectoryPii(userId) {
+  return permissionService.hasPermissionAnywhere(userId, 'ADMIN', 'MANAGE_USERS');
+}
+
+async function shapeOrgChartPayload(req, users) {
+  const full = await canSeeDirectoryPii(req.user.user_id);
+  if (full) return users;
+  return (users || []).map(toPublicOrgPerson);
+}
 
 // GET /azure-ad/users
 const listUsers = catchAsync(async (req, res) => {
@@ -21,13 +47,19 @@ const getUser = catchAsync(async (req, res) => {
 // GET /azure-ad/users/:id/direct-reports
 const getUserDirectReports = catchAsync(async (req, res) => {
   const reports = await service.getUserDirectReports(req.params.id);
-  res.json({ status: 'success', data: reports });
+  res.json({ status: 'success', data: await shapeOrgChartPayload(req, reports) });
+});
+
+// GET /azure-ad/users/:id/direct-reports/count
+const getUserDirectReportsCount = catchAsync(async (req, res) => {
+  const count = await service.getUserDirectReportsCount(req.params.id);
+  res.json({ status: 'success', data: { count } });
 });
 
 // GET /azure-ad/org-tree/roots
 const getOrgTreeRoots = catchAsync(async (req, res) => {
   const roots = await service.getOrgTreeRoots();
-  res.json({ status: 'success', data: roots });
+  res.json({ status: 'success', data: await shapeOrgChartPayload(req, roots) });
 });
 
 // GET /azure-ad/departments
@@ -58,7 +90,8 @@ const testConnection = catchAsync(async (req, res) => {
       status: 'success',
       message: 'Graph API connection OK',
       sampleUser: result.value?.[0] || null,
-      tenantId, clientId,
+      // Do not echo tenantId / clientId — reduces recon if a session is stolen
+      configured: Boolean(tenantId && clientId && clientSecret),
     });
   } catch (err) {
     res.status(200).json({
@@ -66,7 +99,7 @@ const testConnection = catchAsync(async (req, res) => {
       statusCode: err.statusCode || err.code,
       message: err.message,
       body: err.body || null,
-      tenantId, clientId,
+      configured: Boolean(tenantId && clientId && clientSecret),
       hint: err.statusCode === 403
         ? 'Missing "User.Read.All" Application permission or admin consent not granted'
         : err.statusCode === 401
@@ -90,6 +123,24 @@ const syncUsers = catchAsync(async (req, res) => {
     onlyEnabled: only_enabled !== false,
     password,
   }, req.user.user_id);
+
+  await auditService.log({
+    user_id: req.user.user_id,
+    action: dry_run ? 'ENTRA_SYNC_PREVIEW' : 'ENTRA_SYNC',
+    resource_type: 'AzureAd',
+    details: {
+      dry_run: Boolean(dry_run),
+      total_graph: result.total_graph || 0,
+      created: result.created || 0,
+      updated: result.updated || 0,
+      skipped: result.skipped || 0,
+      reporting_linked: result.reporting_linked || 0,
+      error_count: Array.isArray(result.errors) ? result.errors.length : 0,
+      password_auto_generated: Boolean(result.password_auto_generated),
+    },
+    result: 'SUCCESS',
+  });
+
   res.json({ status: 'success', data: result });
 });
 
@@ -105,6 +156,7 @@ module.exports = {
   listUsers,
   getUser,
   getUserDirectReports,
+  getUserDirectReportsCount,
   getOrgTreeRoots,
   getDepartments,
   testConnection,

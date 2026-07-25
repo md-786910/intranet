@@ -197,7 +197,36 @@ async function getUserDirectReports(id) {
   const reports = raw.filter((u) => u.accountEnabled !== false);
 
   await cacheService.set(cacheKey, JSON.stringify(reports), TTL_LIST);
+  await cacheService.set(`ad:reports-count:${id}`, String(reports.length), TTL_LIST);
   return attachLocalUserIds(reports);
+}
+
+/** Lightweight enabled-direct-report count for org-tree Expand badges. */
+async function getUserDirectReportsCount(id) {
+  const countKey = `ad:reports-count:${id}`;
+  const cachedCount = await cacheService.get(countKey);
+  if (cachedCount !== null && cachedCount !== undefined) {
+    const n = parseInt(cachedCount, 10);
+    if (!Number.isNaN(n)) return n;
+  }
+
+  const listKey = `ad:reports:${id}`;
+  const cachedList = await cacheService.get(listKey);
+  if (cachedList) {
+    try {
+      const reports = JSON.parse(cachedList).filter((u) => u.accountEnabled !== false);
+      await cacheService.set(countKey, String(reports.length), TTL_LIST);
+      return reports.length;
+    } catch (_) {}
+  }
+
+  // Minimal select — only need enabled count, not full profile fields
+  const raw = await fetchAllPages(
+    `/users/${id}/directReports?$select=id,accountEnabled`
+  );
+  const count = raw.filter((u) => u.accountEnabled !== false).length;
+  await cacheService.set(countKey, String(count), TTL_LIST);
+  return count;
 }
 
 // ── 4. getOrgTreeRoots — users whose manager is not in this org ───────────────
@@ -371,6 +400,7 @@ module.exports = {
   listUsers,
   getUser,
   getUserDirectReports,
+  getUserDirectReportsCount,
   getOrgTreeRoots,
   getDepartments,
   clearCache,

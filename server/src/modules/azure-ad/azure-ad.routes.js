@@ -7,42 +7,36 @@ const authorize = require('../../middleware/authorize');
 const validate = require('../../middleware/validate');
 const { syncUsersSchema, syncLocalUserSchema } = require('./azure-ad.validation');
 
-// All routes require a valid session
+// All Azure AD routes require a session.
 router.use(authenticate);
 
-// ── Connection test (returns raw Graph error for debugging) ───────────────────
-router.get('/test-connection', controller.testConnection);
+const requireManageUsers = authorize('ADMIN', 'MANAGE_USERS');
 
-// ── Filter helpers ────────────────────────────────────────────────────────────
-router.get('/departments', controller.getDepartments);
-
-// ── User list & detail ────────────────────────────────────────────────────────
-router.get('/users',           controller.listUsers);
-router.get('/users/:id',       controller.getUser);
-
-// ── Relationships (used by org tree on-expand) ────────────────────────────────
+// ── Org chart (any authenticated user; response redacted without Manage Users) ─
+router.get('/users/:id/direct-reports/count', controller.getUserDirectReportsCount);
 router.get('/users/:id/direct-reports', controller.getUserDirectReports);
+router.get('/org-tree/roots', controller.getOrgTreeRoots);
 
-// ── Org hierarchy ─────────────────────────────────────────────────────────────
-router.get('/org-tree/roots',  controller.getOrgTreeRoots);
+// ── Directory PII + sync (Manage Users only) ──────────────────────────────────
+router.get('/test-connection', requireManageUsers, controller.testConnection);
+router.get('/departments', requireManageUsers, controller.getDepartments);
+router.get('/users', requireManageUsers, controller.listUsers);
+router.get('/users/:id', requireManageUsers, controller.getUser);
 
-// ── Sync Entra users → BrightNow (password create / email update, no email) ───
 router.post(
   '/sync-users',
-  authorize('ADMIN', 'MANAGE_USERS'),
+  requireManageUsers,
   validate(syncUsersSchema),
-  controller.syncUsers
+  controller.syncUsers,
 );
 
-// ── Sync one BrightNow user from Entra by local user_id ───────────────────────
 router.post(
   '/sync-local-user/:userId',
-  authorize('ADMIN', 'MANAGE_USERS'),
+  requireManageUsers,
   validate(syncLocalUserSchema),
-  controller.syncLocalUser
+  controller.syncLocalUser,
 );
 
-// ── Cache management ──────────────────────────────────────────────────────────
-router.delete('/cache', controller.clearCache);
+router.delete('/cache', requireManageUsers, controller.clearCache);
 
 module.exports = router;

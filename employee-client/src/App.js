@@ -10,6 +10,7 @@ import EmployeeLayout from './components/layout/EmployeeLayout';
 import LoginPage from './pages/auth/LoginPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+import ChangePasswordPage from './pages/auth/ChangePasswordPage';
 import InvitationAcceptPage from './pages/auth/InvitationAcceptPage';
 import HomePage from './pages/home/HomePage';
 import { ContentRefreshProvider } from './contexts/ContentRefreshContext';
@@ -39,6 +40,15 @@ export default function App() {
             <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
             <Route path="/invitations/:token" element={<InvitationAcceptPage />} />
             <Route path="/s/:token" element={<PublicNewsSharePage />} />
+
+            <Route
+              path="/change-password"
+              element={
+                <ProtectedRoute>
+                  <ChangePasswordPage />
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               element={

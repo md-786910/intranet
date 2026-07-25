@@ -6,28 +6,26 @@
  * Usage:
  *   node scripts/sync-entra-users.js --dry-run
  *   node scripts/sync-entra-users.js
- *   node scripts/sync-entra-users.js --password=OtherPass
+ *   node scripts/sync-entra-users.js --password=OtherPass1!
  *   node scripts/sync-entra-users.js --include-disabled
  *
  * Or: npm run sync:entra -- --dry-run
  *
- * New users are created with default password new@12345 (override with --password).
- * Existing users are updated; passwords are never changed; no emails are sent.
+ * New users get an admin --password or a strong auto-generated temp password,
+ * and must_change_password=true. Existing users are updated; passwords are never
+ * changed; no emails are sent.
  */
 
 require("../config/env");
 
 const { sequelize } = require("../database/models");
-const {
-  syncUsersFromEntra,
-  DEFAULT_CREATE_PASSWORD,
-} = require("../modules/azure-ad/entra-sync");
+const { syncUsersFromEntra } = require("../modules/azure-ad/entra-sync");
 
 function parseArgs(argv) {
   const opts = {
     dryRun: false,
     onlyEnabled: true,
-    password: DEFAULT_CREATE_PASSWORD,
+    password: null,
   };
 
   for (const arg of argv) {
@@ -56,7 +54,8 @@ async function main() {
 
 Options:
   --dry-run              Preview only (no writes)
-  --password=...         Override default create password (default: ${DEFAULT_CREATE_PASSWORD})
+  --password=...         Temp create password (8+ chars, upper/lower/digit/special).
+                         If omitted, a strong password is generated per new user.
   --include-disabled     Include disabled Entra accounts (default: enabled only)
 `);
     process.exit(0);
@@ -74,7 +73,9 @@ Options:
   );
   if (!opts.dryRun) {
     console.log(
-      `New users will use password: ${opts.password === DEFAULT_CREATE_PASSWORD ? "default (new@12345)" : "(custom --password)"}`,
+      opts.password
+        ? "New users will use the provided --password (must change on first login)."
+        : "New users will get auto-generated temp passwords (must change on first login).",
     );
   }
 
@@ -88,7 +89,15 @@ Options:
       null,
     );
 
-    console.log(JSON.stringify(summary, null, 2));
+    // Avoid dumping temp passwords to console by default — print a short note.
+    const { temp_passwords: tempPasswords, ...safeSummary } = summary;
+    console.log(JSON.stringify(safeSummary, null, 2));
+    if (Array.isArray(tempPasswords) && tempPasswords.length > 0) {
+      console.log(
+        `\n${tempPasswords.length} auto-generated temp password(s) — not printed. ` +
+          "Use the admin Sync UI to view them once, or pass --password=...",
+      );
+    }
     console.log(
       `\nDone: created=${summary.created} updated=${summary.updated} skipped=${summary.skipped} ` +
         `job_titles=${summary.job_titles_ensured} ` +

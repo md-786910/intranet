@@ -248,10 +248,11 @@ const authService = {
     const rounds = parseInt(process.env.BCRYPT_ROUNDS, 10) || 12;
     const passwordHash = await bcrypt.hash(newPassword, rounds);
 
-    // Update password
+    // Update password and clear forced-change flag (e.g. after Entra sync)
     await user.update({
       password_hash: passwordHash,
       password_changed_at: new Date(),
+      must_change_password: false,
     });
 
     // Revoke ALL refresh tokens (force re-login everywhere)
@@ -367,6 +368,7 @@ const authService = {
       const updates = {
         password_hash: passwordHash,
         password_changed_at: new Date(),
+        must_change_password: false,
         failed_login_attempts: 0,
         locked_until: null,
       };

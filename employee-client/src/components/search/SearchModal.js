@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import MaterialIcon from '../common/MaterialIcon';
 import Skeleton from '../common/Skeleton';
+import { plainTextFromHtml } from '../common/RichTextView';
 import api from '../../config/api';
 import { searchService } from '../../services/searchService';
 import { loadHistory, pushHistory, clearHistory } from '../../utils/searchHistory';
@@ -56,7 +57,7 @@ function NewsRow({ item, highlighted, onPick }) {
       </span>
       <div className="flex-1 min-w-0">
         <div className="font-body-md text-body-md text-on-background truncate">{item.title}</div>
-        <div className="text-body-sm text-on-surface-variant truncate">{item.summary || '—'}</div>
+        <div className="text-body-sm text-on-surface-variant truncate">{plainTextFromHtml(item.summary) || '—'}</div>
         <div className="mt-1 flex items-center gap-2">
           {item.category?.name && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-container/30 text-primary text-label-caps">
@@ -84,7 +85,7 @@ function DocumentRow({ item, highlighted, onPick }) {
       </span>
       <div className="flex-1 min-w-0">
         <div className="font-body-md text-body-md text-on-background truncate">{item.title}</div>
-        <div className="text-body-sm text-on-surface-variant truncate">{item.summary || '—'}</div>
+        <div className="text-body-sm text-on-surface-variant truncate">{plainTextFromHtml(item.summary) || '—'}</div>
         <div className="mt-1 flex items-center gap-2">
           {item.category?.name && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-container/30 text-primary text-label-caps">

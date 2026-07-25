@@ -36,6 +36,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || '/home';
+  const notice = location.state?.notice;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,8 +45,12 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      await login(email, password);
-      navigate(from, { replace: true });
+      const userData = await login(email, password);
+      if (userData?.must_change_password) {
+        navigate('/change-password', { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     } catch (err) {
       setError(getErrorMessage(err, 'Sign in failed. Please try again.'));
       const validationErrors = extractValidationErrors(err);
@@ -75,6 +80,11 @@ export default function LoginPage() {
         <p className="mt-1 text-sm text-gray-500">Enter your credentials to continue</p>
 
         <form className="mt-6 space-y-5" onSubmit={handleSubmit} noValidate>
+          {notice && (
+            <div className="bg-green-50 border border-green-200 text-green-800 px-3 py-2 rounded-lg text-sm">
+              {notice}
+            </div>
+          )}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">
               {error}

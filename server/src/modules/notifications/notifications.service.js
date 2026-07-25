@@ -4,6 +4,11 @@ const { DEFAULT_TENANT_ID } = require('../../utils/constants');
 const audienceService = require('../../services/audience.service');
 const logger = require('../../config/logger');
 
+function plainTextFromHtml(html) {
+  if (!html || typeof html !== 'string') return '';
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 // Build the wire payload a client expects on the bell + on the
 // `notification:new` socket event. Kept in one place so reader and writer
 // paths emit the same shape.
@@ -13,7 +18,7 @@ function toWire(row) {
     type: row.type,
     entity_id: row.entity_id,
     title: row.title,
-    body: row.body,
+    body: plainTextFromHtml(row.body) || null,
     read_at: row.read_at,
     created_at: row.created_at,
   };
@@ -113,7 +118,7 @@ async function notifyOnPublish({ type, entity, audienceRules, entityKey }) {
 
     const newUserIds = recipientIds.filter((uid) => !existingByUser.has(uid));
     const title = entity.title;
-    const body = (entity.summary || '').slice(0, 500) || null;
+    const body = plainTextFromHtml(entity.summary || '').slice(0, 500) || null;
 
     let inserted = [];
     if (newUserIds.length > 0) {

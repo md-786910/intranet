@@ -7,6 +7,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useNotifications } from "../../hooks/useNotifications";
 import { useChatUnread } from "../../contexts/ChatUnreadContext";
 import { deeplinkFor } from "../../utils/notificationDeeplink";
+import { plainTextFromHtml } from "../common/RichTextView";
 import { formatRelative } from "../../theme/dateFormat";
 
 // Visual mapping for notification rows in the bell dropdown. Each type gets a
@@ -252,7 +253,7 @@ export default function TopNav() {
                                 </p>
                                 {n.body && (
                                   <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">
-                                    {n.body}
+                                    {plainTextFromHtml(n.body)}
                                   </p>
                                 )}
                               </div>

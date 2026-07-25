@@ -61,6 +61,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
+    must_change_password: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
     failed_login_attempts: {
       type: DataTypes.INTEGER,
       defaultValue: 0,

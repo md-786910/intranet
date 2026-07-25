@@ -874,6 +874,7 @@ const usersService = {
         mobile_phone: data.mobile_phone || null,
         azure_object_id: data.azure_object_id || null,
         status: isInviteFlow ? 'INVITED' : 'ACTIVE',
+        must_change_password: Boolean(data.must_change_password) && !isInviteFlow,
       }, { transaction });
 
       // Build profile fields from both data.profile and top-level employee fields

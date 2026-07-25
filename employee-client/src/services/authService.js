@@ -17,5 +17,8 @@ export const authService = {
 
   updateProfile: (data) => api.put('/auth/profile', data),
 
+  changePassword: ({ currentPassword, newPassword }) =>
+    api.put('/auth/change-password', { currentPassword, newPassword }),
+
   getMe: () => api.get('/auth/me'),
 };

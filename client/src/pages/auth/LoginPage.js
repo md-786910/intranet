@@ -20,6 +20,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/";
+  const notice = location.state?.notice;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,8 +29,12 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      await login(email, password);
-      navigate(from, { replace: true });
+      const userData = await login(email, password);
+      if (userData?.must_change_password) {
+        navigate("/change-password", { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     } catch (err) {
       const message = getErrorMessage(
         err,
@@ -69,6 +74,11 @@ export default function LoginPage() {
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {notice && (
+            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm">
+              {notice}
+            </div>
+          )}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
               {error}

@@ -2,19 +2,23 @@
 
 const Joi = require('joi');
 
+// Match auth change-password complexity (see auth.validation.js passwordPattern)
 const passwordPattern = Joi.string()
-  .min(6)
+  .min(8)
   .max(128)
+  .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?])/)
   .messages({
-    'string.min': 'Password must be at least 6 characters',
+    'string.min': 'Password must be at least 8 characters',
+    'string.pattern.base':
+      'Password must contain at least 1 uppercase, 1 lowercase, 1 digit, and 1 special character',
   });
 
 const syncUsersSchema = {
   body: Joi.object({
     dry_run: Joi.boolean().default(false),
     only_enabled: Joi.boolean().default(true),
-    // Optional: only needed to create Entra users not yet in BrightNow.
-    // Updates of existing users (by email / azure_object_id) never need a password.
+    // Optional: blank → server generates a strong per-user temp password.
+    // Updates of existing users never need a password.
     password: passwordPattern.optional().allow('', null),
   }),
 };

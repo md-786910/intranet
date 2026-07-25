@@ -17,35 +17,52 @@ function getInitials(name = '') {
  * AzureOrgTreeNode — renders one user row with tree connector lines.
  *
  * Props:
- *   user          {object}   Graph user object
- *   depth         {number}   0 = root
- *   isLast        {bool}     true when this is the last sibling (└── vs ├──)
- *   ancestorLines {bool[]}   one entry per ancestor level:
- *                            true  = that ancestor still has siblings below → draw vertical line
- *                            false = that ancestor was the last child → draw empty space
+ *   user            {object}   Graph user object
+ *   depth           {number}   0 = root
+ *   isLast          {bool}     true when this is the last sibling (└── vs ├──)
+ *   ancestorLines   {bool[]}   one entry per ancestor level:
+ *                              true  = that ancestor still has siblings below → draw vertical line
+ *                              false = that ancestor was the last child → draw empty space
+ *   initialChildren {array}    optional preloaded direct reports (skips first API fetch)
+ *   defaultExpanded {bool}     start expanded when initialChildren are provided
+ *   pathIds         {Set}      ancestor azure ids — used to detect reporting cycles
  */
 export default function AzureOrgTreeNode({
   user,
-  depth       = 0,
-  isLast      = true,
+  depth = 0,
+  isLast = true,
   ancestorLines = [],
+  initialChildren = null,
+  defaultExpanded = false,
+  pathIds = null,
 }) {
   const navigate = useNavigate();
-  const [expanded,  setExpanded]  = useState(false);
-  const [children,  setChildren]  = useState(null);
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState(null);
-  const [noReports, setNoReports] = useState(false);
+  const seeded = Array.isArray(initialChildren) ? initialChildren : null;
+  const [expanded, setExpanded] = useState(Boolean(defaultExpanded && seeded && seeded.length > 0));
+  const [children, setChildren] = useState(seeded);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [noReports, setNoReports] = useState(Boolean(seeded && seeded.length === 0));
 
-  const color    = DEPTH_COLORS[depth % DEPTH_COLORS.length];
+  const ancestorPath = pathIds || new Set();
+  const hasCycle = ancestorPath.has(user.id);
+  const nextPathIds = hasCycle ? ancestorPath : new Set([...ancestorPath, user.id]);
+
+  const color = DEPTH_COLORS[depth % DEPTH_COLORS.length];
   const initials = getInitials(user.displayName || '?');
 
   async function handleToggle(e) {
     e.stopPropagation();
-    if (noReports) return;
+    if (hasCycle || noReports) return;
 
-    if (expanded) { setExpanded(false); return; }
-    if (children !== null) { setExpanded(true); return; }
+    if (expanded) {
+      setExpanded(false);
+      return;
+    }
+    if (children !== null) {
+      setExpanded(true);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -65,8 +82,17 @@ export default function AzureOrgTreeNode({
     }
   }
 
-  // ── connector line column widths ──────────────────────────────────────────
   const COL = 20; // px per ancestor level
+
+  if (hasCycle) {
+    return (
+      <div className="flex items-center gap-2 py-1.5 pl-1 text-xs text-gray-400">
+        <span className="ml-7">↺</span>
+        <span className="truncate">{user.displayName}</span>
+        <span className="shrink-0">(cycle)</span>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -100,14 +126,11 @@ export default function AzureOrgTreeNode({
             style={{ width: COL, minWidth: COL }}
             className="self-stretch flex flex-col items-center"
           >
-            {/* Top half — vertical line (always present to connect to parent) */}
             <div className="w-px bg-gray-200 flex-1" style={{ maxHeight: '50%' }} />
-            {/* Elbow — horizontal stub */}
             <div className="flex items-center w-full" style={{ height: 20 }}>
               <div className="w-px bg-gray-200 self-stretch" />
               <div className="h-px bg-gray-200 flex-1" />
             </div>
-            {/* Bottom half — continue vertical if NOT last */}
             {!isLast ? (
               <div className="w-px bg-gray-200 flex-1" />
             ) : (
@@ -169,12 +192,10 @@ export default function AzureOrgTreeNode({
         </span>
       </div>
 
-      {/* ── Error ── */}
       {error && (
         <p className="text-xs text-red-500 ml-16 pb-1">{error}</p>
       )}
 
-      {/* ── Children ── */}
       {expanded && children && children.map((child, idx) => (
         <AzureOrgTreeNode
           key={child.id}
@@ -182,6 +203,7 @@ export default function AzureOrgTreeNode({
           depth={depth + 1}
           isLast={idx === children.length - 1}
           ancestorLines={[...ancestorLines, !isLast]}
+          pathIds={nextPathIds}
         />
       ))}
     </div>
