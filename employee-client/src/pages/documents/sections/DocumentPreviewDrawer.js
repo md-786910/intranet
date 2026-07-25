@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import MaterialIcon from '../../../components/common/MaterialIcon';
+import RichTextView from '../../../components/common/RichTextView';
 import { formatRelative } from '../../../theme/dateFormat';
 import { iconForFile } from '../data';
 import { formatBytes, resolveAllFiles, typeLabelFor } from '../documentActions';
@@ -142,7 +143,7 @@ export default function DocumentPreviewDrawer({ doc, initialFileIndex = 0, onClo
             </header>
 
             {files.length > 1 && (
-              <div className="px-unit-lg pt-unit-md">
+              <div className="px-unit-lg pt-unit-md shrink-0">
                 <div className="flex gap-2 overflow-x-auto pb-2">
                   {files.map((f, i) => (
                     <FileTab key={`${f.url}-${i}`} file={f} active={i === activeIdx} onClick={() => setActiveIdx(i)} />
@@ -151,51 +152,53 @@ export default function DocumentPreviewDrawer({ doc, initialFileIndex = 0, onClo
               </div>
             )}
 
-            <div className="flex-1 min-h-0 p-unit-lg">
+            <div className="flex-1 min-h-[160px] max-h-[42vh] p-unit-lg shrink-0">
               <PreviewBody file={active} />
             </div>
 
-            <footer className="border-t border-outline-variant/20 px-unit-lg py-unit-md space-y-4">
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-                <div>
-                  <dt className="font-label-caps text-label-caps text-on-surface-variant">Type</dt>
-                  <dd className="font-body-sm text-body-sm text-on-background mt-0.5">
-                    <span className="font-label-caps text-label-caps bg-surface-container-high px-2 py-0.5 rounded">
-                      {typeLabelFor(active?.name, active?.mime)}
-                    </span>
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-label-caps text-label-caps text-on-surface-variant">Size</dt>
-                  <dd className="font-body-sm text-body-sm text-on-background mt-0.5">
-                    {formatBytes(active?.size)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-label-caps text-label-caps text-on-surface-variant">Last Modified</dt>
-                  <dd className="font-body-sm text-body-sm text-on-background mt-0.5">
-                    {formatRelative(doc.published_at || doc.created_at)}
-                  </dd>
-                </div>
-                {doc.priority && doc.priority !== 'NORMAL' && (
+            <footer className="border-t border-outline-variant/20 flex-1 min-h-0 flex flex-col">
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-unit-lg py-unit-md space-y-4">
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
                   <div>
-                    <dt className="font-label-caps text-label-caps text-on-surface-variant">Priority</dt>
-                    <dd className="font-body-sm text-body-sm text-on-background mt-0.5 capitalize">
-                      {String(doc.priority).toLowerCase()}
+                    <dt className="font-label-caps text-label-caps text-on-surface-variant">Type</dt>
+                    <dd className="font-body-sm text-body-sm text-on-background mt-0.5">
+                      <span className="font-label-caps text-label-caps bg-surface-container-high px-2 py-0.5 rounded">
+                        {typeLabelFor(active?.name, active?.mime)}
+                      </span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-label-caps text-label-caps text-on-surface-variant">Size</dt>
+                    <dd className="font-body-sm text-body-sm text-on-background mt-0.5">
+                      {formatBytes(active?.size)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-label-caps text-label-caps text-on-surface-variant">Last Modified</dt>
+                    <dd className="font-body-sm text-body-sm text-on-background mt-0.5">
+                      {formatRelative(doc.published_at || doc.created_at)}
+                    </dd>
+                  </div>
+                  {doc.priority && doc.priority !== 'NORMAL' && (
+                    <div>
+                      <dt className="font-label-caps text-label-caps text-on-surface-variant">Priority</dt>
+                      <dd className="font-body-sm text-body-sm text-on-background mt-0.5 capitalize">
+                        {String(doc.priority).toLowerCase()}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+                {doc.summary && (
+                  <div>
+                    <dt className="font-label-caps text-label-caps text-on-surface-variant">Summary</dt>
+                    <dd className="font-body-sm text-body-sm text-on-background mt-1">
+                      <RichTextView html={doc.summary} className="prose prose-sm max-w-none" />
                     </dd>
                   </div>
                 )}
-              </dl>
-              {doc.summary && (
-                <div>
-                  <dt className="font-label-caps text-label-caps text-on-surface-variant">Summary</dt>
-                  <dd className="font-body-sm text-body-sm text-on-background mt-1 line-clamp-3">
-                    {doc.summary}
-                  </dd>
-                </div>
-              )}
+              </div>
               {active?.url && (
-                <div className="flex gap-2 pt-1">
+                <div className="shrink-0 border-t border-outline-variant/20 px-unit-lg py-unit-md flex gap-2 bg-surface-container-lowest">
                   <a
                     href={active.url}
                     target="_blank"

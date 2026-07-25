@@ -3,9 +3,9 @@ import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
-import Textarea from '../../components/common/Textarea';
 import Select from '../../components/common/Select';
 import ManageableSelect from '../../components/common/ManageableSelect';
+import RichTextEditor from '../../components/common/RichTextEditor';
 import FilePicker from '../../components/common/FilePicker';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
 import SchedulePopover from '../../components/common/SchedulePopover';
@@ -224,7 +224,16 @@ export default function DocumentEditPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4 mb-6">
         <h2 className="text-base font-semibold text-gray-900">Details</h2>
         <Input label="Title" name="title" required value={form.title} onChange={handleChange} />
-        <Textarea label="Summary" name="summary" value={form.summary} onChange={handleChange} rows={3} />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Summary</label>
+          <RichTextEditor
+            value={form.summary}
+            onChange={(html) => setForm((prev) => ({ ...prev, summary: html }))}
+            imageContext="document"
+            minHeight={160}
+            placeholder="Brief summary (optional)"
+          />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <ManageableSelect
             label="Category"

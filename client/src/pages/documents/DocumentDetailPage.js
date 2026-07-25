@@ -19,6 +19,7 @@ import PriorityBadge from "../../components/common/PriorityBadge";
 import { documentEvents } from "../../utils/activityEvents";
 import { resolveAssetUrl } from "../../utils/mediaUrl";
 import NotFoundState from "../../components/common/NotFoundState";
+import RichTextView from "../../components/common/RichTextView";
 import { getErrorMessage, getUserFacingMessage, isNotFoundError } from "../../utils/errorUtils";
 
 export default function DocumentDetailPage() {
@@ -259,7 +260,9 @@ export default function DocumentDetailPage() {
           <ActivityTimeline events={documentEvents(doc)} />
         </div>
 
-        {doc.summary && <p className="text-gray-600">{doc.summary}</p>}
+        {doc.summary && (
+          <RichTextView html={doc.summary} className="text-gray-600" />
+        )}
 
         <div>
           <h3 className="text-sm font-medium text-gray-700 mb-3">Audience</h3>

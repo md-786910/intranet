@@ -10,6 +10,9 @@ const DOMPurify = createDOMPurify(window);
 const RICH_TEXT_EXEMPTIONS = [
   { method: 'POST', pathRegex: /^\/api\/v1\/news\/?$/, fields: ['body'] },
   { method: 'PUT', pathRegex: /^\/api\/v1\/news\/\d+\/?$/, fields: ['body'] },
+  { method: 'POST', pathRegex: /^\/api\/v1\/documents\/?$/, fields: ['summary'] },
+  { method: 'POST', pathRegex: /^\/api\/v1\/documents\/(publish-now|schedule-now)\/?$/, fields: ['summary'] },
+  { method: 'PUT', pathRegex: /^\/api\/v1\/documents\/\d+\/?$/, fields: ['summary'] },
 ];
 
 const sanitizeValue = (value) => {

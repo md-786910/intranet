@@ -6,6 +6,12 @@ const permissionService = require('../../services/permission.service');
 const audienceService = require('../../services/audience.service');
 const scopeVisibilityService = require('../../services/scope-visibility.service');
 const { assertAudienceWithinUserScope } = require('../../services/publishing-scope.service');
+const { sanitiseRichText } = require('../../utils/sanitiseRichText');
+
+function normaliseSummary(summary) {
+  if (summary == null || summary === '') return null;
+  return sanitiseRichText(summary) || null;
+}
 
 function generateSlug(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -314,7 +320,7 @@ const documentsService = {
         tenant_id: DEFAULT_TENANT_ID,
         title: data.title,
         slug,
-        summary: data.summary || null,
+        summary: normaliseSummary(data.summary),
         category_id: data.category_id || null,
         priority: data.priority || 'NORMAL',
         push_notify: data.push_notify !== false,
@@ -378,10 +384,11 @@ const documentsService = {
       const doc = await DocumentItem.findByPk(id, { transaction });
       if (!doc) throw ApiError.notFound('Document not found');
 
-      const fields = ['title', 'summary', 'category_id', 'priority', 'push_notify'];
+      const fields = ['title', 'category_id', 'priority', 'push_notify'];
       fields.forEach((f) => {
         if (data[f] !== undefined) doc[f] = data[f];
       });
+      if (data.summary !== undefined) doc.summary = normaliseSummary(data.summary);
       if (data.title) doc.slug = generateSlug(data.title) + '-' + Date.now();
 
       doc.updated_by = userId;

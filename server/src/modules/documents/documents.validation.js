@@ -60,7 +60,7 @@ const categoryIdParam = {
 const createDocSchema = {
   body: Joi.object({
     title: Joi.string().trim().min(1).max(255).required(),
-    summary: Joi.string().trim().max(2000).optional().allow('', null),
+    summary: Joi.string().trim().max(50000).optional().allow('', null),
     category_id: idPattern.optional().allow(null),
     priority: priorityPattern.optional(),
     owning_scope_type: scopeTypePattern.optional(),
@@ -100,7 +100,7 @@ const scheduleSchema = {
 const createAndScheduleSchema = {
   body: Joi.object({
     title: Joi.string().trim().min(1).max(255).required(),
-    summary: Joi.string().trim().max(2000).optional().allow('', null),
+    summary: Joi.string().trim().max(50000).optional().allow('', null),
     category_id: idPattern.optional().allow(null),
     priority: priorityPattern.optional(),
     owning_scope_type: scopeTypePattern.optional(),
@@ -123,7 +123,7 @@ const updateDocSchema = {
   }),
   body: Joi.object({
     title: Joi.string().trim().min(1).max(255).optional(),
-    summary: Joi.string().trim().max(2000).optional().allow('', null),
+    summary: Joi.string().trim().max(50000).optional().allow('', null),
     category_id: idPattern.optional().allow(null),
     priority: priorityPattern.optional(),
     scope_type: scopeTypePattern.optional(),

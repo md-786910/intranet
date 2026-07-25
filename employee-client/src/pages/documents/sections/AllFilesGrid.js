@@ -37,7 +37,8 @@ export default function AllFilesGrid({ documents, loading }) {
         }
         // Search matches file name OR parent doc title.
         if (term) {
-          const haystack = `${file.name || ''} ${doc.title || ''} ${doc.summary || ''}`.toLowerCase();
+          const summaryText = String(doc.summary || '').replace(/<[^>]*>/g, ' ');
+          const haystack = `${file.name || ''} ${doc.title || ''} ${summaryText}`.toLowerCase();
           if (!haystack.includes(term)) return;
         }
         out.push({

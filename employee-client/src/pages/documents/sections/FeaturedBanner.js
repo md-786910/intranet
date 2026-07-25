@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Skeleton from '../../../components/common/Skeleton';
+import { plainTextFromHtml } from '../../../components/common/RichTextView';
 import { documentsService } from '../../../services/documentsService';
 import { useDocumentPreview } from '../DocumentPreviewContext';
 
@@ -32,6 +33,7 @@ export default function FeaturedBanner() {
 
   const pill = doc.priority === 'URGENT' ? 'Urgent' : 'Featured';
   const primary = (doc.versions && doc.versions[0]) || null;
+  const summaryText = plainTextFromHtml(doc.summary);
 
   return (
     <section className="relative h-[400px] rounded-[32px] overflow-hidden bg-gradient-to-br from-primary via-tertiary to-secondary">
@@ -42,9 +44,9 @@ export default function FeaturedBanner() {
         <h2 className="text-3xl sm:text-4xl md:text-5xl font-display text-white mb-4 max-w-xl">
           {doc.title}
         </h2>
-        {doc.summary && (
+        {summaryText && (
           <p className="font-body-lg text-body-lg text-white/80 max-w-md mb-8 line-clamp-3">
-            {doc.summary}
+            {summaryText}
           </p>
         )}
         <div className="flex flex-wrap items-center gap-4">
