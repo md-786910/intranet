@@ -46,20 +46,59 @@ const getUser = catchAsync(async (req, res) => {
 
 // GET /azure-ad/users/:id/direct-reports
 const getUserDirectReports = catchAsync(async (req, res) => {
-  const reports = await service.getUserDirectReports(req.params.id);
-  res.json({ status: 'success', data: await shapeOrgChartPayload(req, reports) });
+  const result = await service.getUserDirectReports(req.params.id);
+  const reports = Array.isArray(result) ? result : (result.reports || []);
+  res.json({
+    status: 'success',
+    data: await shapeOrgChartPayload(req, reports),
+    meta: {
+      count: Array.isArray(result) ? reports.length : (result.count || 0),
+      inactiveCount: Array.isArray(result) ? 0 : (result.inactiveCount || 0),
+    },
+  });
 });
 
 // GET /azure-ad/users/:id/direct-reports/count
 const getUserDirectReportsCount = catchAsync(async (req, res) => {
-  const count = await service.getUserDirectReportsCount(req.params.id);
-  res.json({ status: 'success', data: { count } });
+  const counts = await service.getUserDirectReportsCount(req.params.id);
+  res.json({
+    status: 'success',
+    data: {
+      count: counts.count || 0,
+      inactiveCount: counts.inactiveCount || 0,
+    },
+  });
 });
 
 // GET /azure-ad/org-tree/roots
 const getOrgTreeRoots = catchAsync(async (req, res) => {
-  const roots = await service.getOrgTreeRoots();
-  res.json({ status: 'success', data: await shapeOrgChartPayload(req, roots) });
+  const result = await service.getOrgTreeRoots();
+  let roots = Array.isArray(result) ? result : (result.roots || []);
+  const totalUsers = Array.isArray(result) ? null : result.totalUsers;
+  const reportingUsers = Array.isArray(result) ? null : result.reportingUsers;
+  const orphanUsers = Array.isArray(result) ? null : result.orphanUsers;
+
+  // Employee org chart: reporting hierarchy only (no "Other active users" bucket)
+  const full = await canSeeDirectoryPii(req.user.user_id);
+  if (!full) {
+    roots = roots.filter((r) => !service.isOrphanRootId(r.id) && !r._virtual);
+  }
+
+  res.json({
+    status: 'success',
+    data: await shapeOrgChartPayload(req, roots),
+    meta: {
+      totalUsers: totalUsers == null ? null : Number(totalUsers) || 0,
+      reportingUsers: reportingUsers == null ? null : Number(reportingUsers) || 0,
+      orphanUsers: orphanUsers == null ? null : Number(orphanUsers) || 0,
+    },
+  });
+});
+
+// GET /azure-ad/directory-counts — read-only Entra totals (no sync / no writes)
+const getDirectoryCounts = catchAsync(async (req, res) => {
+  const counts = await service.getEntraDirectoryCounts();
+  res.json({ status: 'success', data: counts });
 });
 
 // GET /azure-ad/departments
@@ -159,6 +198,7 @@ module.exports = {
   getUserDirectReports,
   getUserDirectReportsCount,
   getOrgTreeRoots,
+  getDirectoryCounts,
   getDepartments,
   testConnection,
   clearCache,

@@ -24,6 +24,10 @@ export default function OrgHierarchyView() {
   const [roots, setRoots] = useState([]);
   const [rootsLoading, setRootsLoading] = useState(true);
   const [rootUser, setRootUser] = useState(null);
+  const [orgTreeTotal, setOrgTreeTotal] = useState(null);
+  const [orgTreeReporting, setOrgTreeReporting] = useState(null);
+  const [orgTreeOrphans, setOrgTreeOrphans] = useState(null);
+  const [entraCounts, setEntraCounts] = useState(null);
 
   // expandedIds: which nodes show their children to the right
   const [expandedIds, setExpandedIds] = useState(() => new Set());
@@ -43,9 +47,21 @@ export default function OrgHierarchyView() {
     }
   }, [navigate]);
 
-  const applyCount = useCallback((userId, count) => {
-    setCountById((prev) => (prev[userId] === count ? prev : { ...prev, [userId]: count }));
-    if (count === 0) {
+  const applyCount = useCallback((userId, activeCount, inactiveCount) => {
+    setCountById((prev) => {
+      const prevEntry = prev[userId] || {};
+      const next = {
+        active: typeof activeCount === 'number' ? activeCount : (prevEntry.active ?? null),
+        inactive: typeof inactiveCount === 'number'
+          ? inactiveCount
+          : (prevEntry.inactive ?? 0),
+      };
+      if (prevEntry.active === next.active && prevEntry.inactive === next.inactive) {
+        return prev;
+      }
+      return { ...prev, [userId]: next };
+    });
+    if (activeCount === 0) {
       setNoReportsIds((prev) => new Set(prev).add(userId));
     }
   }, []);
@@ -68,7 +84,8 @@ export default function OrgHierarchyView() {
           try {
             const res = await azureAdService.getDirectReportsCount(u.id);
             const count = Number(res.data?.data?.count) || 0;
-            applyCount(u.id, count);
+            const inactive = Number(res.data?.data?.inactiveCount) || 0;
+            applyCount(u.id, count, inactive);
           } catch {
             countPrefetchRef.current.delete(u.id);
           }
@@ -82,16 +99,21 @@ export default function OrgHierarchyView() {
     try {
       const res = await azureAdService.getDirectReports(userId);
       const list = res.data?.data || [];
+      const inactive = Number(res.data?.meta?.inactiveCount);
       setChildrenById((prev) => ({ ...prev, [userId]: list }));
-      applyCount(userId, list.length);
+      applyCount(
+        userId,
+        list.length,
+        Number.isFinite(inactive) ? inactive : undefined,
+      );
       if (list.length === 0) {
         setExpandedIds((prev) => {
           const next = new Set(prev);
           next.delete(userId);
           return next;
         });
-      } else {
-        // Load counts for the next level so Expand badges show before click
+      } else if (!String(userId).startsWith('__entra_')) {
+        // Skip prefetch for the "Other active users" bucket (can be 100s of leaves)
         prefetchCounts(list);
       }
       return list;
@@ -107,17 +129,32 @@ export default function OrgHierarchyView() {
     }
   }, [showToast, applyCount, prefetchCounts]);
 
-  // Load roots
+  // Load roots + read-only Entra directory counts (GET only — never syncs)
   useEffect(() => {
     let cancelled = false;
     setRootsLoading(true);
 
-    azureAdService.getOrgTreeRoots()
-      .then((res) => {
+    Promise.all([
+      azureAdService.getOrgTreeRoots(),
+      azureAdService.getDirectoryCounts().catch(() => null),
+    ])
+      .then(([rootsRes, countsRes]) => {
         if (cancelled) return;
-        const list = res.data?.data || [];
+        const list = rootsRes.data?.data || [];
+        const meta = rootsRes.data?.meta || {};
         setRoots(list);
-        if (list.length === 1) {
+        setOrgTreeTotal(typeof meta.totalUsers === 'number' ? meta.totalUsers : null);
+        setOrgTreeReporting(typeof meta.reportingUsers === 'number' ? meta.reportingUsers : null);
+        setOrgTreeOrphans(typeof meta.orphanUsers === 'number' ? meta.orphanUsers : null);
+        const counts = countsRes?.data?.data;
+        if (counts && typeof counts.total === 'number') {
+          setEntraCounts(counts);
+        }
+        // Prefer the real reporting root; "Other active users" is a separate bucket
+        const reportingRoots = list.filter((u) => !u._virtual && !String(u.id || '').startsWith('__entra_'));
+        if (reportingRoots.length === 1) {
+          setRootUser(reportingRoots[0]);
+        } else if (list.length === 1) {
           setRootUser(list[0]);
         }
       })
@@ -125,6 +162,9 @@ export default function OrgHierarchyView() {
         if (!cancelled) {
           showToast('Failed to load org hierarchy', 'error');
           setRoots([]);
+          setOrgTreeTotal(null);
+          setOrgTreeReporting(null);
+          setOrgTreeOrphans(null);
         }
       })
       .finally(() => {
@@ -255,8 +295,9 @@ export default function OrgHierarchyView() {
     setIsDragging(false);
   };
 
-  const reportCount = rootUser
-    ? (countById[rootUser.id] ?? childrenById[rootUser.id]?.length ?? null)
+  const rootCounts = rootUser ? countById[rootUser.id] : null;
+  const activeReportCount = rootUser
+    ? (rootCounts?.active ?? childrenById[rootUser.id]?.length ?? null)
     : null;
 
   return (
@@ -266,7 +307,61 @@ export default function OrgHierarchyView() {
     >
       <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 shrink-0 space-y-2">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-sm font-medium text-gray-700">Reporting Hierarchy</p>
+          <div className="flex items-center gap-3 flex-wrap min-w-0">
+            <p className="text-sm font-medium text-gray-700">Reporting Hierarchy</p>
+            {entraCounts && (
+              <div className="flex items-center gap-1.5 text-[11px] tabular-nums flex-wrap">
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-700"
+                  title="All users in Microsoft Entra ID (read-only)"
+                >
+                  <span className="font-semibold text-gray-900">{entraCounts.total}</span>
+                  <span className="text-gray-400">Entra total</span>
+                </span>
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary-50 border border-primary-100 text-primary-800"
+                  title="accountEnabled = true"
+                >
+                  <span className="font-semibold">{entraCounts.active}</span>
+                  <span className="text-primary-600/80">active</span>
+                </span>
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 border border-gray-200 text-gray-600"
+                  title="accountEnabled = false"
+                >
+                  <span className="font-semibold text-gray-800">{entraCounts.inactive}</span>
+                  <span className="text-gray-400">inactive</span>
+                </span>
+                {orgTreeReporting != null && (
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-600"
+                    title="Active users under reporting roots (e.g. Christian Pfleiderer)"
+                  >
+                    <span className="font-semibold text-gray-900">{orgTreeReporting}</span>
+                    <span className="text-gray-400">reporting</span>
+                  </span>
+                )}
+                {orgTreeOrphans != null && (
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-600"
+                    title="Active users in Other active users (outside reporting line)"
+                  >
+                    <span className="font-semibold text-gray-900">{orgTreeOrphans}</span>
+                    <span className="text-gray-400">other</span>
+                  </span>
+                )}
+                {orgTreeTotal != null && (
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-600"
+                    title="reporting + other (= all Entra active)"
+                  >
+                    <span className="font-semibold text-gray-900">{orgTreeTotal}</span>
+                    <span className="text-gray-400">in tree</span>
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {rootUser && (
               <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-0.5">
@@ -317,9 +412,9 @@ export default function OrgHierarchyView() {
             <span className="text-gray-800 font-semibold truncate max-w-[200px]">
               {rootUser.displayName}
             </span>
-            {reportCount != null && (
+            {activeReportCount != null && (
               <span className="text-gray-400 ml-2 tabular-nums">
-                · {reportCount} direct report{reportCount === 1 ? '' : 's'} (level 2 open)
+                · {activeReportCount} direct report{activeReportCount === 1 ? '' : 's'} (level 2 open)
               </span>
             )}
           </nav>
@@ -340,7 +435,7 @@ export default function OrgHierarchyView() {
       ) : !rootUser ? (
         <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 p-4">
           <p className="text-sm text-gray-600 mb-3">
-            Select a root manager — their direct reports open automatically (level 2)
+            Select a reporting root, or Other active users for everyone outside the reporting line
           </p>
           <ul className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
             {roots.map((user) => (
@@ -350,8 +445,11 @@ export default function OrgHierarchyView() {
                   onClick={() => selectRoot(user)}
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-left transition-colors"
                 >
-                  <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                    {getInitials(user.displayName)}
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${
+                    user._virtual ? 'bg-gray-500' : 'bg-indigo-600'
+                  }`}
+                  >
+                    {user._virtual ? '+' : getInitials(user.displayName)}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-900 truncate">{user.displayName}</p>

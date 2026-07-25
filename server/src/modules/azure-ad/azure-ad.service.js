@@ -12,6 +12,10 @@ const TTL_LIST   = 86400;  // 24 h – user list / search results
 const TTL_DETAIL = 86400;  // 24 h – individual user + manager
 const TTL_TREE   = 86400;  // 24 h – org tree flat list
 
+/** Virtual root for active Entra users outside the reporting hierarchy. */
+const ORPHAN_ROOT_ID = '__entra_orphan_active__';
+const ORPHAN_CACHE_KEY = 'ad:org-orphans:v1';
+
 // ── Lazy-initialised Graph client ─────────────────────────────────────────────
 let _client = null;
 
@@ -99,6 +103,41 @@ async function fetchAllPages(initialRequest) {
   return results;
 }
 
+/**
+ * Read-only Entra directory counts (GET only — never creates/updates users).
+ * total = all Graph users; active = accountEnabled; inactive = disabled.
+ */
+async function getEntraDirectoryCounts() {
+  const cacheKey = 'ad:directory-counts:v1';
+  const cached = await cacheService.get(cacheKey);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (parsed && typeof parsed.total === 'number') return parsed;
+    } catch (_) {}
+  }
+
+  const raw = await fetchAllPages(
+    '/users?$select=id,accountEnabled&$top=999',
+  );
+
+  let active = 0;
+  let inactive = 0;
+  for (const u of raw) {
+    if (u.accountEnabled === false) inactive += 1;
+    else active += 1;
+  }
+
+  const counts = {
+    total: raw.length,
+    active,
+    inactive,
+  };
+
+  await cacheService.set(cacheKey, JSON.stringify(counts), TTL_TREE);
+  return counts;
+}
+
 // ── Fetch & cache the full flat user list (used for list view + departments) ──
 async function getAllUsersFlat() {
   const cacheKey = 'ad:all-users:v3';
@@ -181,63 +220,194 @@ async function getUser(id) {
   return result;
 }
 
+function summarizeReportCounts(raw) {
+  let active = 0;
+  let inactive = 0;
+  for (const u of raw || []) {
+    if (u.accountEnabled === false) inactive += 1;
+    else active += 1;
+  }
+  return { count: active, inactiveCount: inactive };
+}
+
+async function cacheReportCounts(id, counts) {
+  await cacheService.set(
+    `ad:reports-counts:v2:${id}`,
+    JSON.stringify({
+      count: counts.count || 0,
+      inactiveCount: counts.inactiveCount || 0,
+    }),
+    TTL_LIST,
+  );
+  // Legacy single-number key (active only)
+  await cacheService.set(`ad:reports-count:${id}`, String(counts.count || 0), TTL_LIST);
+}
+
+function isOrphanRootId(id) {
+  return id === ORPHAN_ROOT_ID;
+}
+
+function buildOrphanRoot(orphanCount) {
+  return {
+    id: ORPHAN_ROOT_ID,
+    displayName: 'Other active users',
+    jobTitle: `${orphanCount} outside reporting line`,
+    department: null,
+    accountEnabled: true,
+    _virtual: true,
+  };
+}
+
+async function getCachedOrphanActiveUsers() {
+  const cached = await cacheService.get(ORPHAN_CACHE_KEY);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (_) {}
+  }
+  // Rebuild via roots flow (also refreshes orphan cache)
+  const result = await getOrgTreeRoots();
+  const cachedAgain = await cacheService.get(ORPHAN_CACHE_KEY);
+  if (cachedAgain) {
+    try {
+      const parsed = JSON.parse(cachedAgain);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (_) {}
+  }
+  return Array.isArray(result?.orphans) ? result.orphans : [];
+}
+
 // ── 3. getUserDirectReports — for tree on-expand ──────────────────────────────
 async function getUserDirectReports(id) {
+  if (isOrphanRootId(id)) {
+    const orphans = await getCachedOrphanActiveUsers();
+    const reports = await attachLocalUserIds(orphans);
+    return {
+      reports,
+      count: reports.length,
+      inactiveCount: 0,
+    };
+  }
+
   const cacheKey = `ad:reports:${id}`;
   const cached = await cacheService.get(cacheKey);
   if (cached) {
     try {
-      return attachLocalUserIds(JSON.parse(cached));
+      const reports = await attachLocalUserIds(JSON.parse(cached));
+      const counts = await getUserDirectReportsCount(id);
+      return { reports, ...counts };
     } catch (_) {}
   }
 
   const raw = await fetchAllPages(
     `/users/${id}/directReports?$select=${LIST_SELECT}`
   );
+  const counts = summarizeReportCounts(raw);
   const reports = raw.filter((u) => u.accountEnabled !== false);
 
   await cacheService.set(cacheKey, JSON.stringify(reports), TTL_LIST);
-  await cacheService.set(`ad:reports-count:${id}`, String(reports.length), TTL_LIST);
-  return attachLocalUserIds(reports);
+  await cacheReportCounts(id, counts);
+  return {
+    reports: await attachLocalUserIds(reports),
+    count: counts.count,
+    inactiveCount: counts.inactiveCount,
+  };
 }
 
-/** Lightweight enabled-direct-report count for org-tree Expand badges. */
+/** Active + inactive direct-report counts for org-tree badges. */
 async function getUserDirectReportsCount(id) {
-  const countKey = `ad:reports-count:${id}`;
-  const cachedCount = await cacheService.get(countKey);
-  if (cachedCount !== null && cachedCount !== undefined) {
-    const n = parseInt(cachedCount, 10);
-    if (!Number.isNaN(n)) return n;
+  if (isOrphanRootId(id)) {
+    const orphans = await getCachedOrphanActiveUsers();
+    return { count: orphans.length, inactiveCount: 0 };
   }
 
-  const listKey = `ad:reports:${id}`;
-  const cachedList = await cacheService.get(listKey);
-  if (cachedList) {
+  const countKey = `ad:reports-counts:v2:${id}`;
+  const cachedCounts = await cacheService.get(countKey);
+  if (cachedCounts) {
     try {
-      const reports = JSON.parse(cachedList).filter((u) => u.accountEnabled !== false);
-      await cacheService.set(countKey, String(reports.length), TTL_LIST);
-      return reports.length;
+      const parsed = JSON.parse(cachedCounts);
+      return {
+        count: Number(parsed.count) || 0,
+        inactiveCount: Number(parsed.inactiveCount) || 0,
+      };
     } catch (_) {}
   }
 
-  // Minimal select — only need enabled count, not full profile fields
+  // Minimal select — need enabled flag for both counts
   const raw = await fetchAllPages(
     `/users/${id}/directReports?$select=id,accountEnabled`
   );
-  const count = raw.filter((u) => u.accountEnabled !== false).length;
-  await cacheService.set(countKey, String(count), TTL_LIST);
-  return count;
+  const counts = summarizeReportCounts(raw);
+  await cacheReportCounts(id, counts);
+  return counts;
+}
+
+/**
+ * Active user ids reachable from reporting roots (transitiveReports / Expand path).
+ */
+async function collectReportingTreeIds(roots) {
+  const ids = new Set((roots || []).map((r) => r.id).filter(Boolean));
+  if (ids.size === 0) return ids;
+
+  for (const root of roots) {
+    if (!root?.id || isOrphanRootId(root.id)) continue;
+    try {
+      const reports = await fetchAllPages(
+        `/users/${root.id}/transitiveReports?$select=id,accountEnabled&$top=999`,
+      );
+      for (const u of reports) {
+        if (u.accountEnabled !== false && u.id) ids.add(u.id);
+      }
+    } catch (err) {
+      logger.warn(
+        `transitiveReports unavailable for ${root.id} (${err.message}); falling back to directReports walk`,
+      );
+      const queue = [root.id];
+      const seen = new Set([root.id]);
+      while (queue.length) {
+        const uid = queue.shift();
+        // eslint-disable-next-line no-await-in-loop
+        const raw = await fetchAllPages(
+          `/users/${uid}/directReports?$select=id,accountEnabled`,
+        );
+        for (const child of raw) {
+          if (!child?.id || child.accountEnabled === false || seen.has(child.id)) continue;
+          seen.add(child.id);
+          ids.add(child.id);
+          queue.push(child.id);
+        }
+      }
+    }
+  }
+
+  return ids;
 }
 
 // ── 4. getOrgTreeRoots — users whose manager is not in this org ───────────────
 // Uses $expand=manager to fetch each user's manager ID in a single paged request,
 // then computes roots locally. Avoids the unreliable NOT(manager/id ne null) filter.
+// Also adds a virtual root for remaining active users outside the reporting line.
 async function getOrgTreeRoots() {
-  const cacheKey = 'ad:org-roots:v4';
+  const cacheKey = 'ad:org-roots:v7';
   const cached = await cacheService.get(cacheKey);
   if (cached) {
     try {
-      return attachLocalUserIds(JSON.parse(cached));
+      const parsed = JSON.parse(cached);
+      if (parsed && Array.isArray(parsed.roots)) {
+        const reportingRoots = parsed.roots.filter((r) => !isOrphanRootId(r.id));
+        const orphanCount = Number(parsed.orphanUsers) || 0;
+        const roots = [
+          ...await attachLocalUserIds(reportingRoots),
+          ...(orphanCount > 0 ? [buildOrphanRoot(orphanCount)] : []),
+        ];
+        return {
+          roots,
+          totalUsers: Number(parsed.totalUsers) || 0,
+          reportingUsers: Number(parsed.reportingUsers) || 0,
+          orphanUsers: orphanCount,
+        };
+      }
     } catch (_) {}
   }
 
@@ -253,17 +423,45 @@ async function getOrgTreeRoots() {
     allUsers.filter((u) => u.manager?.id).map((u) => u.manager.id)
   );
 
-  // Root = no internal manager AND has at least one direct report
-  // (excludes leaf accounts: test users, meeting rooms, admin accounts with no reports)
-  const roots = allUsers
+  // Reporting root = no internal manager AND has at least one direct report
+  const reportingRoots = allUsers
     .filter((u) =>
       (!u.manager?.id || !allUserIds.has(u.manager.id)) &&
       managerIds.has(u.id)
     )
-    .map(({ manager, ...rest }) => rest); // strip expanded manager before caching
+    .map(({ manager, ...rest }) => rest);
 
-  await cacheService.set(cacheKey, JSON.stringify(roots), TTL_TREE);
-  return attachLocalUserIds(roots);
+  const inTreeIds = await collectReportingTreeIds(reportingRoots);
+  const orphans = allUsers
+    .filter((u) => !inTreeIds.has(u.id))
+    .map(({ manager, ...rest }) => rest)
+    .sort((a, b) => String(a.displayName || '').localeCompare(String(b.displayName || '')));
+
+  await cacheService.set(ORPHAN_CACHE_KEY, JSON.stringify(orphans), TTL_TREE);
+
+  const reportingUsers = inTreeIds.size;
+  const orphanUsers = orphans.length;
+  const totalUsers = reportingUsers + orphanUsers;
+
+  await cacheService.set(cacheKey, JSON.stringify({
+    roots: reportingRoots,
+    totalUsers,
+    reportingUsers,
+    orphanUsers,
+  }), TTL_TREE);
+
+  const roots = [
+    ...await attachLocalUserIds(reportingRoots),
+    ...(orphanUsers > 0 ? [buildOrphanRoot(orphanUsers)] : []),
+  ];
+
+  return {
+    roots,
+    totalUsers,
+    reportingUsers,
+    orphanUsers,
+    orphans,
+  };
 }
 
 /** Map Entra azure object ids → BrightNow user_id for synced accounts. */
@@ -397,11 +595,14 @@ function syncLocalUserFromEntra(options, actorUserId) {
 }
 
 module.exports = {
+  ORPHAN_ROOT_ID,
+  isOrphanRootId,
   listUsers,
   getUser,
   getUserDirectReports,
   getUserDirectReportsCount,
   getOrgTreeRoots,
+  getEntraDirectoryCounts,
   getDepartments,
   clearCache,
   fetchGraphUsersForSync,

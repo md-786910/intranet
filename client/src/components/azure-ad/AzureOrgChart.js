@@ -89,14 +89,6 @@ export function OrgPersonCard({
             <p className="text-[11px] text-gray-500 truncate leading-tight mt-0.5">{title}</p>
           )}
         </div>
-        {knownCount > 0 && !expanded && (
-          <span
-            className="shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary-50 text-primary-700 text-[10px] font-semibold tabular-nums flex items-center justify-center"
-            title={`${knownCount} direct report${knownCount === 1 ? '' : 's'}`}
-          >
-            {knownCount}
-          </span>
-        )}
         {user.accountEnabled === false && (
           <span className="w-2 h-2 rounded-full bg-gray-300 shrink-0" title="Disabled" />
         )}
@@ -173,7 +165,8 @@ export function OrgTreeNode({
   const children = childrenById[user.id];
   const loading = loadingIds.has(user.id);
   const noReports = noReportsIds.has(user.id);
-  const reportCount = countById?.[user.id];
+  const counts = countById?.[user.id];
+  const reportCount = typeof counts?.active === 'number' ? counts.active : null;
   const nextPath = pathIds.has(user.id) ? pathIds : new Set([...pathIds, user.id]);
   const hasCycle = pathIds.has(user.id);
 
@@ -195,7 +188,7 @@ export function OrgTreeNode({
       expanded={expanded}
       loading={loading}
       noReports={noReports}
-      reportCount={typeof reportCount === 'number' ? reportCount : null}
+      reportCount={reportCount}
       onToggleExpand={noReports || reportCount === 0 ? undefined : onToggleExpand}
       onOpenUser={onOpenUser}
     />

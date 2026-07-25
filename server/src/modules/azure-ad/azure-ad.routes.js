@@ -19,6 +19,8 @@ router.get('/org-tree/roots', controller.getOrgTreeRoots);
 
 // ── Directory PII + sync (Manage Users only) ──────────────────────────────────
 router.get('/test-connection', requireManageUsers, controller.testConnection);
+// Read-only counts — never syncs or writes users
+router.get('/directory-counts', requireManageUsers, controller.getDirectoryCounts);
 router.get('/departments', requireManageUsers, controller.getDepartments);
 router.get('/users', requireManageUsers, controller.listUsers);
 router.get('/users/:id', requireManageUsers, controller.getUser);

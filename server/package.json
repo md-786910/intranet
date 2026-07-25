@@ -14,7 +14,8 @@
     "seed": "npx sequelize-cli db:seed:all",
     "seed:undo": "npx sequelize-cli db:seed:undo:all",
     "migrate:status": "npx sequelize-cli db:migrate:status",
-    "sync:entra": "node src/scripts/sync-entra-users.js"
+    "sync:entra": "node src/scripts/sync-entra-users.js",
+    "count:entra": "node src/scripts/count-entra-directory.js"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",

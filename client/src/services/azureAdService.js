@@ -16,6 +16,9 @@ export const azureAdService = {
   /** Root nodes for the org hierarchy tree */
   getOrgTreeRoots: () => api.get('/azure-ad/org-tree/roots'),
 
+  /** Read-only Entra directory totals (total / active / inactive) — never syncs */
+  getDirectoryCounts: () => api.get('/azure-ad/directory-counts'),
+
   /** Distinct department names for the filter dropdown */
   getDepartments: () => api.get('/azure-ad/departments'),
 
