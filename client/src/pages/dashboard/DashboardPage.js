@@ -1,82 +1,157 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { analyticsService } from '../../services/analyticsService';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { usePermission } from '../../hooks/usePermission';
+import { useToast } from '../../hooks/useToast';
+import {
+  ContentSection,
+  ICONS,
+  KpiCard,
+  LoadingGrid,
+  OverviewSection,
+  UsersSection,
+} from './analyticsParts';
 
-const stats = [
-  { key: 'users', label: 'Total Users', path: 'users.total_users', icon: 'M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z', color: 'primary' },
-  { key: 'news', label: 'Published News', path: 'news.published', icon: 'M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5M6 7.5h3v3H6v-3z', color: 'green' },
-  { key: 'docs', label: 'Documents', path: 'documents.total', icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z', color: 'purple' },
-  { key: 'departments', label: 'Departments', path: 'organisation.departments', icon: 'M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 0h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z', color: 'orange' },
+const TABS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'content', label: 'Content' },
+  { key: 'users', label: 'Users' },
 ];
-
-const colorMap = {
-  primary: { bg: 'bg-primary-50', text: 'text-primary-600' },
-  green: { bg: 'bg-green-50', text: 'text-green-600' },
-  purple: { bg: 'bg-purple-50', text: 'text-purple-600' },
-  orange: { bg: 'bg-orange-50', text: 'text-orange-600' },
-};
-
-function getNestedValue(obj, path) {
-  return path.split('.').reduce((o, k) => (o || {})[k], obj);
-}
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const { currentOrganisationName } = useCurrentOrganisation();
   const { hasPermission: canViewAnalytics } = usePermission('ADMIN', 'VIEW_ANALYTICS');
-  const [data, setData] = useState(null);
+
+  const [dashboard, setDashboard] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState('overview');
+  const [granularity, setGranularity] = useState('month');
 
   useEffect(() => {
-    if (!canViewAnalytics) return;
+    if (!canViewAnalytics) return undefined;
+    let cancelled = false;
+    setLoading(true);
     analyticsService.getDashboard()
-      .then((res) => setData(res.data?.data))
-      .catch(() => {});
-  }, [canViewAnalytics]);
+      .then((res) => {
+        if (!cancelled) setDashboard(res.data?.data || null);
+      })
+      .catch(() => {
+        if (!cancelled) addToast('Failed to load dashboard analytics', 'error');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [canViewAnalytics, addToast]);
+
+  const handleGranularityChange = useCallback((g) => setGranularity(g), []);
 
   if (!canViewAnalytics) {
     return <Navigate to="/" replace />;
   }
 
-  return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+  const displayName = [user?.first_name, user?.last_name].filter(Boolean).join(' ')
+    || user?.email
+    || 'there';
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => {
-          const colors = colorMap[stat.color];
-          const value = data ? getNestedValue(data, stat.path) : null;
-          return (
-            <div key={stat.key} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center gap-4">
-                <div className={`p-3 ${colors.bg} rounded-lg`}>
-                  <svg className={`w-6 h-6 ${colors.text}`} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={stat.icon} />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-900">{value ?? '—'}</p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+  return (
+    <div className="max-w-[1400px]">
+      {/* Header */}
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-600 mb-2">
+            Platform analytics
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
+            Dashboard
+          </h1>
+          <p className="mt-1.5 text-sm text-gray-500 max-w-xl">
+            Welcome back, {displayName}
+            {currentOrganisationName ? (
+              <>
+                {' · '}
+                <span className="font-medium text-gray-700">{currentOrganisationName}</span>
+              </>
+            ) : null}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 rounded-xl bg-gray-100 p-1 self-start sm:self-auto">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                tab === t.key
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Info</h2>
-        <p className="text-gray-600">
-          Logged in as <span className="font-medium">{user?.email}</span>
-        </p>
-        {currentOrganisationName && (
-          <p className="text-gray-600 mt-2">
-            Active organisation: <span className="font-medium">{currentOrganisationName}</span>
-          </p>
+      {/* At-a-glance strip — always visible */}
+      {loading ? (
+        <LoadingGrid count={4} />
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <KpiCard
+            label="Total users"
+            value={dashboard?.users?.total_users}
+            color="primary"
+            icon={ICONS.users}
+            hint={`${dashboard?.users?.active_users ?? 0} active`}
+          />
+          <KpiCard
+            label="Published news"
+            value={dashboard?.news?.published}
+            color="green"
+            icon={ICONS.news}
+            hint={`${dashboard?.news?.draft ?? 0} in draft`}
+          />
+          <KpiCard
+            label="Documents"
+            value={dashboard?.documents?.total}
+            color="slate"
+            icon={ICONS.docs}
+          />
+          <KpiCard
+            label="Departments"
+            value={dashboard?.organisation?.departments}
+            color="amber"
+            icon={ICONS.dept}
+            hint={`${dashboard?.organisation?.office_locations ?? 0} offices`}
+          />
+        </div>
+      )}
+
+      {/* Detail panels */}
+      <div className="rounded-2xl border border-gray-200/80 bg-gradient-to-b from-slate-50/80 to-white p-5 sm:p-6 shadow-[0_1px_2px_rgba(16,24,40,0.03)]">
+        {tab === 'overview' && (
+          loading
+            ? <LoadingGrid count={8} />
+            : dashboard
+              ? <OverviewSection dashboard={dashboard} />
+              : <p className="text-sm text-gray-400 py-12 text-center">No analytics data available yet.</p>
+        )}
+        {tab === 'content' && (
+          <ContentSection granularity={granularity} onGranularityChange={handleGranularityChange} />
+        )}
+        {tab === 'users' && (
+          <UsersSection granularity={granularity} onGranularityChange={handleGranularityChange} />
         )}
       </div>
+
+      <p className="mt-6 text-xs text-gray-400">
+        Signed in as <span className="font-medium text-gray-500">{user?.email}</span>
+      </p>
     </div>
   );
 }

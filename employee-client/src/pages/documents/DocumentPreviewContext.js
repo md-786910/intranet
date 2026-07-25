@@ -20,14 +20,24 @@ export function DocumentPreviewProvider({ children }) {
     if (!doc) return;
     setInitialFileIndex(Number.isInteger(options.fileIndex) ? options.fileIndex : 0);
     setCurrent(doc);
-    if (doc.document_item_id) {
-      documentsService.recordView(doc.document_item_id).catch((err) => {
-        // Don't bubble — the drawer should still open even if view-tracking
-        // fails — but log so dev tools surface real bugs (broken endpoint,
-        // missing migration, audience mismatch, etc.).
-        // eslint-disable-next-line no-console
-        console.warn('recordView failed', err?.response?.status, err?.response?.data);
-      });
+    const docId = doc.document_item_id || doc.id;
+    if (docId) {
+      documentsService.recordView(docId)
+        .then(() => {
+          // Notify Recently Viewed (and any other listeners) to refetch.
+          try {
+            window.dispatchEvent(new CustomEvent('documents:viewed', { detail: { id: docId } }));
+          } catch {
+            /* ignore */
+          }
+        })
+        .catch((err) => {
+          // Don't bubble — the drawer should still open even if view-tracking
+          // fails — but log so dev tools surface real bugs (broken endpoint,
+          // missing migration, audience mismatch, etc.).
+          // eslint-disable-next-line no-console
+          console.warn('recordView failed', err?.response?.status, err?.response?.data);
+        });
     }
   }, []);
 

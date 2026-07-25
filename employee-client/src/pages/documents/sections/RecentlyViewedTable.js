@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import MaterialIcon from '../../../components/common/MaterialIcon';
 import Skeleton from '../../../components/common/Skeleton';
 import { documentsService } from '../../../services/documentsService';
@@ -15,25 +15,30 @@ export default function RecentlyViewedTable() {
   const [error, setError] = useState('');
   const { openDocument } = useDocumentPreview();
 
-  useEffect(() => {
-    let cancelled = false;
-    documentsService
-      .recentlyViewed({ limit: PAGE_LIMIT })
-      .then((res) => {
-        if (cancelled) return;
-        const list = res.data?.data || [];
-        setRows(Array.isArray(list) ? list : []);
-      })
-      .catch(() => {
-        if (!cancelled) setError('Could not load recent activity.');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+  const load = useCallback(async ({ showSkeleton } = { showSkeleton: false }) => {
+    if (showSkeleton) setLoading(true);
+    setError('');
+    try {
+      const res = await documentsService.recentlyViewed({ limit: PAGE_LIMIT });
+      const list = res.data?.data || [];
+      setRows(Array.isArray(list) ? list : []);
+    } catch {
+      setError('Could not load recent activity.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    load({ showSkeleton: true });
+  }, [load]);
+
+  // Refetch after any successful document view (same page or other routes).
+  useEffect(() => {
+    const onViewed = () => { load({ showSkeleton: false }); };
+    window.addEventListener('documents:viewed', onViewed);
+    return () => window.removeEventListener('documents:viewed', onViewed);
+  }, [load]);
 
   return (
     <div className="lg:col-span-2 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-unit-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
@@ -71,7 +76,7 @@ export default function RecentlyViewedTable() {
                 const { icon, color } = iconForFile(primary.name, primary.mime);
                 return (
                   <tr
-                    key={row.view_id}
+                    key={row.view_id || `${doc.document_item_id}-${row.viewed_at}`}
                     onClick={() => openDocument(doc)}
                     className={`hover:bg-surface-variant/20 transition-colors cursor-pointer ${
                       i < rows.length - 1 ? 'border-b border-outline-variant/10' : ''

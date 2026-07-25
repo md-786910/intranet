@@ -821,16 +821,9 @@ const documentsService = {
         where: { deleted_at: null, status: 'PUBLISHED' },
         include: [
           { model: Category, as: 'category', attributes: ['category_id', 'name', 'slug'], required: false },
-          { model: ContentAudienceRule, as: 'audienceRules', where: { entity_type: 'DOCUMENT' }, required: false },
-          {
-            model: DocumentVersion,
-            as: 'versions',
-            attributes: ['document_version_id', 'version_no', 'file_name', 'file_size', 'mime_type', 'file_url', 'files'],
-            required: false,
-            separate: true,
-            order: [['version_no', 'DESC']],
-            limit: 1,
-          },
+          // Association already scopes entity_type=DOCUMENT — don't add a
+          // redundant where (it can confuse the join in some Sequelize versions).
+          { model: ContentAudienceRule, as: 'audienceRules', required: false },
         ],
       }],
     });
@@ -845,11 +838,36 @@ const documentsService = {
       visible = visible.filter((v) => documentMatchesAudience(v.document, userAudienceScopeKeys));
     }
 
-    return visible.slice(0, limit).map((v) => ({
-      view_id: v.view_id,
-      viewed_at: v.viewed_at,
-      document: v.document,
-    }));
+    const sliced = visible.slice(0, limit);
+
+    // Attach latest version for file name/size in the UI (separate query avoids
+    // nested separate+limit include quirks on the view join).
+    const docIds = sliced.map((v) => v.document.document_item_id).filter(Boolean);
+    const latestByDoc = new Map();
+    if (docIds.length > 0) {
+      const versions = await DocumentVersion.findAll({
+        where: { document_item_id: docIds },
+        attributes: ['document_version_id', 'document_item_id', 'version_no', 'file_name', 'file_size', 'mime_type', 'file_url', 'files'],
+        order: [['version_no', 'DESC']],
+      });
+      for (const ver of versions) {
+        const id = ver.document_item_id;
+        if (!latestByDoc.has(id)) latestByDoc.set(id, ver);
+      }
+    }
+
+    return sliced.map((v) => {
+      const doc = v.document.get ? v.document.get({ plain: true }) : v.document;
+      const latest = latestByDoc.get(doc.document_item_id);
+      doc.versions = latest
+        ? [latest.get ? latest.get({ plain: true }) : latest]
+        : [];
+      return {
+        view_id: v.view_id,
+        viewed_at: v.viewed_at,
+        document: doc,
+      };
+    });
   },
 
   async getFeatured(userId) {
