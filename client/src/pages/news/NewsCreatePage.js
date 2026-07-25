@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
+import ManageableSelect from '../../components/common/ManageableSelect';
 import MultiSelect from '../../components/common/MultiSelect';
 import RichTextEditor from '../../components/common/RichTextEditor';
 import FilePicker from '../../components/common/FilePicker';
@@ -33,6 +34,7 @@ export default function NewsCreatePage() {
   const [relatedIds, setRelatedIds] = useState([]); // array of string ids for MultiSelect
   const [audienceTargets, setAudienceTargets] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [otherArticles, setOtherArticles] = useState([]);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -45,16 +47,21 @@ export default function NewsCreatePage() {
     if (lockAudience) setAudienceTargets(lockedTargets);
   }, [lockAudience, lockedTargets]);
 
-  useEffect(() => {
-    let cancelled = false;
-    categoryService.list({ entity_type: 'NEWS', limit: 200 })
-      .then((res) => {
-        if (cancelled) return;
-        setCategories(res.data?.data?.categories || []);
-      })
-      .catch(() => { /* silent */ });
-    return () => { cancelled = true; };
+  const loadCategories = useCallback(async () => {
+    setCategoriesLoading(true);
+    try {
+      const res = await categoryService.list({ entity_type: 'NEWS', limit: 200 });
+      setCategories(res.data?.data?.categories || []);
+    } catch {
+      setCategories([]);
+    } finally {
+      setCategoriesLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,7 +202,7 @@ export default function NewsCreatePage() {
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select
+          <ManageableSelect
             label="Category"
             name="category_id"
             value={form.category_id}
@@ -203,6 +210,10 @@ export default function NewsCreatePage() {
             error={errors.category_id}
             placeholder="Select category (optional)"
             options={categories.map((c) => ({ value: String(c.category_id), label: c.name }))}
+            createTo="/categories?entity=NEWS"
+            createLabel="Create category"
+            onRefresh={loadCategories}
+            refreshing={categoriesLoading}
           />
           <Select
             label="Priority"

@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Textarea from '../../components/common/Textarea';
 import Select from '../../components/common/Select';
+import ManageableSelect from '../../components/common/ManageableSelect';
 import FilePicker from '../../components/common/FilePicker';
 import HierarchyScopeSelector from '../../components/common/HierarchyScopeSelector';
 import SchedulePopover from '../../components/common/SchedulePopover';
@@ -24,6 +25,7 @@ export default function DocumentCreatePage() {
   const { hasPermission: canPublishDocuments } = usePermission('DOCUMENTS', 'PUBLISH');
   const { lockAudience, lockedTargets, owningScope } = usePublishingScope();
   const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [form, setForm] = useState({
     title: '', summary: '', category_id: '', priority: 'NORMAL',
   });
@@ -41,12 +43,25 @@ export default function DocumentCreatePage() {
     if (lockAudience) setAudienceTargets(lockedTargets);
   }, [lockAudience, lockedTargets]);
 
-  useEffect(() => {
+  const loadCategories = useCallback(async () => {
     if (!currentOrganisationId) return;
-    documentService.getCategories({ scope_type: 'ORGANISATION', scope_id: currentOrganisationId })
-      .then((res) => setCategories(res.data?.data || []))
-      .catch(() => {});
+    setCategoriesLoading(true);
+    try {
+      const res = await documentService.getCategories({
+        scope_type: 'ORGANISATION',
+        scope_id: currentOrganisationId,
+      });
+      setCategories(res.data?.data || []);
+    } catch {
+      setCategories([]);
+    } finally {
+      setCategoriesLoading(false);
+    }
   }, [currentOrganisationId]);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -144,9 +159,17 @@ export default function DocumentCreatePage() {
         <Input label="Title" name="title" required value={form.title} error={errors.title} onChange={handleChange} />
         <Textarea label="Summary" name="summary" value={form.summary} onChange={handleChange} rows={3} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select label="Category" name="category_id" value={form.category_id} onChange={handleChange}
+          <ManageableSelect
+            label="Category"
+            name="category_id"
+            value={form.category_id}
+            onChange={handleChange}
             placeholder="Select category (optional)"
-            options={categories.map((c) => ({ value: c.category_id, label: c.name }))}
+            options={categories.map((c) => ({ value: String(c.category_id), label: c.name }))}
+            createTo="/categories?entity=DOCUMENT"
+            createLabel="Create category"
+            onRefresh={loadCategories}
+            refreshing={categoriesLoading}
           />
           <Select label="Priority" name="priority" value={form.priority} onChange={handleChange}
             options={PRIORITY_OPTIONS}

@@ -346,7 +346,7 @@ const service = {
     return {
       likes: rows.map((r) => ({
         id: r.id,
-        liked_at: r.created_at,
+        liked_at: r.createdAt,
         user: authorPayload(r.user),
       })),
       pagination: buildPagination(page, limit, count),
@@ -374,7 +374,7 @@ const service = {
       comments: rows.map((c) => ({
         id: c.id,
         body: c.body,
-        created_at: c.created_at,
+        created_at: c.createdAt,
         deleted: !!c.deleted_at,
         deleted_at: c.deleted_at,
         author: authorPayload(c.author),
@@ -405,7 +405,7 @@ const service = {
         token: s.token,
         view_count: s.view_count,
         revoked_at: s.revoked_at,
-        shared_at: s.created_at,
+        shared_at: s.createdAt,
         user: authorPayload(s.user),
       })),
       pagination: buildPagination(page, limit, count),

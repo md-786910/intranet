@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import SearchBar from '../../components/common/SearchBar';
@@ -42,6 +42,7 @@ const TABS = [
 
 export default function CategoriesPage() {
   const { addToast } = useToast();
+  const [searchParams] = useSearchParams();
   const { hasPermission: canEditNews } = usePermission('NEWS', 'EDIT');
   const { hasPermission: canEditDocs } = usePermission('DOCUMENTS', 'EDIT');
   const { hasPermission: canDeleteNews } = usePermission('NEWS', 'DELETE');
@@ -52,7 +53,11 @@ export default function CategoriesPage() {
     return TABS.filter((t) => (t.value === 'NEWS' ? canEditNews : canEditDocs));
   }, [canEditNews, canEditDocs]);
 
-  const [entityType, setEntityType] = useState(() => allowedTabs[0]?.value || 'DOCUMENT');
+  const [entityType, setEntityType] = useState(() => {
+    const fromUrl = (searchParams.get('entity') || '').toUpperCase();
+    if (fromUrl === 'NEWS' || fromUrl === 'DOCUMENT') return fromUrl;
+    return 'NEWS';
+  });
   const [viewMode, setViewMode] = useState('active');
   const [search, setSearch] = useState('');
   const [data, setData] = useState({ categories: [], pagination: {} });
@@ -156,12 +161,19 @@ export default function CategoriesPage() {
     }
   };
 
+  useEffect(() => {
+    if (!allowedTabs.length) return;
+    if (!allowedTabs.some((t) => t.value === entityType)) {
+      setEntityType(allowedTabs[0].value);
+    }
+  }, [allowedTabs, entityType]);
+
   if (allowedTabs.length === 0) {
     return <Navigate to="/" replace />;
   }
 
-  if (!allowedTabs.find((t) => t.value === entityType)) {
-    return <Navigate to="/" replace />;
+  if (!allowedTabs.some((t) => t.value === entityType)) {
+    return null;
   }
 
   return (
