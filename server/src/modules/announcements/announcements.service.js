@@ -80,6 +80,10 @@ const announcementsService = {
       where.status = 'PUBLISHED';
     }
 
+    if (query.priority) {
+      where.priority = query.priority;
+    }
+
     if (query.search) {
       where[Op.or] = [
         { title: { [Op.iLike]: `%${query.search}%` } },

@@ -18,9 +18,11 @@ const listSchema = {
     limit: Joi.number().integer().min(1).max(100).default(20),
     search: Joi.string().trim().max(255).optional().allow(''),
     status: Joi.string().valid('DRAFT', 'SCHEDULED', 'PUBLISHED', 'ARCHIVED').optional(),
+    priority: priorityPattern.optional(),
     scope_type: scopeTypePattern.optional(),
     scope_id: idPattern.optional(),
     trash: Joi.boolean().optional(),
+    viewer: Joi.alternatives().try(Joi.boolean(), Joi.number().valid(0, 1), Joi.string().valid('0', '1')).optional(),
   }),
 };
 
