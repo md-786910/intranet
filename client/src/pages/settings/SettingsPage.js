@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import PageHeader from '../../components/common/PageHeader';
+import Button from '../../components/common/Button';
+import Input from '../../components/common/Input';
 import { azureAdService } from '../../services/azureAdService';
+import { appSettingsService } from '../../services/appSettingsService';
 import { useToast } from '../../hooks/useToast';
+import { useAppBranding } from '../../contexts/AppBrandingContext';
+import { getUserFacingMessage } from '../../utils/errorUtils';
 
 function CacheRow({ label, ttl }) {
   return (
@@ -14,7 +19,36 @@ function CacheRow({ label, ttl }) {
 
 export default function SettingsPage() {
   const { addToast: showToast } = useToast();
+  const { refresh } = useAppBranding();
   const [clearing, setClearing] = useState(false);
+
+  const [applicationName, setApplicationName] = useState('');
+  const [metaTitle, setMetaTitle] = useState('');
+  const [brandingLoading, setBrandingLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setBrandingLoading(true);
+      try {
+        const res = await appSettingsService.get();
+        const data = res.data?.data || {};
+        if (!cancelled) {
+          setApplicationName(data.application_name || '');
+          setMetaTitle(data.meta_title || '');
+        }
+      } catch (err) {
+        if (!cancelled && !err?.isHandled) {
+          showToast(getUserFacingMessage(err, 'Failed to load application settings'), 'error');
+        }
+      } finally {
+        if (!cancelled) setBrandingLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showToast]);
 
   async function handleClearCache() {
     setClearing(true);
@@ -28,12 +62,98 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSaveBranding(e) {
+    e.preventDefault();
+    const name = applicationName.trim();
+    const title = metaTitle.trim();
+    const nextErrors = {};
+    if (!name) nextErrors.application_name = 'Application name is required';
+    if (!title) nextErrors.meta_title = 'Meta title is required';
+    if (name.length > 100) nextErrors.application_name = 'Must be at most 100 characters';
+    if (title.length > 100) nextErrors.meta_title = 'Must be at most 100 characters';
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    setSaving(true);
+    try {
+      await appSettingsService.update({
+        application_name: name,
+        meta_title: title,
+      });
+      await refresh();
+      showToast('Application settings saved', 'success');
+    } catch (err) {
+      if (!err?.isHandled) {
+        showToast(getUserFacingMessage(err, 'Failed to save settings'), 'error');
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Settings"
-        subtitle="System configuration"
+        title="Configuration"
+        subtitle="Application branding and system configuration"
       />
+
+      {/* Branding / Application settings */}
+      <form
+        onSubmit={handleSaveBranding}
+        className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+      >
+        <div className="px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-primary-50 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-primary-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Application Settings</p>
+              <p className="text-xs text-gray-400">
+                Brand name and browser tab title for admin and employee apps
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-5 space-y-4 max-w-xl">
+          {brandingLoading ? (
+            <p className="text-sm text-gray-400">Loading…</p>
+          ) : (
+            <>
+              <Input
+                label="Application name"
+                name="application_name"
+                value={applicationName}
+                onChange={(e) => setApplicationName(e.target.value)}
+                error={errors.application_name}
+                helpText="Shown in the admin sidebar and employee navigation"
+                required
+                maxLength={100}
+              />
+              <Input
+                label="Meta title"
+                name="meta_title"
+                value={metaTitle}
+                onChange={(e) => setMetaTitle(e.target.value)}
+                error={errors.meta_title}
+                helpText="Browser tab title (unread chat counts are prefixed automatically)"
+                required
+                maxLength={100}
+              />
+            </>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+          <Button type="submit" disabled={brandingLoading || saving}>
+            {saving ? 'Saving…' : 'Save changes'}
+          </Button>
+        </div>
+      </form>
 
       {/* Active Directory Cache */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -70,6 +190,7 @@ export default function SettingsPage() {
           </div>
 
           <button
+            type="button"
             onClick={handleClearCache}
             disabled={clearing}
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

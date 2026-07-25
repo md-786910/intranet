@@ -2,6 +2,7 @@ import React, { useContext, useMemo, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { PermissionContext } from '../../contexts/PermissionContext';
 import { useAuth } from '../../hooks/useAuth';
+import { useAppBranding } from '../../contexts/AppBrandingContext';
 
 const SCOPE_RANK = { DEPARTMENT: 4, VERTICAL: 3, OFFICE_LOCATION: 2, COMPANY: 2, ORGANISATION: 1, GROUP: 1 };
 
@@ -197,6 +198,7 @@ function MenuGroup({ group }) {
 
 export default function Sidebar() {
   const { user, logout, isOwner, roleAssignments } = useAuth();
+  const { applicationName } = useAppBranding();
 
   const roleLabel = useMemo(() => {
     if (isOwner) return 'Owner';
@@ -213,7 +215,9 @@ export default function Sidebar() {
   return (
     <aside className="w-64 bg-white border-r border-gray-200 h-full flex flex-col">
       <div className="px-4 pt-5 pb-4 flex-shrink-0">
-        <h1 className="text-xl font-semibold tracking-tight text-primary-800">BrightNow</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-primary-800 truncate" title={applicationName}>
+          {applicationName}
+        </h1>
         <p className="text-xs font-bold text-primary-700 mt-1">{roleLabel}</p>
       </div>
 

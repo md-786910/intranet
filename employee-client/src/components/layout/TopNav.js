@@ -6,6 +6,7 @@ import SearchModal from "../search/SearchModal";
 import { useAuth } from "../../hooks/useAuth";
 import { useNotifications } from "../../hooks/useNotifications";
 import { useChatUnread } from "../../contexts/ChatUnreadContext";
+import { useAppBranding } from "../../contexts/AppBrandingContext";
 import { deeplinkFor } from "../../utils/notificationDeeplink";
 import { plainTextFromHtml } from "../common/RichTextView";
 import { formatRelative } from "../../theme/dateFormat";
@@ -105,6 +106,7 @@ export default function TopNav() {
     return () => document.removeEventListener("mousedown", onClick);
   }, [open, notificationsOpen]);
 
+  const { applicationName } = useAppBranding();
   const fullName = user
     ? [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email
     : "";
@@ -115,9 +117,10 @@ export default function TopNav() {
         <div className="flex items-center gap-6 lg:gap-12 min-w-0">
           <NavLink
             to="/home"
-            className="text-xl font-bold tracking-tight text-zinc-900 shrink-0"
+            className="text-xl font-bold tracking-tight text-zinc-900 shrink-0 truncate max-w-[12rem]"
+            title={applicationName}
           >
-            BrightNOW
+            {applicationName}
           </NavLink>
           <nav className="hidden md:flex gap-6 lg:gap-8 items-center h-full">
             {NAV_ITEMS.map((item) => (

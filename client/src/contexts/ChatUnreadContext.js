@@ -9,22 +9,26 @@ import React, {
 } from 'react';
 import { useSocket } from './SocketContext';
 import { useAuth } from '../hooks/useAuth';
+import { useAppBranding } from './AppBrandingContext';
 import { chatService } from '../services/chatService';
 
 const ChatUnreadContext = createContext(null);
 
-const BASE_TITLE = 'BrightNOW Admin';
+const FALLBACK_TITLE = 'BrightNOW Admin';
 
-function formatTitle(total) {
-  if (!total || total <= 0) return BASE_TITLE;
+function formatTitle(total, baseTitle) {
+  const base = baseTitle || FALLBACK_TITLE;
+  if (!total || total <= 0) return base;
   const n = total > 99 ? '99+' : String(total);
-  return `(${n}) ${BASE_TITLE}`;
+  return `(${n}) ${base}`;
 }
 
 export function ChatUnreadProvider({ children }) {
   const { socket } = useSocket();
   const { user } = useAuth();
+  const { metaTitle } = useAppBranding();
   const myUserId = user?.user_id != null ? Number(user.user_id) : null;
+  const baseTitle = metaTitle || FALLBACK_TITLE;
 
   const [totalUnread, setTotalUnread] = useState(0);
   const activeIdRef = useRef(null);
@@ -52,11 +56,11 @@ export function ChatUnreadProvider({ children }) {
   }, [refresh]);
 
   useEffect(() => {
-    document.title = formatTitle(totalUnread);
+    document.title = formatTitle(totalUnread, baseTitle);
     return () => {
-      document.title = BASE_TITLE;
+      document.title = baseTitle;
     };
-  }, [totalUnread]);
+  }, [totalUnread, baseTitle]);
 
   useEffect(() => {
     if (!socket || myUserId == null) return undefined;

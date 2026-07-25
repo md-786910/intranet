@@ -15,6 +15,7 @@ import InvitationAcceptPage from './pages/auth/InvitationAcceptPage';
 import HomePage from './pages/home/HomePage';
 import { ContentRefreshProvider } from './contexts/ContentRefreshContext';
 import { ChatUnreadProvider } from './contexts/ChatUnreadContext';
+import { AppBrandingProvider } from './contexts/AppBrandingContext';
 import NewsListPage from './pages/news/NewsListPage';
 import NewsDetailPage from './pages/news/NewsDetailPage';
 import AnnouncementsListPage from './pages/announcements/AnnouncementsListPage';
@@ -53,13 +54,15 @@ export default function App() {
             <Route
               element={
                 <ProtectedRoute>
-                  <SocketProvider>
-                    <ChatUnreadProvider>
-                      <ContentRefreshProvider>
-                        <EmployeeLayout />
-                      </ContentRefreshProvider>
-                    </ChatUnreadProvider>
-                  </SocketProvider>
+                  <AppBrandingProvider>
+                    <SocketProvider>
+                      <ChatUnreadProvider>
+                        <ContentRefreshProvider>
+                          <EmployeeLayout />
+                        </ContentRefreshProvider>
+                      </ChatUnreadProvider>
+                    </SocketProvider>
+                  </AppBrandingProvider>
                 </ProtectedRoute>
               }
             >

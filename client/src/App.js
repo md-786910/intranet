@@ -12,6 +12,7 @@ import { useAuth } from './hooks/useAuth';
 import AdminLayout from './components/layout/AdminLayout';
 import { SocketProvider } from './contexts/SocketContext';
 import { ChatUnreadProvider } from './contexts/ChatUnreadContext';
+import { AppBrandingProvider } from './contexts/AppBrandingContext';
 
 // Auth
 import LoginPage from './pages/auth/LoginPage';
@@ -118,11 +119,13 @@ function App() {
               <Route
                 element={
                   <ProtectedRoute>
-                    <SocketProvider>
-                      <ChatUnreadProvider>
-                        <AdminLayout />
-                      </ChatUnreadProvider>
-                    </SocketProvider>
+                    <AppBrandingProvider>
+                      <SocketProvider>
+                        <ChatUnreadProvider>
+                          <AdminLayout />
+                        </ChatUnreadProvider>
+                      </SocketProvider>
+                    </AppBrandingProvider>
                   </ProtectedRoute>
                 }
               >
@@ -186,6 +189,7 @@ function App() {
                 <Route path="/analytics" element={<AnalyticsPage />} />
 
                 {/* Settings */}
+                <Route path="/application-settings" element={<Navigate to="/settings" replace />} />
                 <Route path="/settings" element={<SettingsPage />} />
 
                 {/* Unknown paths inside admin shell */}

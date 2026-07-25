@@ -1,7 +1,9 @@
 import React from 'react';
+import { useAppBranding } from '../../contexts/AppBrandingContext';
 
-// BrightNOW logo: dark rounded-square mark + wordmark
+// App logo: dark rounded-square mark + configurable wordmark
 export default function Logo({ size = 'md', showWordmark = true, className = '' }) {
+  const { applicationName } = useAppBranding();
   const markSize = size === 'lg' ? 'w-10 h-10' : size === 'sm' ? 'w-7 h-7' : 'w-9 h-9';
   const wordSize = size === 'lg' ? 'text-3xl' : size === 'sm' ? 'text-lg' : 'text-2xl';
 
@@ -26,7 +28,7 @@ export default function Logo({ size = 'md', showWordmark = true, className = '' 
       </div>
       {showWordmark && (
         <span className={`font-bold tracking-tight text-gray-900 ${wordSize}`}>
-          Bright<span className="font-black">NOW</span>
+          {applicationName}
         </span>
       )}
     </div>
