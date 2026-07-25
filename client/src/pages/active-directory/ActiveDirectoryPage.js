@@ -312,11 +312,14 @@ export default function ActiveDirectoryPage() {
 
           {importResult && (
             <div className="space-y-3 border-t border-gray-100 pt-4">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h4 className="text-sm font-semibold text-gray-900">
                   {importResult.dry_run ? 'Preview' : 'Result'}
                 </h4>
                 {importResult.dry_run && <Badge variant="default" size="sm">Dry run</Badge>}
+                {(importResult.emails_disabled !== false) && (
+                  <Badge variant="default" size="sm">No emails sent</Badge>
+                )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <StatPill label="In Entra" value={importResult.total_graph || 0} />

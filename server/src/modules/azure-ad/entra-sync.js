@@ -12,8 +12,12 @@
  * - department_display always stored from Entra string
  * - manager → reports_to_user_id (azure id, then email)
  * - No null wipes of existing local fields when Graph is empty
- * - New users: admin temp password or auto-generated; must_change_password; never emails
+ * - New users: admin temp password or auto-generated; must_change_password
+ * - Email is always disabled for this sync (welcome / invite never sent)
  */
+
+/** Hard-coded: Entra sync must never trigger invitation or welcome emails. */
+const ENTRA_SYNC_SKIP_EMAIL = true;
 
 const crypto = require('crypto');
 const logger = require('../../config/logger');
@@ -313,6 +317,7 @@ async function syncUsersFromEntra({
 
   const summary = {
     dry_run: Boolean(dryRun),
+    emails_disabled: ENTRA_SYNC_SKIP_EMAIL,
     total_graph: graphUsers.length,
     created: 0,
     updated: 0,
@@ -539,7 +544,9 @@ async function syncUsersFromEntra({
           department_ids: [scopeNodeId],
           primary_department_id: scopeNodeId,
           profile,
-          skip_email: true,
+          // Never send welcome/invite mail from Entra sync (password shown to admin instead).
+          skip_email: ENTRA_SYNC_SKIP_EMAIL,
+          source: 'ENTRA_SYNC',
           must_change_password: true,
         }, actorUserId);
 

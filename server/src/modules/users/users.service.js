@@ -969,7 +969,9 @@ const usersService = {
 
       await transaction.commit();
 
-      if (!data.skip_email) {
+      // Entra sync and other callers set skip_email / source=ENTRA_SYNC — never mail those users.
+      const emailDisabled = Boolean(data.skip_email) || data.source === 'ENTRA_SYNC';
+      if (!emailDisabled) {
         if (isInviteFlow) {
           const inviter = actorUserId
             ? await UserAccount.findByPk(actorUserId, { attributes: ['first_name', 'last_name'] })

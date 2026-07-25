@@ -130,6 +130,7 @@ const syncUsers = catchAsync(async (req, res) => {
     resource_type: 'AzureAd',
     details: {
       dry_run: Boolean(dry_run),
+      emails_disabled: true,
       total_graph: result.total_graph || 0,
       created: result.created || 0,
       updated: result.updated || 0,
