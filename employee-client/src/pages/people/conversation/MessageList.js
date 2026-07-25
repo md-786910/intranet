@@ -54,6 +54,7 @@ export default function MessageList({
   hasMore,
   onLoadMore,
   typingUserId,
+  onEditMessage,
 }) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
@@ -158,6 +159,7 @@ export default function MessageList({
               contact={contact}
               myInitials={myInitials}
               myUserId={myUserId}
+              onEditMessage={onEditMessage}
             />
           );
         })

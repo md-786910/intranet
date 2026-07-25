@@ -44,6 +44,7 @@ export default function MessageList({
   contactInitials,
   contactAvatar,
   conversationKey,
+  onEditMessage,
 }) {
   const containerRef = useRef(null);
   const prevScrollHeight = useRef(0);
@@ -133,6 +134,7 @@ export default function MessageList({
               myInitials={myInitials}
               contactInitials={contactInitials}
               contactAvatar={contactAvatar}
+              onEditMessage={onEditMessage}
             />
           );
         })

@@ -11,6 +11,7 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 import { useAuth } from './hooks/useAuth';
 import AdminLayout from './components/layout/AdminLayout';
 import { SocketProvider } from './contexts/SocketContext';
+import { ChatUnreadProvider } from './contexts/ChatUnreadContext';
 
 // Auth
 import LoginPage from './pages/auth/LoginPage';
@@ -108,7 +109,9 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <SocketProvider>
-                      <AdminLayout />
+                      <ChatUnreadProvider>
+                        <AdminLayout />
+                      </ChatUnreadProvider>
                     </SocketProvider>
                   </ProtectedRoute>
                 }

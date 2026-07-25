@@ -22,6 +22,15 @@ const markAsReadSchema = {
   }),
 };
 
+const editMessageSchema = {
+  params: Joi.object({
+    messageId: Joi.number().integer().positive().required(),
+  }),
+  body: Joi.object({
+    content: Joi.string().trim().min(1).max(5000).required(),
+  }),
+};
+
 const getContactsSchema = {
   query: Joi.object({
     search: Joi.string().trim().max(100).optional().allow(''),
@@ -33,5 +42,6 @@ module.exports = {
   createConversationSchema,
   getMessagesSchema,
   markAsReadSchema,
+  editMessageSchema,
   getContactsSchema,
 };

@@ -22,6 +22,10 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 'TEXT',
     },
+    edited_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
     deleted_at: {
       type: DataTypes.DATE,
       allowNull: true,

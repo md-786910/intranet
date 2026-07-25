@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AttachmentChip from './AttachmentChip';
+
+const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function formatMessageTime(dateStr) {
   if (!dateStr) return '';
@@ -15,12 +17,39 @@ function getInitials(firstName, lastName) {
   return `${f}${l}` || '?';
 }
 
-export default function MessageBubble({ message, contact, myInitials = 'JD', myUserId }) {
+export function canEditMessage(message, myUserId) {
+  if (!message || myUserId == null) return false;
+  if (Number(message.senderId) !== Number(myUserId)) return false;
+  if (message.messageType && message.messageType !== 'TEXT') return false;
+  const content = message.content || '';
+  if (content.startsWith('[IMAGE:') || content.startsWith('[FILE:')) return false;
+  const created = new Date(message.createdAt).getTime();
+  if (Number.isNaN(created)) return false;
+  return Date.now() - created <= EDIT_WINDOW_MS;
+}
+
+export default function MessageBubble({
+  message,
+  contact,
+  myInitials = 'JD',
+  myUserId,
+  onEditMessage,
+}) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setEditing(false);
+    setDraft(message?.content || '');
+  }, [message?.id, message?.content]);
 
   if (!message) return null;
-  const isMe = message.senderId === myUserId;
+  const isMe = Number(message.senderId) === Number(myUserId);
   const time = formatMessageTime(message.createdAt);
+  const showEdit = isMe && canEditMessage(message, myUserId) && typeof onEditMessage === 'function';
+  const isEdited = Boolean(message.editedAt);
 
   // Attachment-only message
   if (message.attachment && !message.content) {
@@ -78,14 +107,14 @@ export default function MessageBubble({ message, contact, myInitials = 'JD', myU
     if (splitIndex > -1) {
       const fileName = message.content.substring(6, splitIndex);
       const base64Data = message.content.substring(splitIndex + 1);
-      
+
       const parts = fileName.split('.');
       const ext = parts.length > 1 ? parts[parts.length - 1].toUpperCase() : 'FILE';
-      
+
       const attachmentData = {
         name: fileName,
         kind: `${ext} Document`,
-        url: base64Data, // Data URL acts as href
+        url: base64Data,
       };
 
       contentEl = (
@@ -96,7 +125,7 @@ export default function MessageBubble({ message, contact, myInitials = 'JD', myU
     }
   }
 
-  if (!contentEl) {
+  if (!contentEl && !editing) {
     contentEl = (
       <p className={`text-body-sm break-words whitespace-pre-wrap ${isMe ? 'text-white' : 'text-on-surface'}`}>
         {message.content}
@@ -104,17 +133,88 @@ export default function MessageBubble({ message, contact, myInitials = 'JD', myU
     );
   }
 
+  const handleSave = async () => {
+    const next = draft.trim();
+    if (!next || next === message.content) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onEditMessage(message.id, next);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const metaRow = (
+    <div className={`flex items-center gap-2 mt-1 ${isMe ? 'justify-end' : 'justify-end'}`}>
+      {isEdited && (
+        <span className={`text-[10px] ${isMe ? 'text-blue-100' : 'text-outline'}`}>edited</span>
+      )}
+      {time && (
+        <span className={`text-[10px] ${isMe ? 'text-blue-100' : 'text-outline'}`}>{time}</span>
+      )}
+      {showEdit && !editing && (
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(message.content || '');
+            setEditing(true);
+          }}
+          className={`text-[10px] font-semibold underline-offset-2 hover:underline ${
+            isMe ? 'text-blue-50' : 'text-primary'
+          }`}
+        >
+          Edit
+        </button>
+      )}
+    </div>
+  );
+
   if (isMe) {
     return (
-      <div className="flex items-end gap-unit-sm max-w-[80%] self-end flex-row-reverse">
+      <div className="flex items-end gap-unit-sm max-w-[80%] self-end flex-row-reverse group">
         <div className="w-8 h-8 rounded-full bg-primary-container shrink-0 flex items-center justify-center border border-primary/20">
           <span className="text-on-primary-container text-xs font-bold">{myInitials}</span>
         </div>
-        <div className="bg-primary text-white p-unit-md rounded-2xl rounded-br-none shadow-sm">
-          {contentEl}
-          {time && (
-            <span className="text-[10px] text-blue-100 mt-1 block text-right">{time}</span>
+        <div className="bg-primary text-white p-unit-md rounded-2xl rounded-br-none shadow-sm min-w-[8rem]">
+          {editing ? (
+            <div className="space-y-2">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                rows={3}
+                className="w-full rounded-lg border-0 bg-white/15 text-white text-body-sm p-2 resize-none focus:outline-none focus:ring-2 focus:ring-white/40 placeholder:text-blue-100"
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    setDraft(message.content || '');
+                    setEditing(false);
+                  }}
+                  className="text-[11px] font-semibold text-blue-100 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={saving || !draft.trim()}
+                  onClick={handleSave}
+                  className="text-[11px] font-semibold bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded disabled:opacity-50"
+                >
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            contentEl
           )}
+          {metaRow}
         </div>
       </div>
     );
@@ -141,9 +241,7 @@ export default function MessageBubble({ message, contact, myInitials = 'JD', myU
       )}
       <div className="bg-white border border-outline-variant p-unit-md rounded-2xl rounded-bl-none shadow-sm">
         {contentEl}
-        {time && (
-          <span className="text-[10px] text-outline mt-1 block text-right">{time}</span>
-        )}
+        {metaRow}
       </div>
     </div>
   );

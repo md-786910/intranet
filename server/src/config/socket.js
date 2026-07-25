@@ -83,6 +83,32 @@ const initSocketIO = (httpServer) => {
       }
     });
 
+    // ── Edit message (own TEXT, within 24h) ──
+    socket.on('chat:edit', async (data, ack) => {
+      try {
+        const { messageId, content } = data || {};
+        if (!messageId || !content?.trim()) {
+          return typeof ack === 'function' && ack({ error: 'messageId and content are required' });
+        }
+
+        const chatService = require('../modules/chat/chat.service');
+        const message = await chatService.editMessage(messageId, userId, content.trim());
+
+        const participants = await chatService.getConversationParticipantIds(message.conversationId);
+        participants.forEach((participantId) => {
+          io.to(`user:${participantId}`).emit('chat:edited', {
+            conversationId: message.conversationId,
+            message,
+          });
+        });
+
+        if (typeof ack === 'function') ack({ success: true, message });
+      } catch (error) {
+        logger.error(`chat:edit error (user ${userId}):`, error.message);
+        if (typeof ack === 'function') ack({ error: error.message || 'Failed to edit message' });
+      }
+    });
+
     // ── Typing indicator ──
     socket.on('chat:typing', (data) => {
       try {

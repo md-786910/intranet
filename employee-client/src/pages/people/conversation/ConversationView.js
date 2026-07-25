@@ -3,6 +3,7 @@ import ChatHeader from './ChatHeader';
 import MessageList from './MessageList';
 import ChatComposer from './ChatComposer';
 import { useSocket } from '../../../contexts/SocketContext';
+import { useChatUnread } from '../../../contexts/ChatUnreadContext';
 import { chatService } from '../../../services/chatService';
 
 export default function ConversationView({
@@ -14,6 +15,7 @@ export default function ConversationView({
   className = '',
 }) {
   const { socket } = useSocket();
+  const { markConversationRead } = useChatUnread();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -49,11 +51,12 @@ export default function ConversationView({
 
     // Mark as read
     chatService.markAsRead(conversation.id).catch(() => {});
+    markConversationRead(conversation.id);
 
     return () => {
       cancelled = true;
     };
-  }, [conversation?.id]);
+  }, [conversation?.id, markConversationRead]);
 
   // Join conversation room for typing indicators
   useEffect(() => {
@@ -87,6 +90,7 @@ export default function ConversationView({
       });
       // Mark as read since we're viewing this conversation
       chatService.markAsRead(conversation.id).catch(() => {});
+      markConversationRead(conversation.id);
       socket.emit('chat:read', { conversationId: conversation.id });
     };
 
@@ -106,17 +110,26 @@ export default function ConversationView({
       // Could update read receipts UI here
     };
 
+    const handleEdited = ({ conversationId, message }) => {
+      if (String(conversationId) !== String(conversation.id) || !message) return;
+      setMessages((prev) =>
+        prev.map((m) => (m.id === message.id ? { ...m, ...message } : m)),
+      );
+    };
+
     socket.on('chat:receive', handleReceive);
     socket.on('chat:typing', handleTyping);
     socket.on('chat:read', handleRead);
+    socket.on('chat:edited', handleEdited);
 
     return () => {
       socket.off('chat:receive', handleReceive);
       socket.off('chat:typing', handleTyping);
       socket.off('chat:read', handleRead);
+      socket.off('chat:edited', handleEdited);
       clearTimeout(typingTimeout.current);
     };
-  }, [socket, conversation?.id, myUserId]);
+  }, [socket, conversation?.id, myUserId, markConversationRead]);
 
   // Load more messages (pagination)
   const handleLoadMore = useCallback(async () => {
@@ -162,6 +175,31 @@ export default function ConversationView({
     [socket, conversation?.id],
   );
 
+  const handleEditMessage = useCallback(
+    (messageId, content) =>
+      new Promise((resolve, reject) => {
+        if (!socket) {
+          reject(new Error('Not connected'));
+          return;
+        }
+        socket.emit('chat:edit', { messageId, content }, (response) => {
+          if (response?.error) {
+            reject(new Error(response.error));
+            return;
+          }
+          if (response?.message) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === response.message.id ? { ...m, ...response.message } : m,
+              ),
+            );
+          }
+          resolve(response?.message);
+        });
+      }),
+    [socket],
+  );
+
   // Typing indicator
   const handleTyping = useCallback(
     (isTyping) => {
@@ -190,6 +228,7 @@ export default function ConversationView({
         hasMore={hasMore}
         onLoadMore={handleLoadMore}
         typingUserId={typingUserId}
+        onEditMessage={handleEditMessage}
       />
       <ChatComposer onSend={handleSend} onTyping={handleTyping} />
     </section>

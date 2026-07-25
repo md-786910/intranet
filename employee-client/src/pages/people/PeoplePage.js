@@ -4,11 +4,19 @@ import MessagesSidebar from './sidebar/MessagesSidebar';
 import ConversationView from './conversation/ConversationView';
 import { useAuth } from '../../hooks/useAuth';
 import { useSocket } from '../../contexts/SocketContext';
+import { useChatUnread } from '../../contexts/ChatUnreadContext';
 import { chatService } from '../../services/chatService';
 
 export default function PeoplePage() {
   const { user } = useAuth();
   const { socket, onlineUsers } = useSocket();
+  const {
+    perConvo,
+    getUnreadFor,
+    setActiveConversationId,
+    markConversationRead,
+    syncFromConversations,
+  } = useChatUnread();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [conversations, setConversations] = useState([]);
@@ -19,12 +27,23 @@ export default function PeoplePage() {
   // Mobile: when true, show conversation pane (hide sidebar)
   const [mobileShowConversation, setMobileShowConversation] = useState(false);
 
+  const myUserId = user?.user_id != null ? Number(user.user_id) : null;
+
   const myInitials = useMemo(() => {
     const f = user?.first_name?.[0] || '';
     const l = user?.last_name?.[0] || '';
     const ji = (f + l).toUpperCase();
     return ji || (user?.email?.[0] || 'U').toUpperCase();
   }, [user]);
+
+  const displayConversations = useMemo(
+    () =>
+      conversations.map((c) => ({
+        ...c,
+        unreadCount: getUnreadFor(c.id),
+      })),
+    [conversations, getUnreadFor, perConvo],
+  );
 
   // Load conversations on mount
   useEffect(() => {
@@ -36,6 +55,7 @@ export default function PeoplePage() {
         if (cancelled) return;
         const data = res.data?.data || [];
         setConversations(data);
+        syncFromConversations(data);
         // Auto-select first conversation if none selected
         if (data.length > 0 && !selectedId) {
           setSelectedId(data[0].id);
@@ -52,6 +72,12 @@ export default function PeoplePage() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep provider aware of which conversation is open
+  useEffect(() => {
+    setActiveConversationId(selectedId);
+    return () => setActiveConversationId(null);
+  }, [selectedId, setActiveConversationId]);
 
   // Handle ?userId= query param from Home page "Chat" button
   useEffect(() => {
@@ -93,15 +119,16 @@ export default function PeoplePage() {
       });
   }, [searchParams, loading, conversations, setSearchParams]);
 
-  // Listen for incoming messages via socket
+  // Listen for incoming messages via socket (preview only — unread owned by provider)
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) return undefined;
 
     const handleReceive = ({ conversationId, message }) => {
+      if (!message) return;
+
       setConversations((prev) => {
         const exists = prev.find((c) => c.id === conversationId);
         if (exists) {
-          // Update existing conversation's last message
           return prev
             .map((c) => {
               if (c.id !== conversationId) return c;
@@ -114,10 +141,6 @@ export default function PeoplePage() {
                   createdAt: message.createdAt,
                 },
                 updatedAt: message.createdAt,
-                unreadCount:
-                  conversationId === selectedId
-                    ? c.unreadCount
-                    : (c.unreadCount || 0) + 1,
               };
             })
             .sort((a, b) => {
@@ -129,25 +152,44 @@ export default function PeoplePage() {
         }
         // New conversation — reload the list
         chatService.getConversations().then((res) => {
-          setConversations(res.data?.data || []);
+          const data = res.data?.data || [];
+          setConversations(data);
+          syncFromConversations(data);
         });
         return prev;
       });
     };
 
+    const handleEdited = ({ conversationId, message }) => {
+      if (!message) return;
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== conversationId) return c;
+          if (c.lastMessage?.id !== message.id) return c;
+          return {
+            ...c,
+            lastMessage: {
+              ...c.lastMessage,
+              content: message.content,
+            },
+          };
+        }),
+      );
+    };
+
     socket.on('chat:receive', handleReceive);
-    return () => socket.off('chat:receive', handleReceive);
-  }, [socket, selectedId]);
+    socket.on('chat:edited', handleEdited);
+    return () => {
+      socket.off('chat:receive', handleReceive);
+      socket.off('chat:edited', handleEdited);
+    };
+  }, [socket, syncFromConversations]);
 
   const handleSelect = useCallback((id) => {
     setSelectedId(id);
     setMobileShowConversation(true);
-
-    // Mark as read
-    setConversations((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c)),
-    );
-  }, []);
+    markConversationRead(id);
+  }, [markConversationRead]);
 
   const handleNewConversation = useCallback((conv) => {
     setConversations((prev) => {
@@ -158,12 +200,12 @@ export default function PeoplePage() {
     setMobileShowConversation(true);
   }, []);
 
-  const selected = conversations.find((c) => c.id === selectedId) || null;
+  const selected = displayConversations.find((c) => c.id === selectedId) || null;
 
   return (
     <main className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-unit-lg flex gap-gutter overflow-hidden h-[calc(100vh-11rem)]">
       <MessagesSidebar
-        conversations={conversations}
+        conversations={displayConversations}
         selectedId={selectedId}
         onSelect={handleSelect}
         onNewConversation={handleNewConversation}
@@ -176,7 +218,7 @@ export default function PeoplePage() {
         <ConversationView
           conversation={selected}
           myInitials={myInitials}
-          myUserId={user?.user_id}
+          myUserId={myUserId ?? user?.user_id}
           onlineUsers={onlineUsers}
           onBack={() => setMobileShowConversation(false)}
           className={`${mobileShowConversation ? 'flex' : 'hidden lg:flex'} flex-grow`}

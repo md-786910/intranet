@@ -5,6 +5,7 @@ import Avatar from "../common/Avatar";
 import SearchModal from "../search/SearchModal";
 import { useAuth } from "../../hooks/useAuth";
 import { useNotifications } from "../../hooks/useNotifications";
+import { useChatUnread } from "../../contexts/ChatUnreadContext";
 import { deeplinkFor } from "../../utils/notificationDeeplink";
 import { formatRelative } from "../../theme/dateFormat";
 
@@ -80,6 +81,7 @@ export default function TopNav() {
     markAllRead,
     refresh: refreshNotifications,
   } = useNotifications();
+  const { totalUnread: chatUnread } = useChatUnread();
 
   const onNotificationClick = (notification) => {
     setNotificationsOpen(false);
@@ -124,7 +126,14 @@ export default function TopNav() {
                 end={item.to === "/home"}
                 className={({ isActive }) => (isActive ? ACTIVE : INACTIVE)}
               >
-                {item.label}
+                <span className="inline-flex items-center gap-1.5">
+                  {item.label}
+                  {item.to === "/people" && chatUnread > 0 && (
+                    <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary text-white text-[10px] font-bold leading-5 text-center">
+                      {chatUnread > 9 ? "9+" : chatUnread}
+                    </span>
+                  )}
+                </span>
               </NavLink>
             ))}
           </nav>

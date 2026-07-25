@@ -9,6 +9,9 @@ router.use(authenticate);
 // Get all conversations for the logged-in user
 router.get('/conversations', controller.getConversations);
 
+// Aggregate unread count (for tab title / nav badges)
+router.get('/unread-total', controller.getUnreadTotal);
+
 // Create or get a conversation with another user
 router.post(
   '/conversations',
@@ -28,6 +31,13 @@ router.post(
   '/conversations/:id/read',
   validate(schemas.markAsReadSchema),
   controller.markAsRead,
+);
+
+// Edit a message (own TEXT messages within 24h)
+router.patch(
+  '/messages/:messageId',
+  validate(schemas.editMessageSchema),
+  controller.editMessage,
 );
 
 // Get contacts from user's vertical (for starting new chats)

@@ -2,6 +2,27 @@ const { Op, fn, col, literal } = require('sequelize');
 const ApiError = require('../../utils/ApiError');
 const { parsePagination, buildPagination } = require('../../utils/pagination');
 
+/** Own text messages may be edited within this window after send. */
+const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function serializeMessage(message, sender) {
+  return {
+    id: message.id,
+    conversationId: message.conversation_id,
+    senderId: message.sender_id,
+    content: message.content,
+    messageType: message.message_type,
+    createdAt: message.createdAt,
+    editedAt: message.edited_at || message.editedAt || null,
+    sender: sender ? {
+      userId: sender.user_id || sender.userId,
+      firstName: sender.first_name || sender.firstName,
+      lastName: sender.last_name || sender.lastName,
+      avatarUrl: sender.avatar_url || sender.avatarUrl || null,
+    } : null,
+  };
+}
+
 const chatService = {
   /**
    * Get or create a 1:1 conversation between two users.
@@ -112,20 +133,69 @@ const chatService = {
       attributes: ['user_id', 'first_name', 'last_name', 'avatar_url'],
     });
 
-    return {
-      id: message.id,
-      conversationId: message.conversation_id,
-      senderId: message.sender_id,
-      content: message.content,
-      messageType: message.message_type,
-      createdAt: message.createdAt,
-      sender: sender ? {
-        userId: sender.user_id,
-        firstName: sender.first_name,
-        lastName: sender.last_name,
-        avatarUrl: sender.avatar_url,
-      } : null,
-    };
+    return serializeMessage(message, sender);
+  },
+
+  /**
+   * Edit own TEXT message within 24 hours of creation.
+   */
+  async editMessage(messageId, userId, content) {
+    const { ChatMessage, ConversationParticipant, UserAccount } = require('../../database/models');
+
+    const trimmed = String(content || '').trim();
+    if (!trimmed) throw ApiError.badRequest('Content is required');
+    if (trimmed.length > 5000) throw ApiError.badRequest('Message is too long');
+
+    const message = await ChatMessage.findByPk(messageId);
+    if (!message) throw ApiError.notFound('Message not found');
+    if (Number(message.sender_id) !== Number(userId)) {
+      throw ApiError.forbidden('You can only edit your own messages');
+    }
+    if (message.message_type !== 'TEXT') {
+      throw ApiError.badRequest('Only text messages can be edited');
+    }
+
+    const createdAt = new Date(message.createdAt).getTime();
+    if (Number.isNaN(createdAt) || Date.now() - createdAt > EDIT_WINDOW_MS) {
+      throw ApiError.badRequest('Messages can only be edited within 24 hours');
+    }
+
+    const participant = await ConversationParticipant.findOne({
+      where: { conversation_id: message.conversation_id, user_id: userId },
+    });
+    if (!participant) throw ApiError.forbidden('You are not a participant of this conversation');
+
+    const now = new Date();
+    await message.update({ content: trimmed, edited_at: now });
+
+    const sender = await UserAccount.findByPk(userId, {
+      attributes: ['user_id', 'first_name', 'last_name', 'avatar_url'],
+    });
+
+    return serializeMessage(message, sender);
+  },
+
+  /**
+   * Total unread chat messages across all conversations for a user.
+   */
+  async getUnreadTotal(userId) {
+    const { sequelize } = require('../../database/models');
+    const rows = await sequelize.query(
+      `
+      SELECT COUNT(*)::int AS total
+      FROM chat_message m
+      INNER JOIN conversation_participant cp
+        ON cp.conversation_id = m.conversation_id
+       AND cp.user_id = :userId
+      WHERE m.sender_id <> :userId
+        AND (cp.last_read_at IS NULL OR m.created_at > cp.last_read_at)
+      `,
+      {
+        replacements: { userId },
+        type: sequelize.QueryTypes.SELECT,
+      },
+    );
+    return { total: Number(rows[0]?.total) || 0 };
   },
 
   /**
@@ -256,20 +326,7 @@ const chatService = {
       offset,
     });
 
-    const messages = rows.map((m) => ({
-      id: m.id,
-      conversationId: m.conversation_id,
-      senderId: m.sender_id,
-      content: m.content,
-      messageType: m.message_type,
-      createdAt: m.createdAt,
-      sender: m.sender ? {
-        userId: m.sender.user_id,
-        firstName: m.sender.first_name,
-        lastName: m.sender.last_name,
-        avatarUrl: m.sender.avatar_url,
-      } : null,
-    }));
+    const messages = rows.map((m) => serializeMessage(m, m.sender));
 
     return {
       messages: messages.reverse(), // Return in chronological order

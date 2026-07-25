@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useSocket } from '../../contexts/SocketContext';
+import { useChatUnread } from '../../contexts/ChatUnreadContext';
 import { chatService } from '../../services/chatService';
 import MessageList from './MessageList';
 import ChatComposer from './ChatComposer';
@@ -32,6 +33,7 @@ export default function ChatDrawer({
 }) {
   const { user } = useAuth();
   const { socket, isConnected, onlineUsers } = useSocket();
+  const { setActiveConversationId, markConversationRead } = useChatUnread();
   const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loadingConv, setLoadingConv] = useState(false);
@@ -106,6 +108,8 @@ export default function ChatDrawer({
           setHasMore(Boolean(data?.pagination?.hasNextPage));
           setPage(1);
           chatService.markAsRead(conv.id).catch(() => {});
+          setActiveConversationId(conv.id);
+          markConversationRead(conv.id);
         });
       })
       .catch((err) => {
@@ -123,14 +127,23 @@ export default function ChatDrawer({
 
     return () => {
       cancelled = true;
+      setActiveConversationId(null);
     };
-  }, [open, userId]);
+  }, [open, userId, setActiveConversationId, markConversationRead]);
+
+  // Clear active conversation when drawer closes
+  useEffect(() => {
+    if (!open) {
+      setActiveConversationId(null);
+    }
+  }, [open, setActiveConversationId]);
 
   // Join room + listeners
   useEffect(() => {
     if (!open || !socket || !conversation?.id) return undefined;
 
     socket.emit('chat:join', { conversationId: conversation.id });
+    setActiveConversationId(conversation.id);
 
     const handleReceive = ({ conversationId, message }) => {
       if (String(conversationId) !== String(conversation.id)) return;
@@ -139,6 +152,7 @@ export default function ChatDrawer({
         return [...prev, message];
       });
       chatService.markAsRead(conversation.id).catch(() => {});
+      markConversationRead(conversation.id);
       socket.emit('chat:read', { conversationId: conversation.id });
     };
 
@@ -154,17 +168,26 @@ export default function ChatDrawer({
       }
     };
 
+    const handleEdited = ({ conversationId, message }) => {
+      if (String(conversationId) !== String(conversation.id) || !message) return;
+      setMessages((prev) =>
+        prev.map((m) => (m.id === message.id ? { ...m, ...message } : m)),
+      );
+    };
+
     socket.on('chat:receive', handleReceive);
     socket.on('chat:typing', handleTyping);
+    socket.on('chat:edited', handleEdited);
 
     return () => {
       socket.emit('chat:leave', { conversationId: conversation.id });
       socket.off('chat:receive', handleReceive);
       socket.off('chat:typing', handleTyping);
+      socket.off('chat:edited', handleEdited);
       clearTimeout(typingTimeout.current);
       setTyping(false);
     };
-  }, [open, socket, conversation?.id, myUserId]);
+  }, [open, socket, conversation?.id, myUserId, setActiveConversationId, markConversationRead]);
 
   const handleLoadMore = useCallback(async () => {
     if (!conversation?.id || loadingMsgs || !hasMore) return;
@@ -197,6 +220,31 @@ export default function ChatDrawer({
       );
     },
     [socket, conversation?.id, isConnected],
+  );
+
+  const handleEditMessage = useCallback(
+    (messageId, content) =>
+      new Promise((resolve, reject) => {
+        if (!socket || !isConnected) {
+          reject(new Error('Not connected'));
+          return;
+        }
+        socket.emit('chat:edit', { messageId, content }, (response) => {
+          if (response?.error) {
+            reject(new Error(response.error));
+            return;
+          }
+          if (response?.message) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === response.message.id ? { ...m, ...response.message } : m,
+              ),
+            );
+          }
+          resolve(response?.message);
+        });
+      }),
+    [socket, isConnected],
   );
 
   const handleTyping = useCallback(
@@ -285,6 +333,7 @@ export default function ChatDrawer({
               contactInitials={contactInitials}
               contactAvatar={contactAvatar}
               conversationKey={conversation?.id}
+              onEditMessage={handleEditMessage}
             />
             <ChatComposer
               onSend={handleSend}
