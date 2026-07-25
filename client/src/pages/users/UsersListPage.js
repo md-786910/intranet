@@ -15,6 +15,7 @@ import { useOrgTree } from "../../hooks/useOrgTree";
 import { formatDate } from "../../utils/formatters";
 import { useCurrentOrganisation } from "../../hooks/useCurrentOrganisation";
 import { findScopePath } from "../../utils/scopeLabel";
+import { getUserFacingMessage } from "../../utils/errorUtils";
 
 const AVATAR_COLORS = [
   "bg-indigo-600", "bg-violet-600", "bg-sky-600", "bg-teal-600",
@@ -269,7 +270,7 @@ export default function UsersListPage() {
       const res = await userService.getUsers(params);
       setData(res.data?.data || { users: [], pagination: {} });
     } catch (err) {
-      addToast("Failed to load users", "error");
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, "Failed to load users"), "error");
     } finally {
       setLoading(false);
     }

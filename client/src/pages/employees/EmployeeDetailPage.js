@@ -9,6 +9,8 @@ import { employeeService } from '../../services/employeeService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
 import ChatDrawer from '../../components/chat/ChatDrawer';
+import NotFoundState from '../../components/common/NotFoundState';
+import { getErrorMessage, getUserFacingMessage, isNotFoundError } from '../../utils/errorUtils';
 
 function mediaUrl(path) {
   if (!path) return null;
@@ -36,6 +38,8 @@ export default function EmployeeDetailPage() {
   const { addToast } = useToast();
   const [employee, setEmployee] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [resending, setResending] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -43,9 +47,19 @@ export default function EmployeeDetailPage() {
 
   const fetchEmployee = useCallback(() => {
     setLoading(true);
+    setNotFound(false);
+    setLoadError(false);
     employeeService.getEmployee(id)
       .then((res) => setEmployee(res.data?.data))
-      .catch(() => addToast('Failed to load employee', 'error'))
+      .catch((err) => {
+        setEmployee(null);
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          return;
+        }
+        setLoadError(true);
+        if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load employee'), 'error');
+      })
       .finally(() => setLoading(false));
   }, [id, addToast]);
 
@@ -58,7 +72,7 @@ export default function EmployeeDetailPage() {
       addToast('Invitation resent', 'success');
       fetchEmployee();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to resend invitation', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to resend invitation'), 'error');
     } finally {
       setResending(false);
     }
@@ -71,7 +85,7 @@ export default function EmployeeDetailPage() {
       addToast('Employee removed', 'success');
       navigate('/employees');
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to remove employee', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to remove employee'), 'error');
     } finally {
       setDeleting(false);
       setDeleteOpen(false);
@@ -79,7 +93,28 @@ export default function EmployeeDetailPage() {
   };
 
   if (loading) return <div className="animate-pulse h-96 bg-gray-100 rounded-xl" />;
-  if (!employee) return <div className="text-center py-12 text-gray-500">Employee not found</div>;
+  if (notFound) {
+    return (
+      <NotFoundState
+        pageTitle="Employee"
+        title="Employee not found"
+        description="This employee does not exist or is no longer available."
+        backTo="/employees"
+        backLabel="Back to employees"
+      />
+    );
+  }
+  if (loadError || !employee) {
+    return (
+      <NotFoundState
+        pageTitle="Employee"
+        title="Unable to load employee"
+        description="Something went wrong while loading this employee."
+        backTo="/employees"
+        backLabel="Back to employees"
+      />
+    );
+  }
 
   const displayName = [employee.first_name, employee.last_name].filter(Boolean).join(' ');
   const manager = employee.profile?.manager;

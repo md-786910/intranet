@@ -4,6 +4,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { SocketProvider } from './contexts/SocketContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import NotFoundState from './components/common/NotFoundState';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import EmployeeLayout from './components/layout/EmployeeLayout';
 import LoginPage from './pages/auth/LoginPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
@@ -28,6 +30,7 @@ export default function App() {
     <BrowserRouter>
       <ToastProvider>
         <AuthProvider>
+          <ErrorBoundary homeTo="/home" homeLabel="Back to home">
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -57,10 +60,23 @@ export default function App() {
               <Route path="/directory/:userId" element={<DirectoryProfilePage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/" element={<Navigate to="/home" replace />} />
+              <Route
+                path="*"
+                element={
+                  <NotFoundState
+                    pageTitle="Page"
+                    title="Page not found"
+                    description="This page does not exist or the link is out of date."
+                    backTo="/home"
+                    backLabel="Back to home"
+                  />
+                }
+              />
             </Route>
 
-            <Route path="*" element={<Navigate to="/home" replace />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
+          </ErrorBoundary>
         </AuthProvider>
       </ToastProvider>
     </BrowserRouter>

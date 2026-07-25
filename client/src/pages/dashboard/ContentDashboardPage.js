@@ -8,7 +8,7 @@ import { analyticsService } from '../../services/analyticsService';
 import { usePermission } from '../../hooks/usePermission';
 import { useToast } from '../../hooks/useToast';
 import { formatRelativeTime, truncate } from '../../utils/formatters';
-import { getErrorMessage } from '../../utils/errorUtils';
+import { getErrorMessage, getUserFacingMessage } from '../../utils/errorUtils';
 
 const PERIODS = [
   { key: '7d', label: 'Last 7 days' },
@@ -127,7 +127,7 @@ export default function ContentDashboardPage() {
       const res = await analyticsService.getContentWorkspace({ period, type });
       setData(res.data?.data || null);
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to load content dashboard'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load content dashboard'), 'error');
       setData(null);
     } finally {
       setLoading(false);

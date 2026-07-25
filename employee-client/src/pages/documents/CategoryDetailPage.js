@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import MaterialIcon from '../../components/common/MaterialIcon';
+import NotFoundState from '../../components/common/NotFoundState';
 import Skeleton from '../../components/common/Skeleton';
 import { documentsService } from '../../services/documentsService';
+import { isNotFoundError } from '../../utils/errorUtils';
 import { FiltersProvider, useDocumentsFilters } from './FiltersContext';
 import { DocumentPreviewProvider } from './DocumentPreviewContext';
 import { themeForCategory } from './data';
@@ -91,30 +93,6 @@ function CategoryHero({ category }) {
   );
 }
 
-function NotFound() {
-  return (
-    <main className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-unit-xl bg-background">
-      <Link
-        to="/documents"
-        className="inline-flex items-center gap-1 text-on-surface-variant hover:text-on-background font-body-sm text-body-sm transition-colors"
-      >
-        <MaterialIcon name="arrow_back" className="text-sm" />
-        Resource Library
-      </Link>
-      <div className="mt-unit-xl rounded-2xl border border-dashed border-outline-variant/40 bg-surface-container-lowest p-unit-xl text-center text-on-surface-variant">
-        <MaterialIcon name="folder_off" className="text-outline-variant" style={{ fontSize: 48 }} />
-        <p className="font-h3 text-h3 mt-2 text-on-background">Category not available</p>
-        <p className="font-body-sm text-body-sm mt-1">
-          You don't have access to any documents in this category yet.
-        </p>
-        <Link to="/documents" className="inline-block mt-4 text-primary font-semibold hover:underline">
-          Back to Resource Library
-        </Link>
-      </div>
-    </main>
-  );
-}
-
 function CategoryDetailInner() {
   const { id } = useParams();
   const categoryId = Number(id);
@@ -136,7 +114,7 @@ function CategoryDetailInner() {
       })
       .catch((err) => {
         if (cancelled) return;
-        if (err?.response?.status === 404) setNotFound(true);
+        if (isNotFoundError(err)) setNotFound(true);
       })
       .finally(() => { if (!cancelled) setLoadingCategory(false); });
     return () => { cancelled = true; };
@@ -159,7 +137,17 @@ function CategoryDetailInner() {
     return () => { cancelled = true; };
   }, [categoryId]);
 
-  if (notFound) return <NotFound />;
+  if (notFound) {
+    return (
+      <NotFoundState
+        pageTitle="Documents"
+        title="Category not found"
+        description="This category does not exist or is no longer available."
+        backTo="/documents"
+        backLabel="Back to documents"
+      />
+    );
+  }
 
   return (
     <main className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-unit-xl space-y-unit-xl bg-background">

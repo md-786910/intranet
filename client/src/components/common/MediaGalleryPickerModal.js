@@ -7,6 +7,7 @@ import Pagination from './Pagination';
 import MediaGallery from './MediaGallery';
 import { mediaService } from '../../services/mediaService';
 import { useToast } from '../../hooks/useToast';
+import { getUserFacingMessage } from '../../utils/errorUtils';
 
 const TYPE_FILTERS = [
   { value: '', label: 'All types' },
@@ -59,7 +60,7 @@ export default function MediaGalleryPickerModal({
       const res = await mediaService.list(params);
       setData(res.data?.data || { assets: [], pagination: {} });
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to load media', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load media'), 'error');
     } finally {
       setLoading(false);
     }
@@ -89,7 +90,7 @@ export default function MediaGalleryPickerModal({
         setSelectedIds(mode === 'single' ? [asset.media_asset_id] : (prev) => [...prev, asset.media_asset_id]);
       }
     } catch (err) {
-      addToast(err.response?.data?.message || 'Upload failed', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Upload failed'), 'error');
     } finally {
       setUploading(false);
     }

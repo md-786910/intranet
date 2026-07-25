@@ -16,6 +16,7 @@ import { usePermission } from '../../hooks/usePermission';
 import { useAuth } from '../../hooks/useAuth';
 import { useMultiUpload } from '../../hooks/useMultiUpload';
 import { formatFileSize } from '../../utils/formatters';
+import { getUserFacingMessage } from '../../utils/errorUtils';
 
 const TYPE_FILTERS = [
   { value: '', label: 'All types' },
@@ -64,7 +65,7 @@ export default function MediaGalleryPage() {
       const res = await mediaService.list(params);
       setData(res.data?.data || { assets: [], pagination: {} });
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to load media', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load media'), 'error');
     } finally {
       setLoading(false);
     }
@@ -148,7 +149,7 @@ export default function MediaGalleryPage() {
       setConfirmIds(null);
       fetchAssets();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Delete failed', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Delete failed'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -164,7 +165,7 @@ export default function MediaGalleryPage() {
       setPreviewAsset(null);
       fetchAssets();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Restore failed', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Restore failed'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -181,7 +182,7 @@ export default function MediaGalleryPage() {
       setPurgeIds(null);
       fetchAssets();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Permanent delete failed', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Permanent delete failed'), 'error');
     } finally {
       setActionLoading(false);
     }

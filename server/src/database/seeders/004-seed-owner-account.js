@@ -23,6 +23,55 @@ module.exports = {
       },
     ]);
 
+    // 1b. Mirror migration 065's skeleton: GROUP -> Default Company.
+    // Migration 065 runs before seeders, so a fresh DB has no org rows to
+    // backfill; create the nodes here so /org/tree and Entra sync have a root.
+    const [groupRow] = await queryInterface.sequelize.query(
+      `INSERT INTO org_node
+         (organisation_id, parent_id, node_type, kind, name, code, status,
+          sort_order, legacy_ref, path, created_at, updated_at)
+       VALUES
+         (:orgId, NULL, 'GROUP', 'OPERATIONAL', 'BrightNow', 'BrightNow', 'ACTIVE',
+          0, :legacyRef, NULL, :now, :now)
+       RETURNING id`,
+      {
+        replacements: {
+          orgId: DEFAULT_ORGANISATION_ID,
+          legacyRef: `ORGANISATION:${DEFAULT_ORGANISATION_ID}`,
+          now,
+        },
+        type: Sequelize.QueryTypes.SELECT,
+      },
+    );
+    const groupId = groupRow.id;
+    await queryInterface.sequelize.query(
+      `UPDATE org_node SET path = :path WHERE id = :id`,
+      { replacements: { id: groupId, path: `${groupId}/` } },
+    );
+
+    const [companyRow] = await queryInterface.sequelize.query(
+      `INSERT INTO org_node
+         (organisation_id, parent_id, node_type, kind, name, code, status,
+          sort_order, legacy_ref, path, created_at, updated_at)
+       VALUES
+         (:orgId, :parentId, 'COMPANY', 'OPERATIONAL', 'Default Company', 'DEFAULT', 'ACTIVE',
+          0, NULL, NULL, :now, :now)
+       RETURNING id`,
+      {
+        replacements: {
+          orgId: DEFAULT_ORGANISATION_ID,
+          parentId: groupId,
+          now,
+        },
+        type: Sequelize.QueryTypes.SELECT,
+      },
+    );
+    const companyId = companyRow.id;
+    await queryInterface.sequelize.query(
+      `UPDATE org_node SET path = :path WHERE id = :id`,
+      { replacements: { id: companyId, path: `${groupId}/${companyId}/` } },
+    );
+
     // 2. Create owner user account
     const email = process.env.OWNER_EMAIL || "owner@brightnow.online";
     const password = process.env.OWNER_PASSWORD || "ChangeMe123!";
@@ -71,8 +120,10 @@ module.exports = {
         {
           user_id: userId,
           role_id: ownerRole.role_id,
+          // Keep ORGANISATION for compatibility; scope_id is the GROUP org_node id
+          // (same shape migration 065 produces for remapped org-level scopes).
           scope_type: "ORGANISATION",
-          scope_id: DEFAULT_ORGANISATION_ID,
+          scope_id: groupId,
           assigned_by: null,
           starts_at: null,
           ends_at: null,
@@ -94,6 +145,7 @@ module.exports = {
     await queryInterface.bulkDelete("user_role_assignment", null, {});
     await queryInterface.bulkDelete("person_profile", null, {});
     await queryInterface.bulkDelete("user_account", null, {});
+    await queryInterface.bulkDelete("org_node", null, {});
     await queryInterface.bulkDelete("organisation", null, {});
   },
 };

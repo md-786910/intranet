@@ -10,13 +10,14 @@ const publicApi = axios.create({
 });
 
 export const newsService = {
-  getArticles: (params) => api.get('/news', { params: { ...params, viewer: 1 } }),
-  getArticle: (id) => api.get(`/news/${id}`),
+  // skipGlobalError: pages own EmptyState / NotFoundState for reads
+  getArticles: (params) => api.get('/news', { params: { ...params, viewer: 1 }, skipGlobalError: true }),
+  getArticle: (id) => api.get(`/news/${id}`, { skipGlobalError: true }),
 
   // Engagement
   likeArticle: (id) => api.post(`/news/${id}/like`),
   unlikeArticle: (id) => api.delete(`/news/${id}/like`),
-  listComments: (id, params) => api.get(`/news/${id}/comments`, { params }),
+  listComments: (id, params) => api.get(`/news/${id}/comments`, { params, skipGlobalError: true }),
   addComment: (id, body) => api.post(`/news/${id}/comments`, { body }),
   updateComment: (id, commentId, body) => api.put(`/news/${id}/comments/${commentId}`, { body }),
   deleteComment: (id, commentId) => api.delete(`/news/${id}/comments/${commentId}`),

@@ -5,6 +5,8 @@ import Badge from '../../components/common/Badge';
 import Table from '../../components/common/Table';
 import { azureAdService } from '../../services/azureAdService';
 import { useToast } from '../../hooks/useToast';
+import NotFoundState from '../../components/common/NotFoundState';
+import { getErrorMessage, isNotFoundError } from '../../utils/errorUtils';
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -116,6 +118,8 @@ export default function ActiveDirectoryUserDetailPage() {
 
   const [user, setUser]           = useState(null);
   const [loading, setLoading]     = useState(true);
+  const [notFound, setNotFound]   = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [tab, setTab]             = useState('overview');
 
   // Direct reports (loaded lazily when tab selected)
@@ -130,11 +134,20 @@ export default function ActiveDirectoryUserDetailPage() {
   useEffect(() => {
     setLoading(true);
     setUser(null);
+    setNotFound(false);
+    setLoadError(false);
     setReports(null);
     setOrgPath([]);
     azureAdService.getUser(id)
       .then((res) => setUser(res.data?.data || null))
-      .catch(() => showToast('Failed to load user', 'error'))
+      .catch((err) => {
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          return;
+        }
+        setLoadError(true);
+        showToast(getErrorMessage(err, 'Failed to load user'), 'error');
+      })
       .finally(() => setLoading(false));
   }, [id, showToast]);
 
@@ -191,14 +204,26 @@ export default function ActiveDirectoryUserDetailPage() {
     );
   }
 
-  if (!user) {
+  if (notFound) {
     return (
-      <div className="p-6 text-center text-gray-500">
-        User not found.{' '}
-        <button className="text-primary-600 underline" onClick={() => navigate('/active-directory')}>
-          Back to list
-        </button>
-      </div>
+      <NotFoundState
+        pageTitle="Active Directory"
+        title="User not found"
+        description="This directory user does not exist or is no longer available."
+        backTo="/active-directory"
+        backLabel="Back to Active Directory"
+      />
+    );
+  }
+  if (loadError || !user) {
+    return (
+      <NotFoundState
+        pageTitle="Active Directory"
+        title="Unable to load user"
+        description="Something went wrong while loading this directory user."
+        backTo="/active-directory"
+        backLabel="Back to Active Directory"
+      />
     );
   }
 

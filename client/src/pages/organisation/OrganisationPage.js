@@ -14,6 +14,7 @@ import { ALLOWED_CHILDREN, ADD_CHILD_LABELS, MEMBER } from '../../utils/constant
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
 import { usePermission } from '../../hooks/usePermission';
+import { getUserFacingMessage } from '../../utils/errorUtils';
 
 // Accent bar colours for the panel header, per node type.
 const ACCENT_COLORS = {
@@ -237,7 +238,7 @@ export default function OrganisationPage() {
       closePanel();
       fetchTree();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Operation failed', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Operation failed'), 'error');
     } finally {
       setSaving(false);
     }
@@ -256,7 +257,7 @@ export default function OrganisationPage() {
       });
       addToast('User created and added as a member', 'success');
     } catch (err) {
-      addToast(err.response?.data?.message || 'User created, but could not attach as member', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'User created, but could not attach as member'), 'error');
     } finally {
       fetchTree();
       setSelected(parent);
@@ -284,7 +285,7 @@ export default function OrganisationPage() {
       setSelected(null);
       fetchTree();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Delete failed', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Delete failed'), 'error');
     } finally {
       setDeleting(false);
     }

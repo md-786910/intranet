@@ -1,4 +1,5 @@
-import React, { createContext, useState, useCallback } from 'react';
+import React, { createContext, useState, useCallback, useEffect } from 'react';
+import { toastBridge } from '../utils/toastBridge';
 
 export const ToastContext = createContext(null);
 
@@ -20,6 +21,13 @@ export function ToastProvider({ children }) {
   const removeToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  useEffect(() => {
+    toastBridge.register((message, type = 'error', duration) => {
+      addToast(message, type === 'info' ? 'default' : type, duration);
+    });
+    return () => toastBridge.unregister();
+  }, [addToast]);
 
   return (
     <ToastContext.Provider value={{ addToast, removeToast }}>

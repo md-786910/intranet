@@ -13,7 +13,7 @@ import { userService } from '../../services/userService';
 import { roleService } from '../../services/roleService';
 import { jobTitleService } from '../../services/jobTitleService';
 import { useToast } from '../../hooks/useToast';
-import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
+import { extractValidationErrors, getErrorMessage, getUserFacingMessage } from '../../utils/errorUtils';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -411,7 +411,7 @@ export default function UserCreatePage({
         navigate('/users');
       }
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to create user'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to create user'), 'error');
       const validationErrors = extractValidationErrors(err);
       if (Object.keys(validationErrors).length > 0) setErrors(validationErrors);
     } finally {

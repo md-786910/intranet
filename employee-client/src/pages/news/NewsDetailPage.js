@@ -3,6 +3,7 @@ import MaterialIcon from '../../components/common/MaterialIcon';
 import { Link, useParams } from 'react-router-dom';
 import { newsService } from '../../services/newsService';
 import EmptyState from '../../components/common/EmptyState';
+import NotFoundState from '../../components/common/NotFoundState';
 import Skeleton from '../../components/common/Skeleton';
 import ArticleHeader from './detail/ArticleHeader';
 import ArticleHero from './detail/ArticleHero';
@@ -10,7 +11,7 @@ import ArticleBody from './detail/ArticleBody';
 import EngagementBar from './detail/EngagementBar';
 import CommentsSection from './detail/CommentsSection';
 import RelatedArticles from './detail/RelatedArticles';
-import { getErrorMessage } from '../../utils/errorUtils';
+import { getErrorMessage, isNotFoundError } from '../../utils/errorUtils';
 import { formatRelative } from '../../theme/dateFormat';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -19,6 +20,7 @@ export default function NewsDetailPage() {
   const { user } = useAuth();
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState('');
   const [commentCount, setCommentCount] = useState(0);
   const commentsRef = useRef(null);
@@ -27,6 +29,7 @@ export default function NewsDetailPage() {
     let cancelled = false;
     setLoading(true);
     setError('');
+    setNotFound(false);
     setArticle(null);
     newsService
       .getArticle(id)
@@ -37,8 +40,12 @@ export default function NewsDetailPage() {
         if (a?.comment_count != null) setCommentCount(a.comment_count);
       })
       .catch((err) => {
-        if (!cancelled)
-          setError(getErrorMessage(err, 'Article not found.'));
+        if (cancelled) return;
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          return;
+        }
+        setError(getErrorMessage(err, "Couldn't load article."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -47,6 +54,18 @@ export default function NewsDetailPage() {
       cancelled = true;
     };
   }, [id]);
+
+  if (notFound) {
+    return (
+      <NotFoundState
+        pageTitle="News"
+        title="Article not found"
+        description="This article does not exist or is no longer available."
+        backTo="/news"
+        backLabel="Back to news"
+      />
+    );
+  }
 
   return (
     <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-unit-xl bg-background min-h-[calc(100vh-10rem)]">

@@ -9,7 +9,7 @@ import ChatAccessSelector from '../../components/common/ChatAccessSelector';
 import ReportsToPicker from './ReportsToPicker';
 import { employeeService } from '../../services/employeeService';
 import { useToast } from '../../hooks/useToast';
-import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
+import { extractValidationErrors, getErrorMessage, getUserFacingMessage } from '../../utils/errorUtils';
 
 export default function EmployeeCreatePage() {
   const navigate = useNavigate();
@@ -88,7 +88,7 @@ export default function EmployeeCreatePage() {
       addToast(`Invitation email sent to ${form.email}`, 'success');
       navigate('/employees');
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to invite employee'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to invite employee'), 'error');
       const ve = extractValidationErrors(err);
       if (Object.keys(ve).length > 0) setErrors(ve);
     } finally {

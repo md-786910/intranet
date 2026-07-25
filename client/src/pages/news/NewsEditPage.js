@@ -15,6 +15,8 @@ import { categoryService } from '../../services/categoryService';
 import { useToast } from '../../hooks/useToast';
 import { usePermission } from '../../hooks/usePermission';
 import { usePublishingScope } from '../../hooks/usePublishingScope';
+import NotFoundState from '../../components/common/NotFoundState';
+import { getErrorMessage, getUserFacingMessage, isNotFoundError } from '../../utils/errorUtils';
 
 export default function NewsEditPage() {
   const { id } = useParams();
@@ -32,6 +34,8 @@ export default function NewsEditPage() {
   const [status, setStatus] = useState('DRAFT');
   const [pushNotify, setPushNotify] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [scheduling, setScheduling] = useState(false);
@@ -39,6 +43,8 @@ export default function NewsEditPage() {
   const scheduleBtnRef = useRef(null);
 
   useEffect(() => {
+    setNotFound(false);
+    setLoadError(false);
     newsService.getArticle(id)
       .then((res) => {
         const a = res.data?.data;
@@ -70,7 +76,14 @@ export default function NewsEditPage() {
           scope_label: rule.scope_label,
         })));
       })
-      .catch(() => addToast('Failed to load article', 'error'))
+      .catch((err) => {
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          return;
+        }
+        setLoadError(true);
+        if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load article'), 'error');
+      })
       .finally(() => setLoading(false));
   }, [id, addToast]);
 
@@ -128,7 +141,7 @@ export default function NewsEditPage() {
       addToast('Article updated', 'success');
       navigate(`/news/${id}`);
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to update', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to update'), 'error');
     } finally {
       setSaving(false);
     }
@@ -145,7 +158,7 @@ export default function NewsEditPage() {
       addToast(`Article scheduled for ${new Date(iso).toLocaleString()}`, 'success');
       navigate(`/news/${id}`);
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to schedule', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to schedule'), 'error');
     } finally {
       setScheduling(false);
       setScheduleOpen(false);
@@ -162,7 +175,7 @@ export default function NewsEditPage() {
       addToast(pushNotify ? 'Article published — employees notified' : 'Article published', 'success');
       navigate(`/news/${id}`);
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to publish', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to publish'), 'error');
     } finally {
       setPublishing(false);
     }
@@ -173,6 +186,28 @@ export default function NewsEditPage() {
   }
 
   if (loading) return <div className="animate-pulse h-96 bg-gray-100 rounded-xl" />;
+  if (notFound) {
+    return (
+      <NotFoundState
+        pageTitle="Edit article"
+        title="Article not found"
+        description="This article does not exist or is no longer available."
+        backTo="/news"
+        backLabel="Back to news"
+      />
+    );
+  }
+  if (loadError) {
+    return (
+      <NotFoundState
+        pageTitle="Edit article"
+        title="Unable to load article"
+        description="Something went wrong while loading this article."
+        backTo="/news"
+        backLabel="Back to news"
+      />
+    );
+  }
 
   // Don't offer this article as one of its own related entries.
   const relatedOptions = otherArticles

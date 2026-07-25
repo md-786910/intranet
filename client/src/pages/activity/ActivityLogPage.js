@@ -7,6 +7,7 @@ import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDateTime, formatRelativeTime } from '../../utils/formatters';
+import { getUserFacingMessage } from '../../utils/errorUtils';
 
 const ENTITY_FILTERS = [
   { value: '',         label: 'All' },
@@ -151,7 +152,7 @@ export default function ActivityLogPage() {
       const res = await activityService.list(params);
       setData(res.data?.data || { events: [], pagination: {} });
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to load activity', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load activity'), 'error');
     } finally {
       setLoading(false);
     }

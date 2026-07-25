@@ -161,11 +161,22 @@ module.exports = {
         );
         if (!exists) continue;
 
+        // Two-phase remap: new org_node ids overlap the legacy id space, so a
+        // single UPDATE can violate unique indexes mid-pass (e.g. content_audience_rule
+        // (DOCUMENT,10,DEPARTMENT,1) -> node 5 while (...,DEPARTMENT,5) still exists).
+        // Park matched rows on negative ids first, then flip to the final node id.
         await sequelize.query(
           `UPDATE "${table_name}" x
-           SET "${column_name}" = onode.id
+           SET "${column_name}" = -onode.id
            FROM org_node onode
-           WHERE onode.legacy_ref = x."${typeCol}"::text || ':' || x."${column_name}"::text`,
+           WHERE x."${column_name}" > 0
+             AND onode.legacy_ref = x."${typeCol}"::text || ':' || x."${column_name}"::text`,
+          { transaction: t },
+        );
+        await sequelize.query(
+          `UPDATE "${table_name}"
+           SET "${column_name}" = -"${column_name}"
+           WHERE "${column_name}" < 0`,
           { transaction: t },
         );
       }

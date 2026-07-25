@@ -14,6 +14,7 @@ import { usePermission } from '../../hooks/usePermission';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDateTime, formatRelativeTime } from '../../utils/formatters';
 import { categoryEvents } from '../../utils/activityEvents';
+import { getUserFacingMessage } from '../../utils/errorUtils';
 
 function nameOf(user) {
   if (!user) return null;
@@ -77,7 +78,7 @@ export default function CategoriesPage() {
       const res = await categoryService.list(params);
       setData(res.data?.data || { categories: [], pagination: {} });
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to load categories', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load categories'), 'error');
     } finally {
       setLoading(false);
     }
@@ -135,7 +136,7 @@ export default function CategoriesPage() {
       fetchCategories();
       fetchAllForParentPicker();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Delete failed', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Delete failed'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -149,7 +150,7 @@ export default function CategoriesPage() {
       fetchCategories();
       fetchAllForParentPicker();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Restore failed', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Restore failed'), 'error');
     } finally {
       setActionLoading(false);
     }

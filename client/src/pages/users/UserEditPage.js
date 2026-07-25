@@ -15,7 +15,8 @@ import { roleService } from '../../services/roleService';
 import { jobTitleService } from '../../services/jobTitleService';
 import { useToast } from '../../hooks/useToast';
 import { useOrgTree } from '../../hooks/useOrgTree';
-import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
+import NotFoundState from '../../components/common/NotFoundState';
+import { extractValidationErrors, getErrorMessage, getUserFacingMessage, isNotFoundError } from '../../utils/errorUtils';
 import { findScopeLabel } from '../../utils/scopeLabel';
 
 const DEFAULT_ORGANISATION_ID = 1;
@@ -115,6 +116,7 @@ export default function UserEditPage() {
   const [tab, setTab] = useState('profile');
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [notFound, setNotFound] = useState(false);
   const { tree: orgTree } = useOrgTree();
 
   // Profile form
@@ -169,6 +171,7 @@ export default function UserEditPage() {
   // ── Fetch ──
   const fetchUser = useCallback(() => {
     setLoading(true);
+    setNotFound(false);
     userService.getUser(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
       .then((res) => {
         const u = res.data?.data;
@@ -191,7 +194,14 @@ export default function UserEditPage() {
         }
         setChatBlockedIds(Array.isArray(u.chat_blocked_user_ids) ? u.chat_blocked_user_ids : []);
       })
-      .catch(() => addToast('Failed to load user', 'error'))
+      .catch((err) => {
+        setUser(null);
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          return;
+        }
+        if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load user'), 'error');
+      })
       .finally(() => setLoading(false));
   }, [id, addToast]);
 
@@ -331,7 +341,7 @@ export default function UserEditPage() {
       addToast('Profile updated', 'success');
       fetchUser();
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to update'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to update'), 'error');
       const ve = extractValidationErrors(err);
       if (Object.keys(ve).length > 0) setErrors(ve);
     } finally { setSaving(false); }
@@ -343,7 +353,7 @@ export default function UserEditPage() {
       await userService.resendInvite(id);
       addToast('Invitation resent successfully', 'success');
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to resend invitation'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to resend invitation'), 'error');
     } finally {
       setResending(false);
     }
@@ -404,7 +414,7 @@ export default function UserEditPage() {
       }
       setShowAssignForm(false);
       fetchUser();
-    } catch (err) { addToast(err.response?.data?.message || 'Failed', 'error'); }
+    } catch (err) { if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed'), 'error'); }
     finally { setAssigning(false); }
   };
 
@@ -413,7 +423,7 @@ export default function UserEditPage() {
     try {
       await userService.removeRole(id, assignmentId);
       addToast('Role removed', 'success'); fetchUser();
-    } catch (err) { addToast(err.response?.data?.message || 'Failed', 'error'); }
+    } catch (err) { if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed'), 'error'); }
     finally { setRemoving(null); }
   };
 
@@ -477,7 +487,7 @@ export default function UserEditPage() {
       cancelEditScope();
       fetchUser();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to update scopes', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to update scopes'), 'error');
     } finally {
       setSavingScope(false);
     }
@@ -506,7 +516,7 @@ export default function UserEditPage() {
       setPermScopes([]);
       setShowPermForm(false);
       fetchUser();
-    } catch (err) { addToast(err.response?.data?.message || 'Failed', 'error'); }
+    } catch (err) { if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed'), 'error'); }
     finally { setAddingPerm(false); }
   };
 
@@ -515,7 +525,7 @@ export default function UserEditPage() {
     try {
       await userService.removePermission(id, permissionId);
       addToast('Permission removed', 'success'); fetchUser();
-    } catch (err) { addToast(err.response?.data?.message || 'Failed', 'error'); }
+    } catch (err) { if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed'), 'error'); }
     finally { setRemovingPerm(null); }
   };
 
@@ -558,7 +568,28 @@ export default function UserEditPage() {
   const directPermCount = user?.directPermissions?.length || 0;
 
   if (loading) return <div className="animate-pulse h-64 bg-gray-100 rounded-xl" />;
-  if (!user) return <div className="text-center py-12 text-gray-500">User not found</div>;
+  if (notFound) {
+    return (
+      <NotFoundState
+        pageTitle="Edit user"
+        title="User not found"
+        description="This user does not exist or is no longer available."
+        backTo="/users"
+        backLabel="Back to users"
+      />
+    );
+  }
+  if (!user) {
+    return (
+      <NotFoundState
+        pageTitle="Edit user"
+        title="Unable to load user"
+        description="Something went wrong while loading this user."
+        backTo="/users"
+        backLabel="Back to users"
+      />
+    );
+  }
 
   const tabs = [
     { key: 'profile', label: 'Profile' },

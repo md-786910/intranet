@@ -6,6 +6,8 @@ import { userService } from '../../services/userService';
 import { chatService } from '../../services/chatService';
 import { resolveMediaUrl } from '../../utils/mediaUtils';
 import { useToast } from '../../hooks/useToast';
+import NotFoundState from '../../components/common/NotFoundState';
+import { getUserFacingMessage, isNotFoundError } from '../../utils/errorUtils';
 
 function Field({ label, children }) {
   return (
@@ -26,16 +28,25 @@ export default function DirectoryProfilePage() {
   const toast = useToast();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
+    setNotFound(false);
+    setLoadError(false);
     userService
       .getDirectoryProfile(userId)
       .then((res) => setProfile(res.data?.data || null))
-      .catch(() => {
+      .catch((err) => {
         setProfile(null);
-        toast.error('Could not load profile');
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          return;
+        }
+        setLoadError(true);
+        if (!err?.isHandled) toast.error(getUserFacingMessage(err, 'Could not load profile'));
       })
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -50,7 +61,7 @@ export default function DirectoryProfilePage() {
       await chatService.createConversation(profile.user_id);
       navigate(`/people?userId=${profile.user_id}`);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not start chat');
+      if (!err?.isHandled) toast.error(getUserFacingMessage(err, 'Could not start chat'));
     } finally {
       setStartingChat(false);
     }
@@ -67,18 +78,26 @@ export default function DirectoryProfilePage() {
     );
   }
 
-  if (!profile) {
+  if (notFound) {
     return (
-      <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-unit-lg text-center">
-        <p className="text-secondary mb-4">Profile not found.</p>
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="text-sm font-semibold text-primary hover:underline"
-        >
-          Go back
-        </button>
-      </div>
+      <NotFoundState
+        pageTitle="Directory"
+        title="Profile not found"
+        description="This profile does not exist or is no longer available."
+        backTo="/org-chart"
+        backLabel="Back to org chart"
+      />
+    );
+  }
+  if (loadError || !profile) {
+    return (
+      <NotFoundState
+        pageTitle="Directory"
+        title="Unable to load profile"
+        description="Something went wrong while loading this profile."
+        backTo="/org-chart"
+        backLabel="Back to org chart"
+      />
     );
   }
 

@@ -6,6 +6,8 @@ import { PermissionProvider } from './contexts/PermissionContext';
 import { PermissionContext } from './contexts/PermissionContext';
 import { ToastProvider } from './contexts/ToastContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import NotFoundState from './components/common/NotFoundState';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import { useAuth } from './hooks/useAuth';
 import AdminLayout from './components/layout/AdminLayout';
 import { SocketProvider } from './contexts/SocketContext';
@@ -94,6 +96,7 @@ function App() {
         <OrganisationProvider>
           <PermissionProvider>
             <ToastProvider>
+              <ErrorBoundary homeTo="/dashboard" homeLabel="Back to dashboard">
               <Routes>
               {/* Public routes */}
               <Route path="/login" element={<LoginPage />} />
@@ -171,12 +174,27 @@ function App() {
 
                 {/* Settings */}
                 <Route path="/settings" element={<SettingsPage />} />
+
+                {/* Unknown paths inside admin shell */}
+                <Route
+                  path="*"
+                  element={
+                    <NotFoundState
+                      pageTitle="Page"
+                      title="Page not found"
+                      description="This page does not exist or the link is out of date."
+                      backTo="/dashboard"
+                      backLabel="Back to dashboard"
+                    />
+                  }
+                />
               </Route>
 
-              {/* Default redirect */}
+              {/* Default redirect — only exact home; unknown public URLs go to login */}
               <Route path="/" element={<HomeRedirect />} />
-              <Route path="*" element={<HomeRedirect />} />
+              <Route path="*" element={<Navigate to="/login" replace />} />
               </Routes>
+              </ErrorBoundary>
             </ToastProvider>
           </PermissionProvider>
         </OrganisationProvider>

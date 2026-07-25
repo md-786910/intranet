@@ -1,4 +1,6 @@
 import axios from "axios";
+import { applyGlobalApiErrorPolicy } from "../utils/errorUtils";
+import { toastBridge } from "../utils/toastBridge";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000/api/v1";
 
@@ -56,10 +58,15 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
+const rejectWithGlobalPolicy = (error) => {
+  applyGlobalApiErrorPolicy(error, toastBridge);
+  return Promise.reject(error);
+};
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config || {};
 
     if (
       error.response?.status !== 401 ||
@@ -67,7 +74,7 @@ api.interceptors.response.use(
       originalRequest.url?.includes("/auth/login") ||
       originalRequest.url?.includes("/auth/refresh")
     ) {
-      return Promise.reject(error);
+      return rejectWithGlobalPolicy(error);
     }
 
     if (isRefreshing) {
@@ -78,7 +85,7 @@ api.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${token}`;
           return api(originalRequest);
         })
-        .catch((err) => Promise.reject(err));
+        .catch((err) => rejectWithGlobalPolicy(err));
     }
 
     originalRequest._retry = true;

@@ -4,7 +4,7 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { jobTitleService } from '../../services/jobTitleService';
 import { useToast } from '../../hooks/useToast';
-import { getErrorMessage } from '../../utils/errorUtils';
+import { getErrorMessage, getUserFacingMessage } from '../../utils/errorUtils';
 
 export default function JobTitlesPage() {
   const { addToast } = useToast();
@@ -23,7 +23,7 @@ export default function JobTitlesPage() {
       const res = await jobTitleService.list();
       setItems(res.data?.data || []);
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to load job titles'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load job titles'), 'error');
     } finally {
       setLoading(false);
     }
@@ -43,7 +43,7 @@ export default function JobTitlesPage() {
       await load();
       addToast('Job title added', 'success');
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to add'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to add'), 'error');
     } finally {
       setAdding(false);
     }
@@ -71,7 +71,7 @@ export default function JobTitlesPage() {
       await load();
       addToast('Saved', 'success');
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to save'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to save'), 'error');
     } finally {
       setSavingId(null);
     }
@@ -85,7 +85,7 @@ export default function JobTitlesPage() {
       await load();
       addToast('Deleted', 'success');
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to delete'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to delete'), 'error');
     }
   };
 

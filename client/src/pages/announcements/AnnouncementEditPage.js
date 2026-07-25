@@ -13,6 +13,8 @@ import { useToast } from '../../hooks/useToast';
 import { usePermission } from '../../hooks/usePermission';
 import { usePublishingScope } from '../../hooks/usePublishingScope';
 import { toLocalInputValue, fromLocalInputValue } from './AnnouncementCreatePage';
+import NotFoundState from '../../components/common/NotFoundState';
+import { getErrorMessage, getUserFacingMessage, isNotFoundError } from '../../utils/errorUtils';
 
 export default function AnnouncementEditPage() {
   const { id } = useParams();
@@ -33,6 +35,8 @@ export default function AnnouncementEditPage() {
   const [status, setStatus] = useState('DRAFT');
   const [pushNotify, setPushNotify] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [scheduling, setScheduling] = useState(false);
@@ -40,6 +44,8 @@ export default function AnnouncementEditPage() {
   const scheduleBtnRef = useRef(null);
 
   useEffect(() => {
+    setNotFound(false);
+    setLoadError(false);
     announcementService.get(id)
       .then((res) => {
         const a = res.data?.data;
@@ -59,7 +65,14 @@ export default function AnnouncementEditPage() {
           scope_label: rule.scope_label,
         })));
       })
-      .catch(() => addToast('Failed to load announcement', 'error'))
+      .catch((err) => {
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          return;
+        }
+        setLoadError(true);
+        if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load announcement'), 'error');
+      })
       .finally(() => setLoading(false));
   }, [id, addToast]);
 
@@ -93,7 +106,7 @@ export default function AnnouncementEditPage() {
       addToast('Announcement updated', 'success');
       navigate(`/announcements/${id}`);
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to update', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to update'), 'error');
     } finally {
       setSaving(false);
     }
@@ -108,7 +121,7 @@ export default function AnnouncementEditPage() {
       addToast(`Announcement scheduled for ${new Date(iso).toLocaleString()}`, 'success');
       navigate(`/announcements/${id}`);
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to schedule', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to schedule'), 'error');
     } finally {
       setScheduling(false);
       setScheduleOpen(false);
@@ -124,7 +137,7 @@ export default function AnnouncementEditPage() {
       addToast(pushNotify ? 'Announcement published — employees notified' : 'Announcement published', 'success');
       navigate(`/announcements/${id}`);
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to publish', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to publish'), 'error');
     } finally {
       setPublishing(false);
     }
@@ -132,6 +145,28 @@ export default function AnnouncementEditPage() {
 
   if (!canEdit) return <Navigate to={`/announcements/${id}`} replace />;
   if (loading) return <div className="animate-pulse h-96 bg-gray-100 rounded-xl" />;
+  if (notFound) {
+    return (
+      <NotFoundState
+        pageTitle="Edit announcement"
+        title="Announcement not found"
+        description="This announcement does not exist or is no longer available."
+        backTo="/announcements"
+        backLabel="Back to announcements"
+      />
+    );
+  }
+  if (loadError) {
+    return (
+      <NotFoundState
+        pageTitle="Edit announcement"
+        title="Unable to load announcement"
+        description="Something went wrong while loading this announcement."
+        backTo="/announcements"
+        backLabel="Back to announcements"
+      />
+    );
+  }
 
   return (
     <div>

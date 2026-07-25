@@ -1,4 +1,5 @@
-import React, { createContext, useState, useCallback } from 'react';
+import React, { createContext, useState, useCallback, useEffect } from 'react';
+import { toastBridge } from '../utils/toastBridge';
 
 export const ToastContext = createContext(null);
 
@@ -26,6 +27,13 @@ export function ToastProvider({ children }) {
   const success = useCallback((message, opts) => show(message, { ...opts, type: 'success' }), [show]);
   const error = useCallback((message, opts) => show(message, { ...opts, type: 'error' }), [show]);
   const info = useCallback((message, opts) => show(message, { ...opts, type: 'info' }), [show]);
+
+  useEffect(() => {
+    toastBridge.register((message, type = 'error', duration) => {
+      show(message, { type: type === 'warning' ? 'error' : type, duration });
+    });
+    return () => toastBridge.unregister();
+  }, [show]);
 
   return (
     <ToastContext.Provider value={{ show, success, error, info, remove }}>

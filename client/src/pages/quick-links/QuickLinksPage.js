@@ -4,7 +4,7 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { quickLinkService } from '../../services/quickLinkService';
 import { useToast } from '../../hooks/useToast';
-import { getErrorMessage } from '../../utils/errorUtils';
+import { getErrorMessage, getUserFacingMessage } from '../../utils/errorUtils';
 
 const URL_PATTERN = /^(https?:\/\/|\/).+/i;
 
@@ -27,7 +27,7 @@ export default function QuickLinksPage() {
       const res = await quickLinkService.list();
       setItems(res.data?.data || []);
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to load quick links'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load quick links'), 'error');
     } finally {
       setLoading(false);
     }
@@ -56,7 +56,7 @@ export default function QuickLinksPage() {
       await load();
       addToast('Quick link added', 'success');
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to add'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to add'), 'error');
     } finally {
       setAdding(false);
     }
@@ -92,7 +92,7 @@ export default function QuickLinksPage() {
       await load();
       addToast('Saved', 'success');
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to save'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to save'), 'error');
     } finally {
       setSavingId(null);
     }
@@ -106,7 +106,7 @@ export default function QuickLinksPage() {
       await load();
       addToast('Deleted', 'success');
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to delete'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to delete'), 'error');
     }
   };
 

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import MaterialIcon from '../../../components/common/MaterialIcon';
 import { useToast } from '../../../hooks/useToast';
 import { newsService } from '../../../services/newsService';
+import { getUserFacingMessage } from '../../../utils/errorUtils';
 
 export default function EngagementBar({
   articleId,
@@ -50,10 +51,12 @@ export default function EngagementBar({
         ? await newsService.likeArticle(articleId)
         : await newsService.unlikeArticle(articleId);
       if (res.data?.data?.like_count != null) setLikeCount(res.data.data.like_count);
-    } catch {
+    } catch (err) {
       setLiked(!next);
       setLikeCount((c) => Math.max(0, c + (next ? -1 : 1)));
-      toast.error(next ? 'Failed to like.' : 'Failed to unlike.');
+      if (!err?.isHandled) {
+        toast.error(getUserFacingMessage(err, next ? 'Failed to like.' : 'Failed to unlike.'));
+      }
     }
   };
 
@@ -65,9 +68,9 @@ export default function EngagementBar({
       if (next) await newsService.saveArticle(articleId);
       else await newsService.unsaveArticle(articleId);
       toast.success(next ? 'Saved' : 'Removed from saved');
-    } catch {
+    } catch (err) {
       setSaved(!next);
-      toast.error('Failed to update saved status.');
+      if (!err?.isHandled) toast.error(getUserFacingMessage(err, 'Failed to update saved status.'));
     }
   };
 
@@ -91,8 +94,8 @@ export default function EngagementBar({
         const body = encodeURIComponent(`${title}\n\n${url}`);
         window.location.href = `mailto:?subject=${subject}&body=${body}`;
       }
-    } catch {
-      toast.error('Failed to create share link.');
+    } catch (err) {
+      if (!err?.isHandled) toast.error(getUserFacingMessage(err, 'Failed to create share link.'));
     }
   };
 

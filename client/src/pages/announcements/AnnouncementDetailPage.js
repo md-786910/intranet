@@ -11,6 +11,8 @@ import { announcementService } from "../../services/announcementService";
 import { useToast } from "../../hooks/useToast";
 import { formatDate, formatDateTime } from "../../utils/formatters";
 import { usePermission } from "../../hooks/usePermission";
+import NotFoundState from "../../components/common/NotFoundState";
+import { getErrorMessage, getUserFacingMessage, isNotFoundError } from "../../utils/errorUtils";
 
 export default function AnnouncementDetailPage() {
   const { id } = useParams();
@@ -21,14 +23,26 @@ export default function AnnouncementDetailPage() {
   const { hasPermission: canDelete } = usePermission("NEWS", "DELETE");
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
 
   const fetchItem = () => {
+    setNotFound(false);
+    setLoadError(false);
     announcementService
       .get(id)
       .then((res) => setItem(res.data?.data))
-      .catch(() => addToast("Failed to load announcement", "error"))
+      .catch((err) => {
+        setItem(null);
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          return;
+        }
+        setLoadError(true);
+        if (!err?.isHandled) addToast(getUserFacingMessage(err, "Failed to load announcement"), "error");
+      })
       .finally(() => setLoading(false));
   };
 
@@ -108,7 +122,7 @@ export default function AnnouncementDetailPage() {
       await pendingAction.run();
       setPendingAction(null);
     } catch (err) {
-      addToast(err.response?.data?.message || "Action failed", "error");
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, "Action failed"), "error");
     } finally {
       setActionLoading(false);
     }
@@ -116,12 +130,28 @@ export default function AnnouncementDetailPage() {
 
   if (loading)
     return <div className="animate-pulse h-96 bg-gray-100 rounded-xl" />;
-  if (!item)
+  if (notFound) {
     return (
-      <div className="text-center py-12 text-gray-500">
-        Announcement not found
-      </div>
+      <NotFoundState
+        pageTitle="Announcement"
+        title="Announcement not found"
+        description="This announcement does not exist or is no longer available."
+        backTo="/announcements"
+        backLabel="Back to announcements"
+      />
     );
+  }
+  if (loadError || !item) {
+    return (
+      <NotFoundState
+        pageTitle="Announcement"
+        title="Unable to load announcement"
+        description="Something went wrong while loading this announcement."
+        backTo="/announcements"
+        backLabel="Back to announcements"
+      />
+    );
+  }
 
   const inMarqueeWindow = (() => {
     if (!item.show_in_marquee) return false;

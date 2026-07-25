@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import MaterialIcon from '../../components/common/MaterialIcon';
 import EmptyState from '../../components/common/EmptyState';
+import NotFoundState from '../../components/common/NotFoundState';
 import Skeleton from '../../components/common/Skeleton';
 import { announcementService } from '../../services/announcementService';
 import { formatRelative } from '../../theme/dateFormat';
-import { getErrorMessage } from '../../utils/errorUtils';
+import { getErrorMessage, isNotFoundError } from '../../utils/errorUtils';
 
 const PRIORITY_LABEL = {
   URGENT: 'Urgent',
@@ -18,11 +19,14 @@ export default function AnnouncementDetailPage() {
   const { id } = useParams();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setNotFound(false);
+    setError('');
     announcementService
       .getAnnouncement(id)
       .then((res) => {
@@ -30,7 +34,12 @@ export default function AnnouncementDetailPage() {
         setItem(res.data?.data || null);
       })
       .catch((err) => {
-        if (!cancelled) setError(getErrorMessage(err, 'Could not load this announcement.'));
+        if (cancelled) return;
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          return;
+        }
+        setError(getErrorMessage(err, 'Could not load this announcement.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -48,6 +57,18 @@ export default function AnnouncementDetailPage() {
         <Skeleton className="h-4 w-1/2 rounded" />
         <Skeleton className="h-64 w-full rounded-xl" />
       </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <NotFoundState
+        pageTitle="Announcements"
+        title="Announcement not found"
+        description="This announcement does not exist or is no longer available."
+        backTo="/announcements"
+        backLabel="Back to announcements"
+      />
     );
   }
 

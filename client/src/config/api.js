@@ -1,4 +1,6 @@
 import axios from "axios";
+import { applyGlobalApiErrorPolicy } from "../utils/errorUtils";
+import { toastBridge } from "../utils/toastBridge";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000/api/v1";
 
@@ -41,7 +43,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
-// Response interceptor: handle 401 with silent refresh
+// Response interceptor: 401 refresh + status-based global UX
 let isRefreshing = false;
 let failedQueue = [];
 
@@ -56,23 +58,27 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
+const rejectWithGlobalPolicy = (error) => {
+  applyGlobalApiErrorPolicy(error, toastBridge);
+  return Promise.reject(error);
+};
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config || {};
 
-    // Don't retry auth endpoints or already-retried requests
+    // Non-401 (or auth endpoints / already retried): apply global policy then reject
     if (
       error.response?.status !== 401 ||
       originalRequest._retry ||
       originalRequest.url?.includes("/auth/login") ||
       originalRequest.url?.includes("/auth/refresh")
     ) {
-      return Promise.reject(error);
+      return rejectWithGlobalPolicy(error);
     }
 
     if (isRefreshing) {
-      // Queue this request while refresh is in progress
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       })
@@ -80,7 +86,7 @@ api.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${token}`;
           return api(originalRequest);
         })
-        .catch((err) => Promise.reject(err));
+        .catch((err) => rejectWithGlobalPolicy(err));
     }
 
     originalRequest._retry = true;

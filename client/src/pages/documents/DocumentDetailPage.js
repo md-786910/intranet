@@ -18,6 +18,8 @@ import ActivityTimeline from "../../components/common/ActivityTimeline";
 import PriorityBadge from "../../components/common/PriorityBadge";
 import { documentEvents } from "../../utils/activityEvents";
 import { resolveAssetUrl } from "../../utils/mediaUrl";
+import NotFoundState from "../../components/common/NotFoundState";
+import { getErrorMessage, getUserFacingMessage, isNotFoundError } from "../../utils/errorUtils";
 
 export default function DocumentDetailPage() {
   const { id } = useParams();
@@ -38,15 +40,27 @@ export default function DocumentDetailPage() {
   );
   const [doc, setDoc] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
   const [previewAsset, setPreviewAsset] = useState(null);
 
   const fetchDoc = () => {
+    setNotFound(false);
+    setLoadError(false);
     documentService
       .getDocument(id)
       .then((res) => setDoc(res.data?.data))
-      .catch(() => addToast("Failed to load document", "error"))
+      .catch((err) => {
+        setDoc(null);
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          return;
+        }
+        setLoadError(true);
+        if (!err?.isHandled) addToast(getUserFacingMessage(err, "Failed to load document"), "error");
+      })
       .finally(() => setLoading(false));
   };
 
@@ -127,7 +141,7 @@ export default function DocumentDetailPage() {
       await pendingAction.run();
       setPendingAction(null);
     } catch (err) {
-      addToast(err.response?.data?.message || "Action failed", "error");
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, "Action failed"), "error");
     } finally {
       setActionLoading(false);
     }
@@ -135,10 +149,28 @@ export default function DocumentDetailPage() {
 
   if (loading)
     return <div className="animate-pulse h-96 bg-gray-100 rounded-xl" />;
-  if (!doc)
+  if (notFound) {
     return (
-      <div className="text-center py-12 text-gray-500">Document not found</div>
+      <NotFoundState
+        pageTitle="Document"
+        title="Document not found"
+        description="This document does not exist or is no longer available."
+        backTo="/documents"
+        backLabel="Back to documents"
+      />
     );
+  }
+  if (loadError || !doc) {
+    return (
+      <NotFoundState
+        pageTitle="Document"
+        title="Unable to load document"
+        description="Something went wrong while loading this document."
+        backTo="/documents"
+        backLabel="Back to documents"
+      />
+    );
+  }
 
   return (
     <div>

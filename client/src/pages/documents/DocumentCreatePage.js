@@ -14,6 +14,7 @@ import { useToast } from '../../hooks/useToast';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { usePermission } from '../../hooks/usePermission';
 import { usePublishingScope } from '../../hooks/usePublishingScope';
+import { getUserFacingMessage } from '../../utils/errorUtils';
 
 export default function DocumentCreatePage() {
   const navigate = useNavigate();
@@ -93,7 +94,7 @@ export default function DocumentCreatePage() {
       addToast('Document created', 'success');
       navigate('/documents');
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to create document', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to create document'), 'error');
     } finally {
       setSaving(false);
     }
@@ -108,7 +109,7 @@ export default function DocumentCreatePage() {
       addToast(`Document scheduled for ${new Date(iso).toLocaleString()}`, 'success');
       navigate('/documents?status=SCHEDULED');
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to schedule document', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to schedule document'), 'error');
     } finally {
       setScheduling(false);
       setScheduleOpen(false);
@@ -126,7 +127,7 @@ export default function DocumentCreatePage() {
       addToast('Document published — employees will be notified', 'success');
       navigate('/documents');
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to publish document', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to publish document'), 'error');
     } finally {
       setPublishing(false);
     }

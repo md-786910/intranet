@@ -7,6 +7,7 @@ import Spinner from '../../../components/common/Spinner';
 import { useToast } from '../../../hooks/useToast';
 import { newsService } from '../../../services/newsService';
 import { formatRelative } from '../../../theme/dateFormat';
+import { getUserFacingMessage } from '../../../utils/errorUtils';
 
 function authorName(author) {
   if (!author) return 'Unknown user';
@@ -52,8 +53,8 @@ const CommentsSection = forwardRef(function CommentsSection({ articleId, current
       setPagination(data.pagination || { page, totalPages: 1, total: data.comments?.length || 0 });
       setComments((prev) => (page === 1 ? data.comments || [] : [...prev, ...(data.comments || [])]));
       if (page === 1 && onCountChange) onCountChange(data.pagination?.total ?? (data.comments?.length || 0));
-    } catch {
-      toast.error('Failed to load comments.');
+    } catch (err) {
+      if (!err?.isHandled) toast.error(getUserFacingMessage(err, 'Failed to load comments.'));
     } finally {
       setLoading(false);
     }
@@ -77,7 +78,7 @@ const CommentsSection = forwardRef(function CommentsSection({ articleId, current
       setBody('');
       setComposerOpen(false);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to post comment.');
+      if (!err?.isHandled) toast.error(getUserFacingMessage(err, 'Failed to post comment.'));
     } finally {
       setPosting(false);
     }
@@ -94,7 +95,7 @@ const CommentsSection = forwardRef(function CommentsSection({ articleId, current
       setEditingId(null);
       setEditBody('');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to update comment.');
+      if (!err?.isHandled) toast.error(getUserFacingMessage(err, 'Failed to update comment.'));
     } finally {
       setSaving(false);
     }
@@ -111,8 +112,8 @@ const CommentsSection = forwardRef(function CommentsSection({ articleId, current
       const { comment_count } = res.data?.data || {};
       setComments((prev) => prev.filter((c) => c.id !== commentId));
       if (comment_count != null && onCountChange) onCountChange(comment_count);
-    } catch {
-      toast.error('Failed to delete comment.');
+    } catch (err) {
+      if (!err?.isHandled) toast.error(getUserFacingMessage(err, 'Failed to delete comment.'));
     }
   };
 

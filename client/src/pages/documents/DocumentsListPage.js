@@ -17,6 +17,7 @@ import { useDebounce } from '../../hooks/useDebounce';
 import { usePermission } from '../../hooks/usePermission';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate, formatDateTime, formatRelativeTime } from '../../utils/formatters';
+import { getUserFacingMessage } from '../../utils/errorUtils';
 
 function nameOf(user) {
   if (!user) return null;
@@ -120,7 +121,7 @@ export default function DocumentsListPage() {
       await pendingAction.run();
       setPendingAction(null);
     } catch (err) {
-      addToast(err.response?.data?.message || 'Action failed', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Action failed'), 'error');
     } finally {
       setActionLoading(false);
     }

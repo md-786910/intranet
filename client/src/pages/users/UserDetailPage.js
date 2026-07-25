@@ -19,7 +19,8 @@ import { formatDate, formatDateTime, formatRelativeTime } from '../../utils/form
 import { findScopeLabel, findScopePath } from '../../utils/scopeLabel';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { useOrgTree } from '../../hooks/useOrgTree';
-import { getErrorMessage } from '../../utils/errorUtils';
+import NotFoundState from '../../components/common/NotFoundState';
+import { getErrorMessage, getUserFacingMessage, isNotFoundError } from '../../utils/errorUtils';
 import ChatDrawer from '../../components/chat/ChatDrawer';
 
 const DEFAULT_ORGANISATION_ID = 1;
@@ -269,6 +270,7 @@ export default function UserDetailPage() {
   const { tree: orgTree } = useOrgTree();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [tab, setTab] = useState('profile');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -318,13 +320,21 @@ export default function UserDetailPage() {
 
   const fetchUser = useCallback(() => {
     setLoading(true);
+    setNotFound(false);
     userService.getUser(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
       .then((res) => {
         const next = res.data?.data;
         setUser(next);
         setEditingOrgLink(null);
       })
-      .catch(() => addToast('Failed to load user', 'error'))
+      .catch((err) => {
+        setUser(null);
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          return;
+        }
+        if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load user'), 'error');
+      })
       .finally(() => setLoading(false));
   }, [id, addToast]);
 
@@ -352,7 +362,7 @@ export default function UserDetailPage() {
       addToast('User deactivated', 'success');
       navigate('/users');
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to deactivate', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to deactivate'), 'error');
     } finally { setDeleting(false); setDeleteOpen(false); }
   };
 
@@ -363,7 +373,7 @@ export default function UserDetailPage() {
       addToast('User reactivated successfully', 'success');
       fetchUser();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to reactivate', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to reactivate'), 'error');
     } finally { setReactivating(false); setReactivateOpen(false); }
   };
 
@@ -374,7 +384,7 @@ export default function UserDetailPage() {
       addToast('User permanently deleted', 'success');
       navigate('/users');
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to permanently delete', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to permanently delete'), 'error');
     } finally { setPermDeleting(false); setPermDeleteOpen(false); }
   };
 
@@ -385,7 +395,7 @@ export default function UserDetailPage() {
       addToast('Invitation resent successfully', 'success');
       fetchUser();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to resend invitation', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to resend invitation'), 'error');
     } finally { setResending(false); }
   };
 
@@ -403,7 +413,7 @@ export default function UserDetailPage() {
       setShowAssignForm(false);
       fetchUser();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to assign role', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to assign role'), 'error');
     } finally { setAssigning(false); }
   };
 
@@ -414,7 +424,7 @@ export default function UserDetailPage() {
       addToast('Role removed', 'success');
       fetchUser();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to remove role', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to remove role'), 'error');
     } finally { setRemoving(null); }
   };
 
@@ -457,7 +467,7 @@ export default function UserDetailPage() {
       setShowPermForm(false);
       fetchUser();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to assign permission', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to assign permission'), 'error');
     } finally { setAddingPerm(false); }
   };
 
@@ -468,7 +478,7 @@ export default function UserDetailPage() {
       addToast('Permission removed', 'success');
       fetchUser();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to remove permission', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to remove permission'), 'error');
     } finally { setRemovingPerm(null); }
   };
 
@@ -492,7 +502,7 @@ export default function UserDetailPage() {
       setEditingOrgLink(null);
       fetchUser();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to update org link', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to update org link'), 'error');
     } finally {
       setSavingOrgLink(null);
     }
@@ -509,7 +519,7 @@ export default function UserDetailPage() {
       addToast('Synced from Entra', 'success');
       fetchUser();
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to sync from Entra'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to sync from Entra'), 'error');
     } finally {
       setSyncingEntra(false);
     }
@@ -611,7 +621,28 @@ export default function UserDetailPage() {
   }, [user?.departmentMemberships, orgTree]);
 
   if (loading) return <div className="animate-pulse h-96 bg-gray-100 rounded-xl" />;
-  if (!user) return <div className="text-center py-12 text-gray-500">User not found</div>;
+  if (notFound) {
+    return (
+      <NotFoundState
+        pageTitle="User"
+        title="User not found"
+        description="This user does not exist or is no longer available."
+        backTo="/users"
+        backLabel="Back to users"
+      />
+    );
+  }
+  if (!user) {
+    return (
+      <NotFoundState
+        pageTitle="User"
+        title="Unable to load user"
+        description="Something went wrong while loading this user."
+        backTo="/users"
+        backLabel="Back to users"
+      />
+    );
+  }
 
   const displayName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email;
   const jobTitle = user.profile?.job_title || null;

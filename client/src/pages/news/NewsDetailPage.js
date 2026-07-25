@@ -16,6 +16,8 @@ import { formatDate, formatDateTime } from '../../utils/formatters';
 import { resolveAssetUrl } from '../../utils/mediaUrl';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { usePermission } from '../../hooks/usePermission';
+import NotFoundState from '../../components/common/NotFoundState';
+import { getErrorMessage, getUserFacingMessage, isNotFoundError } from '../../utils/errorUtils';
 
 export default function NewsDetailPage() {
   const { id } = useParams();
@@ -27,13 +29,25 @@ export default function NewsDetailPage() {
   const { hasPermission: canDeleteNews } = usePermission('NEWS', 'DELETE');
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
 
   const fetchArticle = () => {
+    setNotFound(false);
+    setLoadError(false);
     newsService.getArticle(id)
       .then((res) => setArticle(res.data?.data))
-      .catch(() => addToast('Failed to load article', 'error'))
+      .catch((err) => {
+        setArticle(null);
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          return;
+        }
+        setLoadError(true);
+        if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load article'), 'error');
+      })
       .finally(() => setLoading(false));
   };
 
@@ -104,14 +118,35 @@ export default function NewsDetailPage() {
       await pendingAction.run();
       setPendingAction(null);
     } catch (err) {
-      addToast(err.response?.data?.message || 'Action failed', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Action failed'), 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
   if (loading) return <div className="animate-pulse h-96 bg-gray-100 rounded-xl" />;
-  if (!article) return <div className="text-center py-12 text-gray-500">Article not found</div>;
+  if (notFound) {
+    return (
+      <NotFoundState
+        pageTitle="Article"
+        title="Article not found"
+        description="This article does not exist or is no longer available."
+        backTo="/news"
+        backLabel="Back to news"
+      />
+    );
+  }
+  if (loadError || !article) {
+    return (
+      <NotFoundState
+        pageTitle="Article"
+        title="Unable to load article"
+        description="Something went wrong while loading this article."
+        backTo="/news"
+        backLabel="Back to news"
+      />
+    );
+  }
 
   return (
     <div>

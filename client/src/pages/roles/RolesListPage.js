@@ -12,6 +12,7 @@ import { useToast } from '../../hooks/useToast';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
+import { getUserFacingMessage } from '../../utils/errorUtils';
 
 function groupPermissionsByModule(permissions) {
   if (!permissions?.length) return [];
@@ -132,7 +133,7 @@ export default function RolesListPage() {
       setDeleteTarget(null);
       fetchRoles();
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to delete role', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to delete role'), 'error');
     } finally {
       setDeleting(false);
     }

@@ -10,7 +10,8 @@ import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { roleService } from '../../services/roleService';
 import { useToast } from '../../hooks/useToast';
 import { formatDate } from '../../utils/formatters';
-import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
+import NotFoundState from '../../components/common/NotFoundState';
+import { extractValidationErrors, getErrorMessage, getUserFacingMessage, isNotFoundError } from '../../utils/errorUtils';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 
 export default function RoleEditPage() {
@@ -24,12 +25,16 @@ export default function RoleEditPage() {
   const [selectedPermissions, setSelectedPermissions] = useState(new Set());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (!currentOrganisationId) return;
+    setNotFound(false);
+    setLoadError(false);
     Promise.all([
       roleService.getRole(id, { scope_type: 'ORGANISATION', scope_id: currentOrganisationId }),
       roleService.getModules({ scope_type: 'ORGANISATION', scope_id: currentOrganisationId }),
@@ -40,7 +45,15 @@ export default function RoleEditPage() {
       const perms = new Set(r.permissions?.map(p => p.module_action_id) || []);
       setSelectedPermissions(perms);
       setModules(modulesRes.data?.data || []);
-    }).catch(() => addToast('Failed to load role', 'error'))
+    }).catch((err) => {
+      setRole(null);
+      if (isNotFoundError(err)) {
+        setNotFound(true);
+        return;
+      }
+      setLoadError(true);
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load role'), 'error');
+    })
       .finally(() => setLoading(false));
   }, [id, addToast, currentOrganisationId]);
 
@@ -86,7 +99,7 @@ export default function RoleEditPage() {
       addToast('Role deleted', 'success');
       navigate('/roles');
     } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to delete role', 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to delete role'), 'error');
     } finally {
       setDeleting(false);
       setDeleteOpen(false);
@@ -103,7 +116,28 @@ export default function RoleEditPage() {
     );
   }
 
-  if (!role) return <div className="text-center py-12 text-gray-500">Role not found</div>;
+  if (notFound) {
+    return (
+      <NotFoundState
+        pageTitle="Role"
+        title="Role not found"
+        description="This role does not exist or is no longer available."
+        backTo="/roles"
+        backLabel="Back to roles"
+      />
+    );
+  }
+  if (loadError || !role) {
+    return (
+      <NotFoundState
+        pageTitle="Role"
+        title="Unable to load role"
+        description="Something went wrong while loading this role."
+        backTo="/roles"
+        backLabel="Back to roles"
+      />
+    );
+  }
 
   const isSystem = role.is_system;
 

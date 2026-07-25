@@ -9,7 +9,8 @@ import ChatAccessSelector from '../../components/common/ChatAccessSelector';
 import ReportsToPicker from './ReportsToPicker';
 import { employeeService } from '../../services/employeeService';
 import { useToast } from '../../hooks/useToast';
-import { extractValidationErrors, getErrorMessage } from '../../utils/errorUtils';
+import NotFoundState from '../../components/common/NotFoundState';
+import { extractValidationErrors, getErrorMessage, getUserFacingMessage, isNotFoundError } from '../../utils/errorUtils';
 
 const STATUS_OPTIONS = [
   { value: 'ACTIVE', label: 'Active' },
@@ -36,6 +37,8 @@ export default function EmployeeEditPage() {
   const { addToast } = useToast();
 
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [employee, setEmployee] = useState(null);
   const [form, setForm] = useState({
@@ -59,6 +62,8 @@ export default function EmployeeEditPage() {
 
   const fetchEmployee = useCallback(() => {
     setLoading(true);
+    setNotFound(false);
+    setLoadError(false);
     employeeService.getEmployee(id)
       .then((res) => {
         const e = res.data?.data;
@@ -83,7 +88,15 @@ export default function EmployeeEditPage() {
         if (primary) setPrimaryDeptId(String(primary.department?.id || primary.department_id));
         setChatBlockedIds(Array.isArray(e.chat_blocked_user_ids) ? e.chat_blocked_user_ids : []);
       })
-      .catch(() => addToast('Failed to load employee', 'error'))
+      .catch((err) => {
+        setEmployee(null);
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          return;
+        }
+        setLoadError(true);
+        if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load employee'), 'error');
+      })
       .finally(() => setLoading(false));
   }, [id, addToast]);
 
@@ -149,7 +162,7 @@ export default function EmployeeEditPage() {
       addToast('Employee updated', 'success');
       navigate(`/employees/${id}`);
     } catch (err) {
-      addToast(getErrorMessage(err, 'Failed to update employee'), 'error');
+      if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to update employee'), 'error');
       const ve = extractValidationErrors(err);
       if (Object.keys(ve).length > 0) setErrors(ve);
     } finally {
@@ -158,7 +171,28 @@ export default function EmployeeEditPage() {
   };
 
   if (loading) return <div className="animate-pulse h-96 bg-gray-100 rounded-xl" />;
-  if (!employee) return <div className="text-center py-12 text-gray-500">Employee not found</div>;
+  if (notFound) {
+    return (
+      <NotFoundState
+        pageTitle="Edit employee"
+        title="Employee not found"
+        description="This employee does not exist or is no longer available."
+        backTo="/employees"
+        backLabel="Back to employees"
+      />
+    );
+  }
+  if (loadError || !employee) {
+    return (
+      <NotFoundState
+        pageTitle="Edit employee"
+        title="Unable to load employee"
+        description="Something went wrong while loading this employee."
+        backTo="/employees"
+        backLabel="Back to employees"
+      />
+    );
+  }
 
   return (
     <div>
