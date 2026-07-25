@@ -12,6 +12,7 @@ import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import InvitationAcceptPage from './pages/auth/InvitationAcceptPage';
 import HomePage from './pages/home/HomePage';
+import { ContentRefreshProvider } from './contexts/ContentRefreshContext';
 import NewsListPage from './pages/news/NewsListPage';
 import NewsDetailPage from './pages/news/NewsDetailPage';
 import AnnouncementsListPage from './pages/announcements/AnnouncementsListPage';
@@ -42,7 +43,9 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <SocketProvider>
-                    <EmployeeLayout />
+                    <ContentRefreshProvider>
+                      <EmployeeLayout />
+                    </ContentRefreshProvider>
                   </SocketProvider>
                 </ProtectedRoute>
               }

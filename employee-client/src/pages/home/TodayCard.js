@@ -13,6 +13,7 @@ import {
 } from '../documents/DocumentPreviewContext';
 import { pickPrimaryFile, typeLabelFor } from '../documents/documentActions';
 import { iconFor } from './newsIcon';
+import { useContentRefresh } from '../../contexts/ContentRefreshContext';
 
 const FETCH_LIMIT = 20;
 
@@ -57,6 +58,7 @@ function TodayCardInner() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const { openDocument } = useDocumentPreview();
+  const { news, document, announcement } = useContentRefresh();
 
   useEffect(() => {
     let cancelled = false;
@@ -114,7 +116,7 @@ function TodayCardInner() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [news, document, announcement]);
 
   return (
     <div className="lg:col-span-4 bg-white border border-zinc-100 rounded-3xl p-unit-lg shadow-sm flex flex-col">

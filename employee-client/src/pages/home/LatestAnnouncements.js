@@ -6,12 +6,14 @@ import { newsService } from '../../services/newsService';
 import { categoryPalette } from '../../theme/categoryColors';
 import { formatRelative } from '../../theme/dateFormat';
 import { iconFor } from './newsIcon';
+import { useContentRefresh } from '../../contexts/ContentRefreshContext';
 
 const LIMIT = 2;
 
 export default function LatestAnnouncements() {
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { news } = useContentRefresh();
 
   useEffect(() => {
     let cancelled = false;
@@ -31,7 +33,7 @@ export default function LatestAnnouncements() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [news]);
 
   return (
     <div className="bg-white border border-zinc-100 rounded-3xl p-unit-lg shadow-sm flex flex-col">

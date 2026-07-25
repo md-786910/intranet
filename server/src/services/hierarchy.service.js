@@ -73,7 +73,9 @@ const hierarchyService = {
     else if (nodeType === 'COMPANY' || nodeType === 'GROUP') kind = NODE_KIND.OPERATIONAL;
     else if (!kind) kind = parent ? parent.kind : NODE_KIND.OPERATIONAL;
 
-    const isOffice = nodeType === 'OFFICE_LOCATION';
+    // Location fields: offices, companies, and the group root (optional).
+    const allowsLocation =
+      nodeType === 'OFFICE_LOCATION' || nodeType === 'COMPANY' || nodeType === 'GROUP';
     const node = await OrgNode.create({
       organisation_id: data.organisation_id,
       parent_id: data.parent_id || null,
@@ -82,10 +84,10 @@ const hierarchyService = {
       name: data.name,
       code: data.code || null,
       status: data.status || 'ACTIVE',
-      address: isOffice ? (data.address || null) : null,
-      city: isOffice ? (data.city || null) : null,
-      country: isOffice ? (data.country || null) : null,
-      timezone: isOffice ? (data.timezone || null) : null,
+      address: allowsLocation ? (data.address || null) : null,
+      city: allowsLocation ? (data.city || null) : null,
+      country: allowsLocation ? (data.country || null) : null,
+      timezone: allowsLocation ? (data.timezone || null) : null,
       sort_order: data.sort_order || 0,
     }, { transaction });
 

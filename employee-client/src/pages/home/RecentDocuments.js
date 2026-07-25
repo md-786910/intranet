@@ -7,6 +7,7 @@ import {
   useDocumentPreview,
 } from '../documents/DocumentPreviewContext';
 import { pickPrimaryFile, typeLabelFor } from '../documents/documentActions';
+import { useContentRefresh } from '../../contexts/ContentRefreshContext';
 
 const LIMIT = 4;
 
@@ -40,6 +41,7 @@ function RecentDocsInner() {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const { openDocument } = useDocumentPreview();
+  const { document } = useContentRefresh();
 
   useEffect(() => {
     let cancelled = false;
@@ -57,7 +59,7 @@ function RecentDocsInner() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [document]);
 
   return (
     <div className="bg-white border border-zinc-100 rounded-3xl p-unit-lg shadow-sm flex flex-col flex-grow">

@@ -23,20 +23,25 @@ module.exports = {
       },
     ]);
 
-    // 1b. Mirror migration 065's skeleton: GROUP -> Default Company.
+    // 1b. Mirror migration 065's skeleton: GROUP -> COMPANY (named like the org).
     // Migration 065 runs before seeders, so a fresh DB has no org rows to
     // backfill; create the nodes here so /org/tree and Entra sync have a root.
+    const orgName = 'BrightNow';
+    const orgCode = 'BrightNow';
+
     const [groupRow] = await queryInterface.sequelize.query(
       `INSERT INTO org_node
          (organisation_id, parent_id, node_type, kind, name, code, status,
           sort_order, legacy_ref, path, created_at, updated_at)
        VALUES
-         (:orgId, NULL, 'GROUP', 'OPERATIONAL', 'BrightNow', 'BrightNow', 'ACTIVE',
+         (:orgId, NULL, 'GROUP', 'OPERATIONAL', :orgName, :orgCode, 'ACTIVE',
           0, :legacyRef, NULL, :now, :now)
        RETURNING id`,
       {
         replacements: {
           orgId: DEFAULT_ORGANISATION_ID,
+          orgName,
+          orgCode,
           legacyRef: `ORGANISATION:${DEFAULT_ORGANISATION_ID}`,
           now,
         },
@@ -54,13 +59,15 @@ module.exports = {
          (organisation_id, parent_id, node_type, kind, name, code, status,
           sort_order, legacy_ref, path, created_at, updated_at)
        VALUES
-         (:orgId, :parentId, 'COMPANY', 'OPERATIONAL', 'Default Company', 'DEFAULT', 'ACTIVE',
+         (:orgId, :parentId, 'COMPANY', 'OPERATIONAL', :orgName, :orgCode, 'ACTIVE',
           0, NULL, NULL, :now, :now)
        RETURNING id`,
       {
         replacements: {
           orgId: DEFAULT_ORGANISATION_ID,
           parentId: groupId,
+          orgName,
+          orgCode,
           now,
         },
         type: Sequelize.QueryTypes.SELECT,

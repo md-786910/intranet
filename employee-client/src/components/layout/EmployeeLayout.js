@@ -4,11 +4,13 @@ import AnnouncementMarquee from './AnnouncementMarquee';
 import TopNav from './TopNav';
 import SiteFooter from './SiteFooter';
 import { announcementService } from '../../services/announcementService';
+import { useContentRefresh } from '../../contexts/ContentRefreshContext';
 
 const MARQUEE_POLL_MS = 30 * 1000;
 
 export default function EmployeeLayout() {
   const [marqueeItems, setMarqueeItems] = useState([]);
+  const { announcement } = useContentRefresh();
 
   const fetchMarquee = useCallback(async () => {
     try {
@@ -40,6 +42,12 @@ export default function EmployeeLayout() {
       window.removeEventListener('focus', run);
     };
   }, [fetchMarquee]);
+
+  // Live refresh when an announcement notification arrives over the socket.
+  useEffect(() => {
+    if (announcement === 0) return;
+    fetchMarquee();
+  }, [announcement, fetchMarquee]);
 
   return (
     <div className="min-h-screen flex flex-col bg-white font-body-md antialiased">

@@ -60,11 +60,11 @@ module.exports = {
         });
         await setPath(groupId, `${groupId}/`);
 
-        // Default COMPANY to hold pre-existing offices
+        // COMPANY under GROUP — named like the organisation (holds offices)
         const companyId = await insertNode({
           organisation_id: org.id, parent_id: groupId,
           node_type: 'COMPANY', kind: 'OPERATIONAL',
-          name: 'Default Company', code: 'DEFAULT', status: 'ACTIVE',
+          name: org.name || 'Company', code: org.code || null, status: 'ACTIVE',
           address: null, city: null, country: null, timezone: null, sort_order: 0,
           legacy_ref: null, deleted_at: null,
         });

@@ -5,6 +5,7 @@ import Skeleton from '../../components/common/Skeleton';
 import { quickLinksService } from '../../services/quickLinksService';
 import { homeActivityService } from '../../services/homeActivityService';
 import { iconForQuickLink } from './quickLinkIcon';
+import { useContentRefresh } from '../../contexts/ContentRefreshContext';
 
 // Compact relative-time formatter — co-located here rather than a util
 // file since the only caller is this widget.
@@ -34,6 +35,7 @@ export default function BottomRow() {
 function RecentActivityCard() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { any } = useContentRefresh();
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +51,7 @@ function RecentActivityCard() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [any]);
 
   return (
     <div className="lg:col-span-8 bg-white border border-zinc-100 rounded-3xl overflow-hidden shadow-sm flex flex-col">

@@ -93,7 +93,11 @@ const orgService = {
     if (!node) throw ApiError.notFound('Org node not found');
 
     const allowedFields = ['name', 'code', 'status', 'sort_order'];
-    if (node.node_type === 'OFFICE_LOCATION') {
+    if (
+      node.node_type === 'OFFICE_LOCATION' ||
+      node.node_type === 'COMPANY' ||
+      node.node_type === 'GROUP'
+    ) {
       allowedFields.push('address', 'city', 'country', 'timezone');
     }
     const updates = {};

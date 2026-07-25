@@ -28,6 +28,9 @@ const ACCENT_COLORS = {
 
 const EMPTY_FORM = { name: '', code: '', address: '', city: '', country: '', timezone: '' };
 
+/** Derive code from name by removing whitespace (e.g. "BT Electronics" → "BTElectronics"). */
+const codeFromName = (name) => String(name || '').replace(/\s+/g, '');
+
 export default function OrganisationPage() {
   const { addToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -44,6 +47,7 @@ export default function OrganisationPage() {
   const [createNodeType, setCreateNodeType] = useState('');
 
   const [form, setForm] = useState(EMPTY_FORM);
+  const [codeLocked, setCodeLocked] = useState(false);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
@@ -125,7 +129,8 @@ export default function OrganisationPage() {
     (ALLOWED_CHILDREN[node.type] || []).length > 0 && canManageNodes
   ), [canManageNodes]);
 
-  const canEditNode = useCallback((node) => node.type !== 'GROUP' && canManageNodes, [canManageNodes]);
+  // GROUP name/code editable; COMPANY (+ offices) also get optional location.
+  const canEditNode = useCallback((node) => Boolean(node && canManageNodes), [canManageNodes]);
 
   // ── Panel actions ──
   const openView = (node) => {
@@ -138,17 +143,21 @@ export default function OrganisationPage() {
 
   const openEdit = (node) => {
     const target = node || selected;
-    if (!target || target.type === 'GROUP') return;
+    if (!target) return;
     if (!canManageNodes) {
       addToast('You do not have permission to manage the organisation structure', 'error');
       return;
     }
     setSelected(target);
+    const name = target.name || '';
+    const code = target.code || '';
     setForm({
-      name: target.name || '', code: target.code || '',
+      name, code,
       address: target.address || '', city: target.city || '',
       country: target.country || '', timezone: target.timezone || '',
     });
+    // Keep syncing on rename unless an existing code already diverges from the name-derived value.
+    setCodeLocked(Boolean(code.trim()) && code !== codeFromName(name));
     setErrors({});
     setPanelMode('edit');
     setConfirmDelete(false);
@@ -163,6 +172,7 @@ export default function OrganisationPage() {
     setCreateParent(parentNode);
     setCreateNodeType(childType);
     setForm(EMPTY_FORM);
+    setCodeLocked(false);
     setErrors({});
     setPanelMode('create');
     setConfirmDelete(false);
@@ -209,8 +219,9 @@ export default function OrganisationPage() {
     setSaving(true);
     try {
       const nodeType = panelMode === 'create' ? createNodeType : selected.type;
-      const isOffice = nodeType === 'OFFICE_LOCATION';
-      const locationFields = isOffice ? {
+      const allowsLocation =
+        nodeType === 'OFFICE_LOCATION' || nodeType === 'COMPANY' || nodeType === 'GROUP';
+      const locationFields = allowsLocation ? {
         address: form.address.trim() || undefined,
         city: form.city.trim() || undefined,
         country: form.country.trim() || undefined,
@@ -296,8 +307,27 @@ export default function OrganisationPage() {
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: null }));
   };
 
+  const handleNameChange = (value) => {
+    setForm((prev) => ({
+      ...prev,
+      name: value,
+      ...(!codeLocked ? { code: codeFromName(value) } : {}),
+    }));
+    if (errors.name) setErrors((prev) => ({ ...prev, name: null }));
+    if (!codeLocked && errors.code) setErrors((prev) => ({ ...prev, code: null }));
+  };
+
+  const handleCodeChange = (value) => {
+    updateField('code', value);
+    // Lock when custom; clearing unlocks so Name can refill Code again.
+    setCodeLocked(Boolean(value.trim()) && value !== codeFromName(form.name));
+  };
+
   const activeNodeType = panelMode === 'create' ? createNodeType : selected?.type;
-  const isOffice = activeNodeType === 'OFFICE_LOCATION';
+  const allowsLocation =
+    activeNodeType === 'OFFICE_LOCATION' ||
+    activeNodeType === 'COMPANY' ||
+    activeNodeType === 'GROUP';
   const hasChildren = selected?.children?.length > 0;
   const allowedChildren = selected ? (ALLOWED_CHILDREN[selected.type] || []) : [];
 
@@ -387,10 +417,28 @@ export default function OrganisationPage() {
                           <dd className="font-medium text-gray-800">{selected.code}</dd>
                         </div>
                       )}
+                      {selected.address && (
+                        <div className="col-span-2">
+                          <dt className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-0.5">Address</dt>
+                          <dd className="font-medium text-gray-800">{selected.address}</dd>
+                        </div>
+                      )}
                       {selected.city && (
                         <div>
                           <dt className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-0.5">City</dt>
                           <dd className="font-medium text-gray-800">{selected.city}</dd>
+                        </div>
+                      )}
+                      {selected.country && (
+                        <div>
+                          <dt className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-0.5">Country</dt>
+                          <dd className="font-medium text-gray-800">{selected.country}</dd>
+                        </div>
+                      )}
+                      {selected.timezone && (
+                        <div className="col-span-2">
+                          <dt className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-0.5">Timezone</dt>
+                          <dd className="font-medium text-gray-800">{selected.timezone}</dd>
                         </div>
                       )}
                       <div>
@@ -453,27 +501,38 @@ export default function OrganisationPage() {
                   <Input
                     label="Name" name="name" required value={form.name} error={errors.name}
                     placeholder={
-                      activeNodeType === 'COMPANY' ? 'e.g. BT-Electronics' :
+                      activeNodeType === 'GROUP' ? 'e.g. BrightNow Group' :
+                      activeNodeType === 'COMPANY' ? 'e.g. BrightNow' :
                       activeNodeType === 'ADMIN_UNIT' ? 'e.g. HR' :
                       activeNodeType === 'OFFICE_LOCATION' ? 'e.g. Vienna Office' :
                       activeNodeType === 'VERTICAL' ? 'e.g. Finance' : 'e.g. Invoicing'
                     }
-                    onChange={(e) => updateField('name', e.target.value)}
+                    onChange={(e) => handleNameChange(e.target.value)}
                   />
                   <Input
                     label="Code" name="code" value={form.code}
                     placeholder="Optional short code"
-                    helpText="Internal reference. Leave blank to auto-generate."
-                    onChange={(e) => updateField('code', e.target.value)}
+                    helpText={
+                      activeNodeType === 'GROUP'
+                        ? 'Filled from name (spaces removed). Entra sync uses this tree root.'
+                        : 'Filled from name (spaces removed). You can edit it.'
+                    }
+                    onChange={(e) => handleCodeChange(e.target.value)}
                   />
-                  {isOffice && (
+                  {allowsLocation && (
                     <>
-                      <Input label="Address" name="address" value={form.address} placeholder="Street address" onChange={(e) => updateField('address', e.target.value)} />
+                      <Input
+                        label="Address"
+                        name="address"
+                        value={form.address}
+                        placeholder="Street address (optional)"
+                        onChange={(e) => updateField('address', e.target.value)}
+                      />
                       <div className="grid grid-cols-2 gap-3">
                         <Input label="City" name="city" value={form.city} placeholder="e.g. Vienna" onChange={(e) => updateField('city', e.target.value)} />
                         <Input label="Country" name="country" value={form.country} placeholder="e.g. Austria" onChange={(e) => updateField('country', e.target.value)} />
                       </div>
-                      <Input label="Timezone" name="timezone" value={form.timezone} placeholder="e.g. Europe/Vienna" helpText="IANA format" onChange={(e) => updateField('timezone', e.target.value)} />
+                      <Input label="Timezone" name="timezone" value={form.timezone} placeholder="e.g. Europe/Vienna" helpText="IANA format (optional)" onChange={(e) => updateField('timezone', e.target.value)} />
                     </>
                   )}
                 </div>
@@ -481,7 +540,7 @@ export default function OrganisationPage() {
             </div>
 
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50/50">
-              {panelMode === 'view' && selected?.type !== 'GROUP' && canEditNode(selected) && (
+              {panelMode === 'view' && selected && canEditNode(selected) && (
                 <Button variant="primary" className="w-full" onClick={() => openEdit(selected)}>
                   Edit {NODE_TYPE_LABELS[selected?.type]}
                 </Button>

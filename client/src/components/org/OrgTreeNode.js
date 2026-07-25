@@ -45,7 +45,7 @@ export default function OrgTreeNode({
   const isSelected = selectedId === node.id;
   const allowedChildTypes = ALLOWED_CHILDREN[node.type] || [];
   const canAddChild = allowedChildTypes.length > 0 && (canAddNode ? canAddNode(node) : true);
-  const canEditCurrentNode = node.type !== 'GROUP' && (canEditNode ? canEditNode(node) : true);
+  const canEditCurrentNode = canEditNode ? canEditNode(node) : node.type !== 'GROUP';
   const typeColor = TYPE_COLORS[node.type] || TYPE_COLORS.DEPARTMENT;
   const iconPath = TYPE_ICONS[node.type] || TYPE_ICONS.DEPARTMENT;
 
@@ -102,7 +102,7 @@ export default function OrgTreeNode({
         <div className="flex-1 min-w-0">
           <span className={`text-sm ${isSelected ? 'font-semibold' : 'font-medium'} text-gray-900 truncate block`} title={node.name}>
             {node.name}
-            {node.code && (
+            {node.code && String(node.code).trim().toLowerCase() !== String(node.name || '').trim().toLowerCase() && (
               <span className="ml-1.5 text-xs text-gray-400 font-mono">({node.code})</span>
             )}
           </span>

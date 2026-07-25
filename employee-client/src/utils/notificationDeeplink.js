@@ -7,5 +7,6 @@ export function deeplinkFor(notification) {
   if (!notification) return '/home';
   if (notification.type === 'NEWS') return `/news/${notification.entity_id}`;
   if (notification.type === 'DOCUMENT') return `/documents?preview=${notification.entity_id}`;
+  if (notification.type === 'ANNOUNCEMENT') return `/announcements/${notification.entity_id}`;
   return '/home';
 }

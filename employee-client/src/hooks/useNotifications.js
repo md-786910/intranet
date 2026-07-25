@@ -11,6 +11,7 @@ function toastMessageFor(notification) {
   const title = notification.title || 'New update';
   if (notification.type === 'NEWS') return `New article: ${title}`;
   if (notification.type === 'DOCUMENT') return `New document: ${title}`;
+  if (notification.type === 'ANNOUNCEMENT') return `New announcement: ${title}`;
   return title;
 }
 

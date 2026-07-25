@@ -62,15 +62,27 @@ async function resolveGroupRoot() {
 
 /** Upsert Entra job title into job_title catalog (rank is required). */
 async function ensureJobTitle(name) {
-  const trimmed = (name || '').trim();
-  if (!trimmed) return null;
-  const { JobTitle } = require('../../database/models');
-  const title = trimmed.slice(0, 100);
+  const { formatJobTitleName } = require('../../utils/jobTitleFormat');
+  const title = formatJobTitleName(name);
+  if (!title) return null;
+  const { JobTitle, sequelize } = require('../../database/models');
+  const { Op } = require('sequelize');
 
   const existing = await JobTitle.findOne({
-    where: { tenant_id: DEFAULT_TENANT_ID, name: title },
+    where: {
+      tenant_id: DEFAULT_TENANT_ID,
+      [Op.and]: sequelize.where(
+        sequelize.fn('LOWER', sequelize.col('name')),
+        title.toLowerCase(),
+      ),
+    },
   });
-  if (existing) return existing.name;
+  if (existing) {
+    if (existing.name !== title) {
+      await existing.update({ name: title });
+    }
+    return existing.name;
+  }
 
   const maxRank = await JobTitle.max('rank', { where: { tenant_id: DEFAULT_TENANT_ID } });
   const [row] = await JobTitle.findOrCreate({

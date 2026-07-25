@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
@@ -114,6 +114,7 @@ export default function UserCreatePage({
   const [reportsTo, setReportsTo] = useState(null);
   const [primaryDeptId, setPrimaryDeptId] = useState('');
   const [jobTitles, setJobTitles] = useState([]);
+  const [jobTitlesLoading, setJobTitlesLoading] = useState(false);
   const [chatCandidates, setChatCandidates] = useState([]);
   const [chatCandidatesLoading, setChatCandidatesLoading] = useState(true);
   const [chatBlockedIds, setChatBlockedIds] = useState([]);
@@ -138,15 +139,27 @@ export default function UserCreatePage({
   const [permScopes, setPermScopes] = useState([]);
   const [showPermForm, setShowPermForm] = useState(false);
 
+  const loadJobTitles = useCallback(async () => {
+    setJobTitlesLoading(true);
+    try {
+      const res = await jobTitleService.list();
+      setJobTitles(res.data?.data || []);
+    } catch {
+      setJobTitles([]);
+    } finally {
+      setJobTitlesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     roleService.getRoles({ limit: 100 }).then((res) => setAllRoles(res.data?.data?.roles || [])).catch(() => {});
     roleService.getModules().then((res) => setModules(res.data?.data || [])).catch(() => {});
-    jobTitleService.list().then((res) => setJobTitles(res.data?.data || [])).catch(() => {});
+    loadJobTitles();
     userService.listChatCandidates()
       .then((res) => setChatCandidates(res.data?.data || []))
       .catch(() => setChatCandidates([]))
       .finally(() => setChatCandidatesLoading(false));
-  }, []);
+  }, [loadJobTitles]);
 
   // ── Derived ──
   const jobTitleOptions = useMemo(
@@ -480,8 +493,53 @@ export default function UserCreatePage({
           <div className="border-t border-gray-100 pt-5">
             <h3 className="text-sm font-semibold text-gray-800 mb-4">Profile</h3>
             <div className="grid grid-cols-2 gap-4">
-              <Select label="Job Title" name="job_title" value={form.job_title}
-                onChange={handleChange} options={jobTitleOptions} placeholder="Select a job title" />
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <label htmlFor="job_title" className="block text-sm font-medium text-gray-700">
+                    Job Title
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to="/job-titles"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-medium text-primary-600 hover:text-primary-700"
+                    >
+                      Create job title
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={loadJobTitles}
+                      disabled={jobTitlesLoading}
+                      className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
+                      title="Refresh job titles"
+                      aria-label="Refresh job titles"
+                    >
+                      <svg
+                        className={`w-3.5 h-3.5 ${jobTitlesLoading ? 'animate-spin' : ''}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={2}
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <Select
+                  name="job_title"
+                  value={form.job_title}
+                  onChange={handleChange}
+                  options={jobTitleOptions}
+                  placeholder="Select a job title"
+                  disabled={jobTitlesLoading}
+                />
+              </div>
               <Input label="Employee ID" name="employee_id" value={form.employee_id} onChange={handleChange} />
             </div>
             <div className="mt-4">

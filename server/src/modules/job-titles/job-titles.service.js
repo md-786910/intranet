@@ -1,5 +1,21 @@
+const { Op } = require('sequelize');
 const ApiError = require('../../utils/ApiError');
 const { DEFAULT_TENANT_ID } = require('../../utils/constants');
+const { formatJobTitleName } = require('../../utils/jobTitleFormat');
+
+async function findByNameCi(JobTitle, sequelize, name, { transaction, excludeId } = {}) {
+  const where = {
+    tenant_id: DEFAULT_TENANT_ID,
+    [Op.and]: sequelize.where(
+      sequelize.fn('LOWER', sequelize.col('name')),
+      name.toLowerCase(),
+    ),
+  };
+  if (excludeId != null) {
+    where.id = { [Op.ne]: excludeId };
+  }
+  return JobTitle.findOne({ where, transaction });
+}
 
 const service = {
   async list() {
@@ -19,12 +35,12 @@ const service = {
 
   async create(data) {
     const { JobTitle, sequelize } = require('../../database/models');
+    const name = formatJobTitleName(data.name);
+    if (!name) throw ApiError.badRequest('Name is required');
+
     const tx = await sequelize.transaction();
     try {
-      const clash = await JobTitle.findOne({
-        where: { tenant_id: DEFAULT_TENANT_ID, name: data.name },
-        transaction: tx,
-      });
+      const clash = await findByNameCi(JobTitle, sequelize, name, { transaction: tx });
       if (clash) throw ApiError.conflict('A job title with this name already exists');
 
       const maxRank = await JobTitle.max('rank', {
@@ -34,7 +50,7 @@ const service = {
       const created = await JobTitle.create(
         {
           tenant_id: DEFAULT_TENANT_ID,
-          name: data.name,
+          name,
           rank: data.rank || (maxRank || 0) + 1,
           description: data.description || null,
         },
@@ -55,13 +71,18 @@ const service = {
       const row = await JobTitle.findOne({ where: { id, tenant_id: DEFAULT_TENANT_ID }, transaction: tx });
       if (!row) throw ApiError.notFound('Job title not found');
 
-      if (data.name !== undefined && data.name !== row.name) {
-        const clash = await JobTitle.findOne({
-          where: { tenant_id: DEFAULT_TENANT_ID, name: data.name },
-          transaction: tx,
-        });
-        if (clash) throw ApiError.conflict('A job title with this name already exists');
-        row.name = data.name;
+      if (data.name !== undefined) {
+        const name = formatJobTitleName(data.name);
+        if (!name) throw ApiError.badRequest('Name is required');
+
+        if (name.toLowerCase() !== String(row.name || '').toLowerCase()) {
+          const clash = await findByNameCi(JobTitle, sequelize, name, {
+            transaction: tx,
+            excludeId: id,
+          });
+          if (clash) throw ApiError.conflict('A job title with this name already exists');
+        }
+        row.name = name;
       }
 
       await row.save({ transaction: tx });

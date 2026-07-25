@@ -4,7 +4,8 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { jobTitleService } from '../../services/jobTitleService';
 import { useToast } from '../../hooks/useToast';
-import { getErrorMessage, getUserFacingMessage } from '../../utils/errorUtils';
+import { getUserFacingMessage } from '../../utils/errorUtils';
+import { formatJobTitleName } from '../../utils/jobTitleFormat';
 
 export default function JobTitlesPage() {
   const { addToast } = useToast();
@@ -32,13 +33,14 @@ export default function JobTitlesPage() {
   useEffect(() => { load(); }, []);
 
   const handleAdd = async () => {
-    if (!newName.trim()) {
+    const name = formatJobTitleName(newName);
+    if (!name) {
       addToast('Name is required', 'error');
       return;
     }
     setAdding(true);
     try {
-      await jobTitleService.create({ name: newName.trim() });
+      await jobTitleService.create({ name });
       setNewName('');
       await load();
       addToast('Job title added', 'success');
@@ -60,13 +62,14 @@ export default function JobTitlesPage() {
   };
 
   const saveEdit = async (id) => {
-    if (!editName.trim()) {
+    const name = formatJobTitleName(editName);
+    if (!name) {
       addToast('Name is required', 'error');
       return;
     }
     setSavingId(id);
     try {
-      await jobTitleService.update(id, { name: editName.trim() });
+      await jobTitleService.update(id, { name });
       cancelEdit();
       await load();
       addToast('Saved', 'success');
@@ -98,21 +101,26 @@ export default function JobTitlesPage() {
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/40">
-          <div className="grid grid-cols-12 gap-3 items-end">
-            <div className="col-span-9">
-              <Input
-                label="New job title"
-                name="newName"
-                placeholder="e.g. Senior Engineer"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-              />
-            </div>
-            <div className="col-span-3">
-              <Button onClick={handleAdd} loading={adding} className="w-full">Add</Button>
-            </div>
+          <label htmlFor="newName" className="block text-sm font-medium text-gray-700 mb-1">
+            New job title
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              id="newName"
+              name="newName"
+              type="text"
+              placeholder="e.g. Senior Engineer"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onBlur={() => setNewName((v) => formatJobTitleName(v) || v)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+              className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+            <Button onClick={handleAdd} loading={adding} className="shrink-0">
+              Add
+            </Button>
           </div>
+          <p className="mt-1.5 text-xs text-gray-500">Saved as Title Case (e.g. Team Lead).</p>
         </div>
 
         <table className="w-full">
@@ -141,6 +149,7 @@ export default function JobTitlesPage() {
                         name="editName"
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
+                        onBlur={() => setEditName((v) => formatJobTitleName(v) || v)}
                         onKeyDown={(e) => e.key === 'Enter' && saveEdit(item.id)}
                       />
                     ) : (
