@@ -19,6 +19,8 @@ function getInitials(name = '') {
 
 /**
  * Compact person card for the LTR org tree.
+ * Click the person area → BrightNow user details when synced (local_user_id).
+ * Expand stays a separate control.
  */
 export function OrgPersonCard({
   user,
@@ -30,7 +32,7 @@ export function OrgPersonCard({
   noReports = false,
   reportCount = null,
   onToggleExpand,
-  onOpenProfile,
+  onOpenUser,
 }) {
   const color = TOP_COLORS[depth % TOP_COLORS.length];
   const avatarBg = AVATAR_BG[depth % AVATAR_BG.length];
@@ -39,6 +41,7 @@ export function OrgPersonCard({
   const knownCount = typeof reportCount === 'number' ? reportCount : null;
   const hasReports = knownCount === null ? !noReports : knownCount > 0;
   const canExpand = Boolean(onToggleExpand) && hasReports && !noReports;
+  const canOpenUser = Boolean(onOpenUser && user?.local_user_id);
 
   let expandLabel = 'Expand';
   if (loading) expandLabel = 'Loading…';
@@ -55,14 +58,31 @@ export function OrgPersonCard({
       } ${selected ? 'border-primary-400 ring-2 ring-primary-100' : 'border-gray-100'}`}
       style={{ borderTop: `3px solid ${color}` }}
     >
-      <div className={`flex items-center gap-3 px-3 ${isLg ? 'py-3' : 'py-2.5'}`}>
+      <div
+        role={canOpenUser ? 'button' : undefined}
+        tabIndex={canOpenUser ? 0 : undefined}
+        onClick={() => {
+          if (canOpenUser) onOpenUser(user);
+        }}
+        onKeyDown={(e) => {
+          if (!canOpenUser) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onOpenUser(user);
+          }
+        }}
+        className={`flex items-center gap-3 px-3 ${isLg ? 'py-3' : 'py-2.5'} ${
+          canOpenUser ? 'cursor-pointer hover:bg-gray-50 rounded-t-xl' : ''
+        }`}
+        title={canOpenUser ? 'Open user details' : undefined}
+      >
         <div
           className={`${isLg ? 'w-10 h-10 text-sm' : 'w-8 h-8 text-xs'} rounded-full ${avatarBg} flex items-center justify-center text-white font-bold shrink-0`}
         >
           {getInitials(user.displayName)}
         </div>
         <div className="min-w-0 flex-1">
-          <p className={`${isLg ? 'text-sm' : 'text-sm'} font-semibold text-gray-900 truncate leading-tight`}>
+          <p className="text-sm font-semibold text-gray-900 truncate leading-tight">
             {user.displayName}
           </p>
           {title && (
@@ -82,36 +102,26 @@ export function OrgPersonCard({
         )}
       </div>
 
-      <div className="px-3 pb-2.5 flex gap-1.5">
-        {canExpand && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleExpand(user);
-            }}
-            disabled={loading}
-            className="flex-1 text-[11px] font-medium text-primary-700 hover:bg-primary-50 border border-primary-100 rounded-lg py-1.5 transition-colors disabled:opacity-50"
-          >
-            {expandLabel}
-          </button>
-        )}
-        {(noReports || knownCount === 0) && (
-          <span className="flex-1 text-[11px] text-center text-gray-400 py-1.5">No reports</span>
-        )}
-        {onOpenProfile && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenProfile(user);
-            }}
-            className={`${canExpand || noReports || knownCount === 0 ? 'flex-1' : 'w-full'} text-[11px] font-medium text-gray-600 hover:text-primary-700 hover:bg-gray-50 border border-gray-100 rounded-lg py-1.5 transition-colors`}
-          >
-            Profile
-          </button>
-        )}
-      </div>
+      {(canExpand || noReports || knownCount === 0) && (
+        <div className="px-3 pb-2.5 flex gap-1.5">
+          {canExpand && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpand(user);
+              }}
+              disabled={loading}
+              className="flex-1 text-[11px] font-medium text-primary-700 hover:bg-primary-50 border border-primary-100 rounded-lg py-1.5 transition-colors disabled:opacity-50"
+            >
+              {expandLabel}
+            </button>
+          )}
+          {(noReports || knownCount === 0) && (
+            <span className="flex-1 text-[11px] text-center text-gray-400 py-1.5">No reports</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -157,7 +167,7 @@ export function OrgTreeNode({
   noReportsIds,
   selectedId,
   onToggleExpand,
-  onOpenProfile,
+  onOpenUser,
 }) {
   const expanded = expandedIds.has(user.id);
   const children = childrenById[user.id];
@@ -187,7 +197,7 @@ export function OrgTreeNode({
       noReports={noReports}
       reportCount={typeof reportCount === 'number' ? reportCount : null}
       onToggleExpand={noReports || reportCount === 0 ? undefined : onToggleExpand}
-      onOpenProfile={onOpenProfile}
+      onOpenUser={onOpenUser}
     />
   );
 
@@ -212,7 +222,7 @@ export function OrgTreeNode({
               noReportsIds={noReportsIds}
               selectedId={selectedId}
               onToggleExpand={onToggleExpand}
-              onOpenProfile={onOpenProfile}
+              onOpenUser={onOpenUser}
             />
           </li>
         ))}
@@ -226,7 +236,6 @@ export function OrgTreeNode({
         {card}
         {expanded && Array.isArray(children) && children.length > 0 && (
           <>
-            {/* Stem from root into first-level spine */}
             <div className="w-4 h-0.5 bg-gray-300 shrink-0" aria-hidden />
             {childrenColumn}
           </>
@@ -235,7 +244,6 @@ export function OrgTreeNode({
     );
   }
 
-  // Nested node: card + optional children to the right (already wrapped by parent's connectors)
   return (
     <div className="flex flex-row items-center">
       {card}
@@ -244,7 +252,7 @@ export function OrgTreeNode({
   );
 }
 
-/** @deprecated kept for import safety — use OrgTreeNode */
+/** @deprecated */
 export function OrgReportsBranch() {
   return null;
 }

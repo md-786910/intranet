@@ -36,11 +36,10 @@ export default function OrgHierarchyView() {
   const [isDragging, setIsDragging] = useState(false);
   const countPrefetchRef = useRef(new Set());
 
-  const openProfile = useCallback((user) => {
+  // Only BrightNow user details when the Entra person is synced locally.
+  const openUser = useCallback((user) => {
     if (user?.local_user_id) {
       navigate(`/users/${user.local_user_id}`);
-    } else if (user?.id) {
-      navigate(`/active-directory/${user.id}`);
     }
   }, [navigate]);
 
@@ -393,7 +392,7 @@ export default function OrgHierarchyView() {
               noReportsIds={noReportsIds}
               selectedId={selectedId}
               onToggleExpand={toggleExpand}
-              onOpenProfile={openProfile}
+              onOpenUser={openUser}
             />
           </div>
         </div>
