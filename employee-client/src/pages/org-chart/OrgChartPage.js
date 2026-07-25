@@ -6,6 +6,10 @@ import MaterialIcon from '../../components/common/MaterialIcon';
 import { orgService } from '../../services/orgService';
 import { azureAdService } from '../../services/azureAdService';
 
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 1.5;
+const ZOOM_STEP = 0.1;
+
 const RANK_PILLS = [
   'bg-amber-100 text-amber-800 border-amber-200',
   'bg-rose-100 text-rose-800 border-rose-200',
@@ -336,9 +340,78 @@ export default function OrgChartPage() {
   const [deptLoading, setDeptLoading] = useState(false);
   const [expandedIds, setExpandedIds] = useState(() => new Set());
   const [loadingIds, setLoadingIds] = useState(() => new Set());
+  const [zoom, setZoom] = useState(1);
+  const [isPanning, setIsPanning] = useState(false);
   const inflightRef = useRef(new Set());
+  const chartScrollRef = useRef(null);
+  const panRef = useRef({ active: false, x: 0, y: 0, sl: 0, st: 0 });
 
   const isDeptView = Boolean(deptId || deptFilter);
+
+  const zoomIn = useCallback(
+    () => setZoom((z) => Math.min(MAX_ZOOM, Math.round((z + ZOOM_STEP) * 10) / 10)),
+    [],
+  );
+  const zoomOut = useCallback(
+    () => setZoom((z) => Math.max(MIN_ZOOM, Math.round((z - ZOOM_STEP) * 10) / 10)),
+    [],
+  );
+  const zoomReset = useCallback(() => setZoom(1), []);
+
+  // Ctrl/Cmd + wheel zoom (native non-passive so preventDefault works)
+  useEffect(() => {
+    const el = chartScrollRef.current;
+    if (!el || isDeptView) return undefined;
+
+    const onWheel = (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.deltaY < 0) {
+        setZoom((z) => Math.min(MAX_ZOOM, Math.round((z + ZOOM_STEP) * 10) / 10));
+      } else if (e.deltaY > 0) {
+        setZoom((z) => Math.max(MIN_ZOOM, Math.round((z - ZOOM_STEP) * 10) / 10));
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [isDeptView, loading, error, roots.length]);
+
+  // Left-click drag to pan (skip when interacting with buttons/links)
+  const onChartMouseDown = (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest('button, a, input, textarea, select, label')) return;
+    const el = chartScrollRef.current;
+    if (!el) return;
+    panRef.current = {
+      active: true,
+      moved: false,
+      x: e.pageX,
+      y: e.pageY,
+      sl: el.scrollLeft,
+      st: el.scrollTop,
+    };
+    setIsPanning(true);
+  };
+
+  const onChartMouseMove = (e) => {
+    if (!panRef.current.active) return;
+    e.preventDefault();
+    const el = chartScrollRef.current;
+    if (!el) return;
+    const dx = e.pageX - panRef.current.x;
+    const dy = e.pageY - panRef.current.y;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) panRef.current.moved = true;
+    el.scrollLeft = panRef.current.sl - dx;
+    el.scrollTop = panRef.current.st - dy;
+  };
+
+  const endPan = () => {
+    if (!panRef.current.active) return;
+    panRef.current.active = false;
+    setIsPanning(false);
+  };
 
   const load = useCallback(() => {
     setLoading(true);
@@ -596,23 +669,73 @@ export default function OrgChartPage() {
           matchedIds && visibleRoots.length === 0 ? (
             <div className="text-center py-12 text-secondary">No matches.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <div className="inline-flex justify-center min-w-full px-4 py-6">
-                <div className="flex items-start gap-unit-xl">
-                  {visibleRoots.map((root) => (
-                    <TreeNode
-                      key={root.azure_id}
-                      node={root}
-                      depth={0}
-                      expandedIds={expandedIds}
-                      toggle={toggle}
-                      loadChildren={loadChildren}
-                      loadingIds={loadingIds}
-                      onChat={handleChat}
-                      matchedIds={matchedIds}
-                      query={trimmedQuery}
-                    />
-                  ))}
+            <div>
+              <div className="flex items-center justify-end gap-2 mb-2 px-1">
+                <p className="text-xs text-secondary mr-auto hidden sm:block">
+                  Ctrl + scroll to zoom · drag to pan
+                </p>
+                <div className="inline-flex items-center gap-0.5 rounded-lg border border-outline-variant bg-white p-0.5">
+                  <button
+                    type="button"
+                    onClick={zoomOut}
+                    disabled={zoom <= MIN_ZOOM}
+                    className="w-7 h-7 text-sm font-bold text-on-surface hover:bg-surface-container-low rounded-md disabled:opacity-40"
+                    title="Zoom out"
+                    aria-label="Zoom out"
+                  >
+                    −
+                  </button>
+                  <button
+                    type="button"
+                    onClick={zoomReset}
+                    className="min-w-[2.75rem] h-7 text-[11px] font-medium text-on-surface-variant hover:bg-surface-container-low rounded-md tabular-nums"
+                    title="Reset zoom"
+                  >
+                    {Math.round(zoom * 100)}%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={zoomIn}
+                    disabled={zoom >= MAX_ZOOM}
+                    className="w-7 h-7 text-sm font-bold text-on-surface hover:bg-surface-container-low rounded-md disabled:opacity-40"
+                    title="Zoom in"
+                    aria-label="Zoom in"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              {/* Fixed-height viewport: zoom scales content inside; section height stays stable */}
+              <div
+                ref={chartScrollRef}
+                className="h-[min(70vh,36rem)] overflow-auto rounded-2xl bg-white/40 border border-outline-variant/30 select-none"
+                style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
+                onMouseDown={onChartMouseDown}
+                onMouseMove={onChartMouseMove}
+                onMouseUp={endPan}
+                onMouseLeave={endPan}
+              >
+                {/* left-drag pans; Expand buttons are excluded from pan start */}
+                <div
+                  className="inline-flex justify-center min-w-full px-4 py-6"
+                  style={{ zoom }}
+                >
+                  <div className="flex items-start gap-unit-xl">
+                    {visibleRoots.map((root) => (
+                      <TreeNode
+                        key={root.azure_id}
+                        node={root}
+                        depth={0}
+                        expandedIds={expandedIds}
+                        toggle={toggle}
+                        loadChildren={loadChildren}
+                        loadingIds={loadingIds}
+                        onChat={handleChat}
+                        matchedIds={matchedIds}
+                        query={trimmedQuery}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
