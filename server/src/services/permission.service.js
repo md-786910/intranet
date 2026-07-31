@@ -333,9 +333,58 @@ const permissionService = {
   },
 
   async invalidateUserCache(userId) {
-    await cacheService.deletePattern(`perm:${userId}:*`);
-    await cacheService.deletePattern(`perms:${userId}:*`);
-    await cacheService.deletePattern(`scope:read:${userId}:*`);
+    await cacheService.deletePattern(`bh:perm:${userId}:*`);
+    await cacheService.deletePattern(`bh:perms:${userId}:*`);
+    await cacheService.deletePattern(`bh:scope:read:${userId}:*`);
+  },
+
+  /**
+   * Same gate as admin client HomeRedirect — true if user can stay in the admin portal.
+   */
+  async hasAdminPortalAccess(userId) {
+    const checks = [
+      ['ADMIN', 'VIEW_ANALYTICS'],
+      ['ADMIN', 'MANAGE_USERS'],
+      ['ADMIN', 'MANAGE_ROLES'],
+      ['ADMIN', 'MANAGE_OFFICE_LOCATIONS'],
+      ['NEWS', 'EDIT'],
+      ['NEWS', 'CREATE'],
+      ['DOCUMENTS', 'EDIT'],
+      ['DOCUMENTS', 'CREATE'],
+    ];
+    for (const [moduleCode, actionCode] of checks) {
+      // eslint-disable-next-line no-await-in-loop
+      if (await this.hasPermissionAnywhere(userId, moduleCode, actionCode)) {
+        return true;
+      }
+    }
+    return false;
+  },
+
+  /**
+   * After role/permission mutations: if the user can no longer use the admin portal,
+   * revoke refresh tokens and notify their open admin socket sessions.
+   * Caller must clear permission cache first.
+   */
+  async enforceAdminPortalAccess(userId) {
+    const hasAccess = await this.hasAdminPortalAccess(userId);
+    if (hasAccess) return { revoked: false };
+
+    const tokenService = require('./token.service');
+    await tokenService.revokeAllUserTokens(userId, 'ROLE_CHANGE');
+
+    try {
+      const { getIO } = require('../config/socket');
+      const io = getIO();
+      if (io) {
+        io.to(`user:${userId}`).emit('auth:session-revoked', { reason: 'ROLE_CHANGE' });
+      }
+    } catch (err) {
+      logger.warn(`Failed to emit auth:session-revoked for user ${userId}: ${err.message}`);
+    }
+
+    logger.info(`[auth] session revoked for user ${userId} — no admin portal access`);
+    return { revoked: true };
   },
 };
 

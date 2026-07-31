@@ -7,6 +7,7 @@ const cacheService = require('../../services/cache.service');
 const tokenService = require('../../services/token.service');
 const emailService = require('../../services/email.service');
 const organisationContextService = require('../../services/organisation-context.service');
+const permissionService = require('../../services/permission.service');
 const logger = require('../../config/logger');
 const { DEFAULT_TENANT_ID } = require('../../utils/constants');
 const { parsePagination, buildPagination } = require('../../utils/pagination');
@@ -1103,6 +1104,8 @@ const usersService = {
       });
 
       await transaction.commit();
+      // After commit so role state is visible — kick demoted admins off the portal.
+      await permissionService.enforceAdminPortalAccess(id);
       return this.getById(id);
     } catch (error) {
       await transaction.rollback();
@@ -1208,6 +1211,7 @@ const usersService = {
 
     await cacheService.deletePattern(`bh:perm:${userId}:*`);
     await cacheService.deletePattern(`bh:perms:${userId}:*`);
+    await permissionService.enforceAdminPortalAccess(userId);
 
     await auditService.log({
       user_id: actorUserId,
@@ -1231,6 +1235,7 @@ const usersService = {
 
     await cacheService.deletePattern(`bh:perm:${userId}:*`);
     await cacheService.deletePattern(`bh:perms:${userId}:*`);
+    await permissionService.enforceAdminPortalAccess(userId);
 
     await auditService.log({
       user_id: actorUserId,

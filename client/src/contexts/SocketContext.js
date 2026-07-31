@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
-import { getAccessToken } from '../config/api';
+import { getAccessToken, clearTokens } from '../config/api';
+import { useAuth } from '../hooks/useAuth';
 
 const SocketContext = createContext(null);
 
@@ -8,12 +9,14 @@ const SOCKET_URL = (process.env.REACT_APP_API_URL || 'http://localhost:8000/api/
   .replace(/\/api\/v1\/?$/, '');
 
 export function SocketProvider({ children }) {
+  const { logout } = useAuth();
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [lastSeenUpdates, setLastSeenUpdates] = useState({});
   const socketRef = useRef(null);
   const reconnectAttempt = useRef(0);
+  const handlingSessionRevoke = useRef(false);
 
   const connect = useCallback(() => {
     const token = getAccessToken();
@@ -77,9 +80,27 @@ export function SocketProvider({ children }) {
       }
     });
 
+    // Demoted from admin portal (e.g. role changed to Employee) — force local logout.
+    newSocket.on('auth:session-revoked', async () => {
+      if (handlingSessionRevoke.current) return;
+      handlingSessionRevoke.current = true;
+      try {
+        newSocket.disconnect();
+        await logout();
+      } catch {
+        clearTokens();
+      } finally {
+        window.location.replace(
+          '/login?notice=' + encodeURIComponent(
+            'Your admin access was removed. Sign in again or use the employee portal.',
+          ),
+        );
+      }
+    });
+
     socketRef.current = newSocket;
     setSocket(newSocket);
-  }, []);
+  }, [logout]);
 
   const disconnect = useCallback(() => {
     if (socketRef.current) {

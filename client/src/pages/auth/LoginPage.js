@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import Input from "../../components/common/Input";
 import Button from "../../components/common/Button";
@@ -19,8 +19,12 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const from = location.state?.from?.pathname || "/";
-  const notice = location.state?.notice;
+  const notice = useMemo(
+    () => location.state?.notice || searchParams.get("notice") || "",
+    [location.state?.notice, searchParams],
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
