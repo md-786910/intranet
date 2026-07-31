@@ -15,4 +15,7 @@ export const chatService = {
 
   editMessage: (messageId, content) =>
     api.patch(`/chat/messages/${messageId}`, { content }),
+
+  /** Scoped contacts for starting chats — not the admin Users list. */
+  getContacts: (params) => api.get('/chat/contacts', { params }),
 };

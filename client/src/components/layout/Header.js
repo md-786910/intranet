@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import { useOrgTree } from '../../hooks/useOrgTree';
@@ -98,20 +99,27 @@ export default function Header() {
 
       <div className="flex items-center justify-end gap-4 min-w-0 flex-1">
         <HierarchyRow segments={hierarchySegments} />
-        {chatUnread > 0 && (
-          <div
-            className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-full bg-primary-50 border border-primary-100 px-2.5 py-1"
-            title={`${chatUnread} unread chat message${chatUnread === 1 ? '' : 's'}`}
-          >
-            <svg className="w-3.5 h-3.5 text-primary-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75c0 4.556 4.694 7.5 9.75 7.5s9.75-2.944 9.75-7.5-4.694-7.5-9.75-7.5-9.75 2.944-9.75 7.5z" />
-            </svg>
-            <span className="text-xs font-semibold text-primary-700">
-              {chatUnread > 9 ? '9+' : chatUnread}
-            </span>
-          </div>
-        )}
+        <Link
+          to="/chat"
+          className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-colors ${
+            chatUnread > 0
+              ? 'bg-primary-50 border-primary-100 text-primary-700 hover:bg-primary-100'
+              : 'bg-gray-50 border-gray-100 text-gray-600 hover:bg-gray-100'
+          }`}
+          title={
+            chatUnread > 0
+              ? `${chatUnread} unread chat message${chatUnread === 1 ? '' : 's'}`
+              : 'Open chat'
+          }
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75c0 4.556 4.694 7.5 9.75 7.5s9.75-2.944 9.75-7.5-4.694-7.5-9.75-7.5-9.75 2.944-9.75 7.5z" />
+          </svg>
+          <span className="text-xs font-semibold">
+            {chatUnread > 0 ? (chatUnread > 9 ? '9+' : chatUnread) : 'Chat'}
+          </span>
+        </Link>
       </div>
     </header>
   );

@@ -24,6 +24,7 @@ import InvitationAcceptPage from './pages/auth/InvitationAcceptPage';
 // Pages
 import DashboardPage from './pages/dashboard/DashboardPage';
 import ContentDashboardPage from './pages/dashboard/ContentDashboardPage';
+import ChatPage from './pages/chat/ChatPage';
 import OrganisationPage from './pages/organisation/OrganisationPage';
 import UsersListPage from './pages/users/UsersListPage';
 import UserCreatePage from './pages/users/UserCreatePage';
@@ -133,6 +134,7 @@ function App() {
               >
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/content-dashboard" element={<ContentDashboardPage />} />
+                <Route path="/chat" element={<ChatPage />} />
                 <Route path="/organisation" element={<OrganisationPage />} />
 
                 {/* Active Directory */}
