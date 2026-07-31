@@ -4,6 +4,7 @@ import MaterialIcon from '../../components/common/MaterialIcon';
 import Spinner from '../../components/common/Spinner';
 import { newsService } from '../../services/newsService';
 import { formatRelative } from '../../theme/dateFormat';
+import { ARTICLE_BODY_CLASS } from './detail/ArticleBody';
 
 export default function PublicNewsSharePage() {
   const { token } = useParams();
@@ -89,7 +90,7 @@ export default function PublicNewsSharePage() {
 
             {article.body && (
               <div
-                className="prose prose-zinc max-w-none"
+                className={ARTICLE_BODY_CLASS}
                 dangerouslySetInnerHTML={{ __html: article.body }}
               />
             )}

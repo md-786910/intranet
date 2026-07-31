@@ -50,13 +50,28 @@ body {
   }
 }
 
+/* News article drop-cap — sized to sit cleanly against the first two lines. */
 .drop-cap::first-letter {
   float: left;
-  font-size: 4.5rem;
-  line-height: 1;
-  padding-right: 0.75rem;
+  font-size: 3.75rem;
+  line-height: 0.9;
+  padding-top: 0.12em;
+  padding-right: 0.85rem;
+  padding-bottom: 0.08rem;
+  margin-right: 0.05rem;
   font-weight: 800;
   color: #4c5e83;
+}
+
+/* Reinforce list markers under Tailwind Preflight inside custom article bodies. */
+.article-body ul {
+  list-style-type: disc;
+}
+.article-body ol {
+  list-style-type: decimal;
+}
+.article-body li::marker {
+  color: #5f6368;
 }
 
 .line-clamp-2 {
