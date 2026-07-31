@@ -248,6 +248,17 @@ const categoriesService = {
     const cat = await Category.findByPk(id);
     if (!cat) throw ApiError.notFound('Category not found');
 
+    const usage = await loadCategoryUsage([cat.category_id], cat.entity_type);
+    const count = usage.get(Number(cat.category_id)) || 0;
+    if (count > 0) {
+      const entityLabel = cat.entity_type === 'NEWS'
+        ? (count === 1 ? 'news item' : 'news items')
+        : (count === 1 ? 'document' : 'documents');
+      throw ApiError.conflict(
+        `Cannot delete — ${count} ${entityLabel} still use this category. Reassign or remove them first.`
+      );
+    }
+
     await cat.update({ deleted_at: new Date(), deleted_by: userId || null });
     return { message: 'Category moved to trash' };
   },

@@ -1004,11 +1004,20 @@ const documentsService = {
   },
 
   async deleteCategory(id) {
-    const { Category } = require('../../database/models');
+    const { Category, DocumentItem } = require('../../database/models');
     const cat = await Category.findOne({
       where: { category_id: id, entity_type: 'DOCUMENT' },
     });
     if (!cat) throw ApiError.notFound('Category not found');
+
+    // DocumentItem defaultScope already excludes soft-deleted rows.
+    const count = await DocumentItem.count({ where: { category_id: id } });
+    if (count > 0) {
+      throw ApiError.conflict(
+        `Cannot delete — ${count} document${count === 1 ? '' : 's'} still use this category. Reassign or remove them first.`
+      );
+    }
+
     await cat.update({ deleted_at: new Date() });
     return { message: 'Category deleted successfully' };
   },

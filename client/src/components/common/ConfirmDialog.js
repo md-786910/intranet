@@ -5,6 +5,7 @@ import Button from './Button';
 export default function ConfirmDialog({
   isOpen, onConfirm, onCancel, title = 'Confirm', message, extra,
   confirmLabel = 'Confirm', confirmVariant = 'danger', loading,
+  hideConfirm = false, cancelLabel = 'Cancel',
 }) {
   return (
     <Modal
@@ -14,8 +15,10 @@ export default function ConfirmDialog({
       size="md"
       footer={
         <>
-          <Button variant="secondary" onClick={onCancel} disabled={loading}>Cancel</Button>
-          <Button variant={confirmVariant} onClick={onConfirm} loading={loading}>{confirmLabel}</Button>
+          <Button variant="secondary" onClick={onCancel} disabled={loading}>{cancelLabel}</Button>
+          {!hideConfirm && (
+            <Button variant={confirmVariant} onClick={onConfirm} loading={loading}>{confirmLabel}</Button>
+          )}
         </>
       }
     >

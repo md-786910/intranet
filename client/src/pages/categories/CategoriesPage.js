@@ -131,8 +131,12 @@ export default function CategoriesPage() {
     addToast('Category saved', 'success');
   };
 
+  const handleDeleteClick = (cat) => {
+    setConfirmCategory(cat);
+  };
+
   const handleConfirmDelete = async () => {
-    if (!confirmCategory) return;
+    if (!confirmCategory || (confirmCategory.item_count || 0) > 0) return;
     setActionLoading(true);
     try {
       await categoryService.remove(confirmCategory.category_id);
@@ -146,6 +150,12 @@ export default function CategoriesPage() {
       setActionLoading(false);
     }
   };
+
+  const linkedCount = confirmCategory?.item_count || 0;
+  const deleteBlocked = Boolean(confirmCategory) && linkedCount > 0;
+  const linkedEntityLabel = entityType === 'NEWS'
+    ? (linkedCount === 1 ? 'news item' : 'news items')
+    : (linkedCount === 1 ? 'document' : 'documents');
 
   const handleRestore = async (category) => {
     setActionLoading(true);
@@ -341,7 +351,7 @@ export default function CategoriesPage() {
                             {canDeleteCurrent && (
                               <button
                                 type="button"
-                                onClick={() => setConfirmCategory(cat)}
+                                onClick={() => handleDeleteClick(cat)}
                                 className="text-red-600 hover:text-red-700 text-xs font-medium"
                               >
                                 Delete
@@ -383,14 +393,14 @@ export default function CategoriesPage() {
         onCancel={() => setConfirmCategory(null)}
         onConfirm={handleConfirmDelete}
         loading={actionLoading}
-        title="Move to trash"
+        hideConfirm={deleteBlocked}
+        cancelLabel={deleteBlocked ? 'Close' : 'Cancel'}
+        title={deleteBlocked ? 'Cannot delete category' : 'Move to trash'}
         message={
           confirmCategory
-            ? `Move "${confirmCategory.name}" to Trash? You can restore it later from the Trash tab.${
-                confirmCategory.item_count > 0
-                  ? ` Note: ${confirmCategory.item_count} item${confirmCategory.item_count === 1 ? ' uses' : 's use'} this category.`
-                  : ''
-              }`
+            ? (deleteBlocked
+              ? `"${confirmCategory.name}" cannot be deleted — ${linkedCount} ${linkedEntityLabel} still use this category. Reassign or remove them first.`
+              : `Move "${confirmCategory.name}" to Trash? You can restore it later from the Trash tab.`)
             : ''
         }
         confirmLabel="Move to trash"
