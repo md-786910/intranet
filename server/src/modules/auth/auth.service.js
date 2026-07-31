@@ -269,7 +269,7 @@ const authService = {
    * Initiate password reset. Always returns successfully to prevent
    * user enumeration. Sends an email only if the account exists & is active.
    */
-  async forgotPassword(email, ipAddress, userAgent) {
+  async forgotPassword(email, ipAddress, userAgent, client) {
     const { UserAccount, PasswordReset } = require("../../database/models");
 
     const normalized = email.toLowerCase().trim();
@@ -300,6 +300,7 @@ const authService = {
         firstName: user.first_name,
         token: rawToken,
         expiresAt,
+        client: client === "admin" ? "admin" : "employee",
       });
     } catch (err) {
       logger.error(`[auth] failed to send password reset email: ${err.message}`);

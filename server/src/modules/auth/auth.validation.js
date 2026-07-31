@@ -80,6 +80,8 @@ const forgotPasswordSchema = {
         'string.email': 'Please provide a valid email address',
         'any.required': 'Email is required',
       }),
+    // Which front-end should receive the reset link (admin vs employee portal).
+    client: Joi.string().valid('admin', 'employee').optional(),
   }),
 };
 

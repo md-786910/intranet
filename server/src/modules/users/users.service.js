@@ -162,15 +162,30 @@ async function syncDepartmentMemberships({ userId, departmentIds, primaryDepartm
 
 async function syncEmployeeRoleAssignments({ userId, roleId, departmentIds, actorUserId, transaction }) {
   const { UserRoleAssignment, OrgNode } = require('../../database/models');
-  const nodeIds = [...new Set(departmentIds.map(Number))];
-  const nodes = await OrgNode.findAll({ where: { id: nodeIds }, attributes: ['id', 'node_type'], transaction });
+  const desiredIds = new Set(departmentIds.map(Number));
+  const nodes = await OrgNode.findAll({ where: { id: [...desiredIds] }, attributes: ['id', 'node_type'], transaction });
   const typeById = new Map(nodes.map((n) => [Number(n.id), n.node_type]));
 
-  await UserRoleAssignment.destroy({ where: { user_id: userId, role_id: roleId }, transaction });
-  for (const nodeId of nodeIds) {
-    await UserRoleAssignment.create({
-      user_id: userId, role_id: roleId, scope_type: typeById.get(nodeId) || 'DEPARTMENT', scope_id: nodeId, assigned_by: actorUserId || null,
-    }, { transaction });
+  const existing = await UserRoleAssignment.findAll({
+    where: { user_id: userId, role_id: roleId },
+    transaction,
+  });
+  const existingByScope = new Map(
+    existing.map((row) => [`${row.scope_type}:${Number(row.scope_id)}`, row]),
+  );
+
+  for (const assignment of existing) {
+    if (!desiredIds.has(Number(assignment.scope_id))) {
+      await assignment.destroy({ transaction });
+    }
+  }
+  for (const nodeId of desiredIds) {
+    const scopeType = typeById.get(nodeId) || 'DEPARTMENT';
+    if (!existingByScope.has(`${scopeType}:${nodeId}`)) {
+      await UserRoleAssignment.create({
+        user_id: userId, role_id: roleId, scope_type: scopeType, scope_id: nodeId, assigned_by: actorUserId || null,
+      }, { transaction });
+    }
   }
 }
 
@@ -1057,8 +1072,20 @@ const usersService = {
         await syncDepartmentMemberships({
           userId: id, departmentIds: data.department_ids, primaryDepartmentId: data.primary_department_id, transaction,
         });
-        const roleId = await resolveEmployeeRoleId();
-        await syncEmployeeRoleAssignments({ userId: id, roleId, departmentIds: data.department_ids, actorUserId, transaction });
+        // Only sync Employee role scopes when the user already has Employee.
+        // If an admin switched them to Content Editor (etc.), do not resurrect Employee.
+        const { UserRoleAssignment } = require('../../database/models');
+        const employeeRoleId = await resolveEmployeeRoleId();
+        const hasEmployee = await UserRoleAssignment.findOne({
+          where: { user_id: id, role_id: employeeRoleId },
+          attributes: ['assignment_id'],
+          transaction,
+        });
+        if (hasEmployee) {
+          await syncEmployeeRoleAssignments({
+            userId: id, roleId: employeeRoleId, departmentIds: data.department_ids, actorUserId, transaction,
+          });
+        }
       }
 
       if (Array.isArray(data.chat_blocked_user_ids)) {

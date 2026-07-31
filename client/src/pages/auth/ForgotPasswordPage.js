@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../../config/api";
+import { getErrorMessage } from "../../utils/errorUtils";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -17,13 +19,15 @@ export default function ForgotPasswordPage() {
     }
     setIsSubmitting(true);
     try {
-      // TODO: Wire to POST /api/v1/auth/forgot-password when backend endpoint is ready
-      // await api.post('/auth/forgot-password', { email });
+      await api.post(
+        "/auth/forgot-password",
+        { email: email.trim(), client: "admin" },
+        { silent: true },
+      );
       setSubmitted(true);
     } catch (err) {
       setError(
-        err.response?.data?.message ||
-          "Something went wrong. Please try again.",
+        getErrorMessage(err, "Something went wrong. Please try again."),
       );
     } finally {
       setIsSubmitting(false);
@@ -64,9 +68,10 @@ export default function ForgotPasswordPage() {
             </h3>
             <p className="mt-1 text-sm text-green-700">
               If an account exists for <strong>{email}</strong>, you'll receive
-              a password reset link shortly.
+              a password reset link shortly. The link expires in 30 minutes.
             </p>
             <button
+              type="button"
               onClick={() => navigate("/login")}
               className="mt-4 text-sm font-medium text-primary-600 hover:text-primary-500"
             >

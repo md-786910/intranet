@@ -167,18 +167,20 @@ export default function UserCreatePage({
     [jobTitles],
   );
 
-  // Collect unique department-level scopes from all assigned roles
+  // Collect unique org-unit scopes from assigned roles and any in-progress picker
+  // draft (so skipping "Add" still yields department_ids for membership sync).
   const departmentScopes = useMemo(() => {
+    const draftScopes = pickerRoleId && pickerScopes.length > 0 ? pickerScopes : [];
     const seen = new Set();
-    return assignedRoles
-      .filter((a) => a.scope_type === 'DEPARTMENT')
+    return [...assignedRoles, ...draftScopes]
+      .filter((a) => a.scope_id != null && a.scope_type !== 'GROUP' && a.scope_type !== 'ORGANISATION')
       .filter((a) => {
         if (seen.has(a.scope_id)) return false;
         seen.add(a.scope_id);
         return true;
       })
       .map((a) => ({ scope_type: a.scope_type, scope_id: a.scope_id, scope_label: a.scope_label }));
-  }, [assignedRoles]);
+  }, [assignedRoles, pickerRoleId, pickerScopes]);
 
   const departmentOptions = useMemo(
     () => departmentScopes.map((s) => ({

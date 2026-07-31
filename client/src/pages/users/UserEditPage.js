@@ -15,11 +15,10 @@ import { roleService } from '../../services/roleService';
 import { jobTitleService } from '../../services/jobTitleService';
 import { useToast } from '../../hooks/useToast';
 import { useOrgTree } from '../../hooks/useOrgTree';
+import { useCurrentOrganisation } from '../../hooks/useCurrentOrganisation';
 import NotFoundState from '../../components/common/NotFoundState';
 import { extractValidationErrors, getErrorMessage, getUserFacingMessage, isNotFoundError } from '../../utils/errorUtils';
 import { findScopeLabel } from '../../utils/scopeLabel';
-
-const DEFAULT_ORGANISATION_ID = 1;
 
 const STATUS_OPTIONS = [
   { value: 'ACTIVE', label: 'Active' },
@@ -104,6 +103,7 @@ export default function UserEditPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { addToast } = useToast();
+  const { currentOrganisationId } = useCurrentOrganisation();
 
   const detailBackTo = useMemo(() => {
     const from = searchParams.get('from');
@@ -171,9 +171,10 @@ export default function UserEditPage() {
 
   // ── Fetch ──
   const fetchUser = useCallback(() => {
+    if (!currentOrganisationId) return;
     setLoading(true);
     setNotFound(false);
-    userService.getUser(id, { scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID })
+    userService.getUser(id, { scope_type: 'ORGANISATION', scope_id: currentOrganisationId })
       .then((res) => {
         const u = res.data?.data;
         setUser(u);
@@ -204,7 +205,7 @@ export default function UserEditPage() {
         if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to load user'), 'error');
       })
       .finally(() => setLoading(false));
-  }, [id, addToast]);
+  }, [id, addToast, currentOrganisationId]);
 
   useEffect(() => {
     fetchUser();
@@ -216,45 +217,38 @@ export default function UserEditPage() {
     setShowRolePermissions(false);
   }, [fetchUser]);
 
-  // Role picker at top — default Employee with current org scopes (Create-like, no duplicate card).
+  // Role picker at top — prefer an already-assigned non-Employee role (so Content Editor
+  // stays selected after save), then Employee, then first assigned / first available.
   useEffect(() => {
     if (hasDefaultedRole || loading || !user || allRoles.length === 0) return;
     const employee = allRoles.find((r) => r.code === 'EMPLOYEE');
-    const preferred = employee
-      || allRoles.find((r) => (user.roleAssignments || []).some(
-        (a) => Number(a.role_id || a.role?.role_id) === Number(r.role_id),
-      ))
-      || allRoles[0];
+    const assignedNonEmployee = allRoles.find((r) => r.code !== 'EMPLOYEE' && (user.roleAssignments || []).some(
+      (a) => Number(a.role_id || a.role?.role_id) === Number(r.role_id),
+    ));
+    const assignedAny = allRoles.find((r) => (user.roleAssignments || []).some(
+      (a) => Number(a.role_id || a.role?.role_id) === Number(r.role_id),
+    ));
+    const preferred = assignedNonEmployee || (employee && (user.roleAssignments || []).some(
+      (a) => Number(a.role_id || a.role?.role_id) === Number(employee.role_id),
+    ) ? employee : null) || assignedAny || employee || allRoles[0];
     if (!preferred) {
       setHasDefaultedRole(true);
       return;
     }
     setAssignRoleId(String(preferred.role_id));
-    if (preferred.code === 'EMPLOYEE') {
-      if (empScopes.length > 0) {
-        setAssignScopes(empScopes);
-      } else {
-        const fromRole = (user.roleAssignments || [])
-          .filter((a) => Number(a.role_id || a.role?.role_id) === Number(preferred.role_id))
-          .map((a) => ({
-            scope_type: a.scope_type,
-            scope_id: a.scope_id,
-            scope_label: findScopeLabel(orgTree, a.scope_type, a.scope_id)
-              || `${a.scope_type}: #${a.scope_id}`,
-          }));
-        setAssignScopes(fromRole);
-        if (fromRole.length > 0) setEmpScopes(fromRole);
-      }
-    } else {
-      const fromRole = (user.roleAssignments || [])
-        .filter((a) => Number(a.role_id || a.role?.role_id) === Number(preferred.role_id))
-        .map((a) => ({
-          scope_type: a.scope_type,
-          scope_id: a.scope_id,
-          scope_label: findScopeLabel(orgTree, a.scope_type, a.scope_id)
-            || `${a.scope_type}: #${a.scope_id}`,
-        }));
+    const fromRole = (user.roleAssignments || [])
+      .filter((a) => Number(a.role_id || a.role?.role_id) === Number(preferred.role_id))
+      .map((a) => ({
+        scope_type: a.scope_type,
+        scope_id: a.scope_id,
+        scope_label: findScopeLabel(orgTree, a.scope_type, a.scope_id)
+          || `${a.scope_type}: #${a.scope_id}`,
+      }));
+    if (fromRole.length > 0) {
       setAssignScopes(fromRole);
+      setEmpScopes(fromRole);
+    } else if (preferred.code === 'EMPLOYEE' && empScopes.length > 0) {
+      setAssignScopes(empScopes);
     }
     setHasDefaultedRole(true);
   }, [hasDefaultedRole, loading, user, allRoles, empScopes, orgTree]);
@@ -325,22 +319,80 @@ export default function UserEditPage() {
     return STATUS_OPTIONS;
   }, [user?.status]);
 
+  const removeEmployeeAssignments = async (assignments = user?.roleAssignments) => {
+    const employeeRole = allRoles.find((r) => r.code === 'EMPLOYEE');
+    if (!employeeRole) return;
+    const employeeAssignments = (assignments || []).filter(
+      (a) => Number(a.role_id || a.role?.role_id) === Number(employeeRole.role_id),
+    );
+    for (const a of employeeAssignments) {
+      // eslint-disable-next-line no-await-in-loop
+      await userService.removeRole(id, a.assignment_id);
+    }
+  };
+
+  const applySelectedRoleAssignments = async (roleId, scopes) => {
+    const existing = (user?.roleAssignments || []).filter(
+      (a) => Number(a.role_id || a.role?.role_id) === Number(roleId),
+    );
+    const keyOf = (s) => `${s.scope_type}:${s.scope_id}`;
+    const existingKeys = new Set(existing.map(keyOf));
+    const newKeys = new Set(scopes.map(keyOf));
+    const toRemove = existing.filter((a) => !newKeys.has(keyOf(a)));
+    const toAdd = scopes.filter((s) => !existingKeys.has(keyOf(s)));
+    for (const a of toRemove) {
+      // eslint-disable-next-line no-await-in-loop
+      await userService.removeRole(id, a.assignment_id);
+    }
+    for (const scope of toAdd) {
+      // eslint-disable-next-line no-await-in-loop
+      await userService.assignRole(id, {
+        role_id: Number(roleId),
+        scope_type: scope.scope_type,
+        scope_id: scope.scope_id || currentOrganisationId,
+      });
+    }
+    return { toRemove, toAdd };
+  };
+
   const handleSaveProfile = async () => {
     const newErrors = {};
     if (!form.first_name) newErrors.first_name = 'First name is required';
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
-    // Send every ticked org unit. Filtering to DEPARTMENT-only dropped office/company
-    // selections so edits never reached the server.
-    const department_ids = orgAssignmentIds.length > 0
-      ? orgAssignmentIds
-      : empScopes
+    const selectedRole = assignRoleId
+      ? allRoles.find((r) => r.role_id === Number(assignRoleId))
+      : null;
+    const membershipScopes = (assignScopes.length > 0 ? assignScopes : empScopes);
+    const membershipIds = membershipScopes
+      .filter((s) => s.scope_id != null && s.scope_type !== 'GROUP' && s.scope_type !== 'ORGANISATION')
+      .map((s) => Number(s.scope_id))
+      .filter((id) => Number.isFinite(id));
+    const department_ids = membershipIds.length > 0
+      ? membershipIds
+      : membershipScopes
         .filter((s) => s.scope_type === 'GROUP' || s.scope_type === 'ORGANISATION')
         .map((s) => Number(s.scope_id))
         .filter((id) => Number.isFinite(id));
 
+    const pendingScopes = assignRoleId
+      ? (assignScopes.length > 0
+        ? assignScopes
+        : [{ scope_type: 'ORGANISATION', scope_id: currentOrganisationId }])
+      : [];
+
     setSaving(true);
     try {
+      // Persist role selected in the Roles & Organisation picker (Create-like draft capture).
+      if (assignRoleId && pendingScopes.length > 0) {
+        await applySelectedRoleAssignments(assignRoleId, pendingScopes);
+        // Switching away from Employee replaces it — don't leave both.
+        if (selectedRole?.code !== 'EMPLOYEE') {
+          await removeEmployeeAssignments();
+        }
+        setEmpScopes(pendingScopes);
+      }
+
       await userService.updateUser(id, {
         first_name: form.first_name, last_name: form.last_name || null,
         phone: form.phone || undefined,
@@ -351,7 +403,13 @@ export default function UserEditPage() {
         primary_department_id: primaryDeptId ? Number(primaryDeptId) : (department_ids[0] || undefined),
         chat_blocked_user_ids: chatBlockedIds,
       });
-      addToast('Profile updated', 'success');
+      addToast(
+        assignRoleId && selectedRole
+          ? `Profile updated — ${selectedRole.name} saved`
+          : 'Profile updated',
+        'success',
+      );
+      setHasDefaultedRole(false);
       fetchUser();
     } catch (err) {
       if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed to update'), 'error');
@@ -380,52 +438,24 @@ export default function UserEditPage() {
     // No scopes selected → default to Organisation (mirrors Create's behaviour).
     const scopes = assignScopes.length > 0
       ? assignScopes
-      : [{ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID }];
+      : [{ scope_type: 'ORGANISATION', scope_id: currentOrganisationId }];
 
     setAssigning(true);
     try {
-      const existing = (user?.roleAssignments || []).filter(
-        (a) => Number(a.role_id || a.role?.role_id) === roleId,
-      );
-      if (existing.length > 0) {
-        // Replace scopes for an already-assigned role (Create-like re-pick).
-        const keyOf = (s) => `${s.scope_type}:${s.scope_id}`;
-        const existingKeys = new Set(existing.map(keyOf));
-        const newKeys = new Set(scopes.map(keyOf));
-        const toRemove = existing.filter((a) => !newKeys.has(keyOf(a)));
-        const toAdd = scopes.filter((s) => !existingKeys.has(keyOf(s)));
-        for (const a of toRemove) {
-          // eslint-disable-next-line no-await-in-loop
-          await userService.removeRole(id, a.assignment_id);
-        }
-        for (const scope of toAdd) {
-          // eslint-disable-next-line no-await-in-loop
-          await userService.assignRole(id, {
-            role_id: roleId,
-            scope_type: scope.scope_type,
-            scope_id: scope.scope_id || DEFAULT_ORGANISATION_ID,
-          });
-        }
-        if (role?.code === 'EMPLOYEE') setEmpScopes(scopes);
-        addToast(
-          toRemove.length === 0 && toAdd.length === 0
-            ? 'No changes to save'
-            : `Saved — ${scopes.length} scope${scopes.length === 1 ? '' : 's'} for ${role?.name || 'role'}`,
-          toRemove.length === 0 && toAdd.length === 0 ? 'info' : 'success',
-        );
-      } else {
-        for (const scope of scopes) {
-          // eslint-disable-next-line no-await-in-loop
-          await userService.assignRole(id, {
-            role_id: roleId,
-            scope_type: scope.scope_type,
-            scope_id: scope.scope_id || DEFAULT_ORGANISATION_ID,
-          });
-        }
-        if (role?.code === 'EMPLOYEE') setEmpScopes(scopes);
-        addToast(scopes.length === 1 ? 'Role assigned' : `Role assigned at ${scopes.length} scopes`, 'success');
+      const { toRemove, toAdd } = await applySelectedRoleAssignments(roleId, scopes);
+      // Changing the primary role dropdown away from Employee replaces Employee.
+      if (role?.code !== 'EMPLOYEE') {
+        await removeEmployeeAssignments();
       }
+      setEmpScopes(scopes);
+      addToast(
+        toRemove.length === 0 && toAdd.length === 0 && role?.code === 'EMPLOYEE'
+          ? 'No changes to save'
+          : `Saved — ${role?.name || 'role'} at ${scopes.length} scope${scopes.length === 1 ? '' : 's'}`,
+        toRemove.length === 0 && toAdd.length === 0 && role?.code === 'EMPLOYEE' ? 'info' : 'success',
+      );
       setShowAssignForm(false);
+      setHasDefaultedRole(false);
       fetchUser();
     } catch (err) { if (!err?.isHandled) addToast(getUserFacingMessage(err, 'Failed'), 'error'); }
     finally { setAssigning(false); }
@@ -484,7 +514,7 @@ export default function UserEditPage() {
         await userService.assignRole(id, {
           role_id: Number(roleId),
           scope_type: scope.scope_type,
-          scope_id: scope.scope_id || DEFAULT_ORGANISATION_ID,
+          scope_id: scope.scope_id || currentOrganisationId,
         });
       }
 
@@ -511,7 +541,7 @@ export default function UserEditPage() {
     if (!permActionId) return;
     const scopes = permScopes.length > 0
       ? permScopes
-      : [{ scope_type: 'ORGANISATION', scope_id: DEFAULT_ORGANISATION_ID }];
+      : [{ scope_type: 'ORGANISATION', scope_id: currentOrganisationId }];
 
     setAddingPerm(true);
     try {
@@ -520,7 +550,7 @@ export default function UserEditPage() {
         await userService.assignPermission(id, {
           module_action_id: Number(permActionId),
           scope_type: scope.scope_type,
-          scope_id: scope.scope_id || DEFAULT_ORGANISATION_ID,
+          scope_id: scope.scope_id || currentOrganisationId,
         });
       }
       addToast(scopes.length === 1 ? 'Permission granted' : `Permission granted at ${scopes.length} scopes`, 'success');
@@ -562,11 +592,9 @@ export default function UserEditPage() {
 
   const handleAssignScopesChange = useCallback((scopes) => {
     setAssignScopes(scopes);
-    // Employee scopes are also the org membership saved with the profile.
-    if (assignPickerRole?.code === 'EMPLOYEE') {
-      setEmpScopes(scopes);
-    }
-  }, [assignPickerRole?.code]);
+    // Org membership follows whatever role is selected in the primary picker.
+    setEmpScopes(scopes);
+  }, []);
 
   const moduleOptions = useMemo(() => modules.map((m) => ({ value: String(m.module_id), label: m.name })), [modules]);
   const actionOptions = useMemo(() => {
@@ -726,7 +754,7 @@ export default function UserEditPage() {
               <div className="border-t border-gray-100 pt-5">
                 <h3 className="text-sm font-semibold text-gray-800 mb-1">Roles &amp; Organisation</h3>
                 <p className="text-xs text-gray-500 mb-4">
-                  Assign the Employee role at organisation units to create memberships and control content access.
+                  Pick a role and org units. Changing the role (e.g. Employee → Content Editor) replaces the previous role — Save Changes or Update applies it.
                 </p>
                 {errors.scopes && (
                   <p className="mb-3 text-xs text-red-600">{errors.scopes}</p>

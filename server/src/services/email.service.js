@@ -43,8 +43,12 @@ function buildAcceptUrl(token) {
   return `${EMPLOYEE_APP_BASE_URL.replace(/\/$/, "")}/invitations/${token}`;
 }
 
-function buildResetUrl(token) {
-  return `${EMPLOYEE_APP_BASE_URL.replace(/\/$/, "")}/reset-password/${token}`;
+function buildResetUrl(token, client = "employee") {
+  const base =
+    client === "admin"
+      ? APP_BASE_URL.replace(/\/$/, "")
+      : EMPLOYEE_APP_BASE_URL.replace(/\/$/, "");
+  return `${base}/reset-password/${token}`;
 }
 
 function formatExpiresAt(expiresAt) {
@@ -145,8 +149,8 @@ async function sendWelcomeUser({
   return { delivered: true, loginUrl };
 }
 
-async function sendPasswordReset({ to, firstName, token, expiresAt }) {
-  const resetUrl = buildResetUrl(token);
+async function sendPasswordReset({ to, firstName, token, expiresAt, client = "employee" }) {
+  const resetUrl = buildResetUrl(token, client);
   const html = renderTemplate(loadTemplate("password-reset"), {
     appName: APP_NAME,
     firstName: firstName || "there",

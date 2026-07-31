@@ -17,6 +17,7 @@ import { AppBrandingProvider } from './contexts/AppBrandingContext';
 // Auth
 import LoginPage from './pages/auth/LoginPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import ChangePasswordPage from './pages/auth/ChangePasswordPage';
 import InvitationAcceptPage from './pages/auth/InvitationAcceptPage';
 
@@ -104,6 +105,7 @@ function App() {
               {/* Public routes */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
               <Route path="/invitations/:token" element={<InvitationAcceptPage />} />
 
               <Route

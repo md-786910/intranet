@@ -107,6 +107,7 @@ const forgotPassword = catchAsync(async (req, res) => {
     req.body.email,
     req.ip,
     req.headers['user-agent'],
+    req.body.client,
   );
   // Generic response — never reveal whether the account exists
   res.status(200).json({
