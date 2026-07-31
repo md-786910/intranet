@@ -2,15 +2,24 @@ const ApiError = require('../utils/ApiError');
 const scopeService = require('./scope.service');
 const logger = require('../config/logger');
 
+const ORG_WIDE_TYPES = new Set(['ORGANISATION', 'GROUP']);
+const PUBLISH_ANYWHERE_ROLES = new Set(['OWNER', 'CONTENT_EDITOR', 'OFFICE_MANAGER']);
+
+function isOrgWideAssignment(assignment) {
+  return ORG_WIDE_TYPES.has(assignment.scope_type);
+}
+
 /**
  * Defence-in-depth: ensure a publisher only targets audience scopes they
  * actually own (per their user_role_assignment rows).
  *
- * - OWNER / CONTENT_EDITOR / OFFICE_MANAGER: unrestricted audience (can pick
- *   any hierarchy node).
- * - ORGANISATION/GROUP-scope assignment: unrestricted.
- * - Sub-org only: each target must equal one of the user's assignments OR
- *   be a descendant of one.
+ * Unrestricted audience when:
+ * - OWNER role (any scope)
+ * - CONTENT_EDITOR / OFFICE_MANAGER assigned at ORGANISATION/GROUP
+ * - Any ORGANISATION/GROUP-scope assignment
+ *
+ * Company/office/dept-only editors: each target must equal one of their
+ * assignments OR be a descendant of one.
  *
  * Throws `403 SCOPE_OUT_OF_BOUNDS` if any target is outside the allowed set.
  */
@@ -34,10 +43,17 @@ async function assertAudienceWithinUserScope(userId, audienceTargets) {
     attributes: ['scope_type', 'scope_id'],
   });
 
-  const PUBLISH_ANYWHERE_ROLES = new Set(['OWNER', 'CONTENT_EDITOR', 'OFFICE_MANAGER']);
+  // OWNER is unrestricted regardless of assignment scope.
+  if (assignments.some((a) => a.role?.code === 'OWNER')) return;
 
-  if (assignments.some((a) => a.role?.code && PUBLISH_ANYWHERE_ROLES.has(a.role.code))) return;
-  if (assignments.some((a) => a.scope_type === 'ORGANISATION' || a.scope_type === 'GROUP')) return;
+  // Org-wide Content Editor / Office Manager (or any org/group assignment) may pick freely.
+  const hasOrgWidePublishRole = assignments.some(
+    (a) => a.role?.code
+      && PUBLISH_ANYWHERE_ROLES.has(a.role.code)
+      && isOrgWideAssignment(a),
+  );
+  if (hasOrgWidePublishRole) return;
+  if (assignments.some(isOrgWideAssignment)) return;
 
   if (assignments.length === 0) {
     throw ApiError.forbidden('SCOPE_OUT_OF_BOUNDS: user has no scope assignments');

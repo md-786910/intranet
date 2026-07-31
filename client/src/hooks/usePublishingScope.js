@@ -32,14 +32,14 @@ function toAudienceTarget(assignment) {
 }
 
 /**
- * Resolves the publishing scope context for News/Documents create + edit flows.
+ * Resolves the publishing scope context for News/Documents/Announcements create + edit.
  *
- * Unrestricted audience when:
+ * Unrestricted (org-wide owning scope + free audience) when:
  * - Platform Owner
- * - CONTENT_EDITOR / OFFICE_MANAGER (can choose any hierarchy)
- * - Any ORGANISATION/GROUP-scope assignment, or role attached to the Group root node
+ * - CONTENT_EDITOR / OFFICE_MANAGER / OWNER assigned at ORGANISATION/GROUP (or group root)
  *
- * Other roles with only sub-org assignments stay locked to those scopes.
+ * Company/office/dept-only editors stay locked to those assignment scopes so
+ * publish/create checks match where NEWS:PUBLISH is actually granted.
  */
 export function usePublishingScope() {
   const { isOwner, roleAssignments } = useAuth();
@@ -51,25 +51,27 @@ export function usePublishingScope() {
     const rootNode = tree?.[0] || null;
     const rootId = rootNode?.id != null ? Number(rootNode.id) : null;
 
-    const hasPublishAnywhereRole = assignments.some(
-      (a) => a.role?.code && PUBLISH_ANYWHERE_ROLES.has(a.role.code),
-    );
-
-    const hasOrgWideAssignment = assignments.some((a) => {
+    const isOrgWideScope = (a) => {
       if (ORG_WIDE_TYPES.has(a.scope_type)) return true;
       if (rootId != null && Number(a.scope_id) === rootId) return true;
       return false;
-    });
+    };
 
-    const subOrgAssignments = assignments.filter((a) => {
-      if (ORG_WIDE_TYPES.has(a.scope_type)) return false;
-      if (rootId != null && Number(a.scope_id) === rootId) return false;
-      return true;
-    });
+    // "Publish anywhere" only when the privileged role is actually org-wide.
+    // Company-scoped Content Editor must not claim GROUP owning_scope (server denies).
+    const hasOrgWidePublishRole = assignments.some(
+      (a) => a.role?.code
+        && PUBLISH_ANYWHERE_ROLES.has(a.role.code)
+        && isOrgWideScope(a),
+    );
+
+    const hasOrgWideAssignment = assignments.some(isOrgWideScope);
+
+    const subOrgAssignments = assignments.filter((a) => !isOrgWideScope(a));
 
     const lockAudience =
       !isOwner
-      && !hasPublishAnywhereRole
+      && !hasOrgWidePublishRole
       && !hasOrgWideAssignment
       && subOrgAssignments.length > 0;
 
