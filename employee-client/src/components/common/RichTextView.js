@@ -27,20 +27,18 @@ export default function RichTextView({ html, className = '' }) {
     });
   }, [html]);
 
+  // Plain-text fallback uses innerHTML so entities like &amp; decode to &.
+  // safeHtml is already DOMPurify output, so it is safe to embed as HTML text.
   const looksLikeHtml = /<[a-z][\s\S]*>/i.test(safeHtml);
   if (!safeHtml) return null;
-  if (!looksLikeHtml) {
-    return (
-      <div className={`whitespace-pre-wrap ${className}`}>
-        {safeHtml}
-      </div>
-    );
-  }
+  const renderedHtml = looksLikeHtml
+    ? safeHtml
+    : `<p>${safeHtml.replace(/\n/g, '<br>')}</p>`;
   return (
     <div
-      className={className}
+      className={`${looksLikeHtml ? '' : 'whitespace-pre-wrap '}${className}`.trim()}
       // eslint-disable-next-line react/no-danger
-      dangerouslySetInnerHTML={{ __html: safeHtml }}
+      dangerouslySetInnerHTML={{ __html: renderedHtml }}
     />
   );
 }

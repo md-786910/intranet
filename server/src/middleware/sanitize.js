@@ -9,7 +9,11 @@ const DOMPurify = createDOMPurify(window);
 // itself with a narrower whitelist (see server/src/utils/sanitiseRichText.js).
 const RICH_TEXT_EXEMPTIONS = [
   { method: 'POST', pathRegex: /^\/api\/v1\/news\/?$/, fields: ['body'] },
+  { method: 'POST', pathRegex: /^\/api\/v1\/news\/(publish-now|schedule-now)\/?$/, fields: ['body'] },
   { method: 'PUT', pathRegex: /^\/api\/v1\/news\/\d+\/?$/, fields: ['body'] },
+  { method: 'POST', pathRegex: /^\/api\/v1\/announcements\/?$/, fields: ['body'] },
+  { method: 'POST', pathRegex: /^\/api\/v1\/announcements\/(publish-now|schedule-now)\/?$/, fields: ['body'] },
+  { method: 'PUT', pathRegex: /^\/api\/v1\/announcements\/\d+\/?$/, fields: ['body'] },
   { method: 'POST', pathRegex: /^\/api\/v1\/documents\/?$/, fields: ['summary'] },
   { method: 'POST', pathRegex: /^\/api\/v1\/documents\/(publish-now|schedule-now)\/?$/, fields: ['summary'] },
   { method: 'PUT', pathRegex: /^\/api\/v1\/documents\/\d+\/?$/, fields: ['summary'] },

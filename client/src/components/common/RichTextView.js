@@ -23,22 +23,20 @@ export default function RichTextView({ html, className = '' }) {
   }, [html]);
 
   // Pre-rich-text articles whose body has no HTML render as plain paragraphs.
+  // Use innerHTML (not a React text node) so entities like &amp; decode to &.
+  // safeHtml is already DOMPurify output, so it is safe to embed as HTML text.
   const looksLikeHtml = /<[a-z][\s\S]*>/i.test(safeHtml);
   if (!safeHtml) {
     return <p className={`text-gray-500 italic ${className}`}>No content yet.</p>;
   }
-  if (!looksLikeHtml) {
-    return (
-      <div className={`prose prose-sm max-w-none whitespace-pre-wrap ${className}`}>
-        {safeHtml}
-      </div>
-    );
-  }
+  const renderedHtml = looksLikeHtml
+    ? safeHtml
+    : `<p>${safeHtml.replace(/\n/g, '<br>')}</p>`;
   return (
     <div
-      className={`prose prose-sm max-w-none ${className}`}
+      className={`prose prose-sm max-w-none${looksLikeHtml ? '' : ' whitespace-pre-wrap'} ${className}`.trim()}
       // eslint-disable-next-line react/no-danger
-      dangerouslySetInnerHTML={{ __html: safeHtml }}
+      dangerouslySetInnerHTML={{ __html: renderedHtml }}
     />
   );
 }
