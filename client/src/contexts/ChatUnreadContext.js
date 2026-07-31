@@ -110,7 +110,16 @@ export function useChatUnread() {
       setActiveConversationId: () => {},
       markConversationRead: () => {},
       refresh: async () => {},
+      // Stubs for employee-portal API shape — admin context has no per-convo map.
+      getUnreadFor: () => 0,
+      perConvo: {},
+      syncFromConversations: () => {},
     };
   }
-  return ctx;
+  return {
+    getUnreadFor: () => 0,
+    perConvo: {},
+    syncFromConversations: () => {},
+    ...ctx,
+  };
 }

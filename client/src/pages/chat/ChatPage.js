@@ -37,12 +37,12 @@ function formatPreviewTime(dateStr) {
 export default function ChatPage() {
   const { user } = useAuth();
   const { socket, onlineUsers } = useSocket();
+  // Admin ChatUnreadContext exposes totalUnread + refresh helpers only
+  // (no per-conversation map like the employee portal).
   const {
-    getUnreadFor,
-    perConvo,
     setActiveConversationId,
     markConversationRead,
-    syncFromConversations,
+    refresh: refreshUnreadTotal,
   } = useChatUnread();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -65,14 +65,8 @@ export default function ChatPage() {
     [user],
   );
 
-  const displayConversations = useMemo(
-    () =>
-      conversations.map((c) => ({
-        ...c,
-        unreadCount: getUnreadFor(c.id),
-      })),
-    [conversations, getUnreadFor, perConvo],
-  );
+  // Unread counts come from the conversations API payload.
+  const displayConversations = conversations;
 
   const filteredConversations = useMemo(() => {
     const q = listSearch.trim().toLowerCase();
@@ -92,7 +86,7 @@ export default function ChatPage() {
         if (cancelled) return;
         const data = res.data?.data || [];
         setConversations(data);
-        syncFromConversations(data);
+        refreshUnreadTotal?.();
         setError(null);
       })
       .catch((err) => {
@@ -151,6 +145,8 @@ export default function ChatPage() {
           return prev
             .map((c) => {
               if (c.id !== conversationId) return c;
+              const isActive = selectedId != null && String(c.id) === String(selectedId);
+              const fromOther = myUserId != null && Number(message.senderId) !== myUserId;
               return {
                 ...c,
                 lastMessage: {
@@ -160,6 +156,9 @@ export default function ChatPage() {
                   createdAt: message.createdAt,
                 },
                 updatedAt: message.createdAt,
+                unreadCount: isActive || !fromOther
+                  ? 0
+                  : (Number(c.unreadCount) || 0) + 1,
               };
             })
             .sort((a, b) => {
@@ -170,9 +169,8 @@ export default function ChatPage() {
             });
         }
         chatService.getConversations().then((res) => {
-          const data = res.data?.data || [];
-          setConversations(data);
-          syncFromConversations(data);
+          setConversations(res.data?.data || []);
+          refreshUnreadTotal?.();
         });
         return prev;
       });
@@ -195,7 +193,7 @@ export default function ChatPage() {
       socket.off('chat:receive', handleReceive);
       socket.off('chat:edited', handleEdited);
     };
-  }, [socket, syncFromConversations]);
+  }, [socket, selectedId, myUserId, refreshUnreadTotal]);
 
   const loadContacts = useCallback(async (searchTerm) => {
     setContactsLoading(true);
@@ -233,6 +231,9 @@ export default function ChatPage() {
   const handleSelect = useCallback((id) => {
     setSelectedId(id);
     setMobileShowConversation(true);
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c)),
+    );
     markConversationRead(id);
   }, [markConversationRead]);
 
