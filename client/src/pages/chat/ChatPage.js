@@ -258,20 +258,20 @@ export default function ChatPage() {
   const selected = displayConversations.find((c) => c.id === selectedId) || null;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-7.5rem)] min-h-[28rem] -mx-1">
-      <div className="mb-3 shrink-0">
+    <div className="flex flex-col h-[calc(100vh-4.5rem)] min-h-[28rem] -mx-6 -mt-5 -mb-5 w-[calc(100%+3rem)] max-w-none">
+      <div className="px-6 pt-5 pb-3 shrink-0 border-b border-gray-200 bg-white">
         <h1 className="text-xl font-semibold text-gray-900">Chat</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Message colleagues. Start new chats from your contacts — no admin user list required.
+          Message colleagues from your contacts.
         </p>
       </div>
 
-      <div className="flex gap-4 flex-1 min-h-0">
-        {/* Conversation list */}
+      <div className="flex flex-1 min-h-0 w-full bg-gray-50">
+        {/* Conversation list — fixed rail; thread fills remaining width */}
         <aside
           className={`${
             mobileShowConversation ? 'hidden lg:flex' : 'flex'
-          } w-full lg:w-80 shrink-0 flex-col bg-white border border-gray-200 rounded-xl overflow-hidden relative`}
+          } w-full lg:w-[22rem] xl:w-96 shrink-0 flex-col bg-white border-r border-gray-200 overflow-hidden relative`}
         >
           <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-200 shrink-0">
             <h2 className="text-sm font-semibold text-gray-900">Messages</h2>
@@ -424,8 +424,12 @@ export default function ChatPage() {
           )}
         </aside>
 
-        {/* Thread */}
-        <div className={`${mobileShowConversation ? 'flex' : 'hidden lg:flex'} flex-1 min-w-0 min-h-0`}>
+        {/* Thread — must grow to fill all remaining horizontal space */}
+        <div
+          className={`${
+            mobileShowConversation ? 'flex' : 'hidden lg:flex'
+          } flex-1 min-w-0 min-h-0 w-full flex-col`}
+        >
           {selected ? (
             <ChatConversationPane
               conversation={selected}
@@ -435,7 +439,7 @@ export default function ChatPage() {
               onBack={() => setMobileShowConversation(false)}
             />
           ) : (
-            <div className="flex-1 flex items-center justify-center bg-white border border-gray-200 rounded-xl">
+            <div className="flex-1 w-full flex items-center justify-center bg-white">
               <div className="text-center p-8 max-w-sm">
                 <div className="mx-auto w-12 h-12 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center mb-3">
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">

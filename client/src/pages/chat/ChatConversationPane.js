@@ -192,8 +192,8 @@ export default function ChatConversationPane({
   );
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 shrink-0">
+    <div className="flex flex-col h-full w-full min-h-0 min-w-0 flex-1 bg-white overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-200 shrink-0">
         {onBack && (
           <button
             type="button"
@@ -226,7 +226,7 @@ export default function ChatConversationPane({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col w-full">
         <MessageList
           messages={messages}
           loading={loading}
