@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const nodemailer = require("nodemailer");
 const logger = require("../config/logger");
+const organisationContextService = require("./organisation-context.service");
 
 const APP_NAME = process.env.APP_NAME || "BrightNow";
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
@@ -61,16 +62,34 @@ function formatExpiresAt(expiresAt) {
   });
 }
 
+/**
+ * Prefer organisation.name from DB, then optional caller override, then APP_NAME.
+ */
+async function resolveCompanyName(override) {
+  const trimmedOverride = override && String(override).trim() ? String(override).trim() : null;
+  try {
+    const organisation = await organisationContextService.getCurrentOrganisation();
+    const fromDb = organisation?.name && String(organisation.name).trim();
+    if (fromDb) return fromDb;
+  } catch (err) {
+    logger.warn(`[email] Could not resolve organisation name: ${err.message}`);
+  }
+  return trimmedOverride || APP_NAME;
+}
+
 async function sendEmployeeInvitation({
   to,
   firstName,
   inviterName,
   token,
   expiresAt,
+  companyName,
 }) {
   const acceptUrl = buildAcceptUrl(token);
+  const safeCompanyName = await resolveCompanyName(companyName);
   const html = renderTemplate(loadTemplate("employee-invitation"), {
     appName: APP_NAME,
+    companyName: safeCompanyName,
     firstName: firstName || "there",
     inviterName: inviterName || "An administrator",
     acceptUrl,
@@ -91,11 +110,11 @@ async function sendEmployeeInvitation({
 
   const from =
     process.env.SMTP_FROM ||
-    `"${APP_NAME}" <no-reply@${APP_NAME.toLowerCase()}.local>`;
+    `"${safeCompanyName}" <no-reply@${APP_NAME.toLowerCase()}.local>`;
   await transport.sendMail({
     from,
     to,
-    subject: `You're invited to ${APP_NAME}`,
+    subject: `You're invited to ${safeCompanyName}`,
     html,
   });
 
@@ -113,7 +132,7 @@ async function sendWelcomeUser({
   inviterName,
 }) {
   const loginUrl = EMPLOYEE_APP_BASE_URL.replace(/\/$/, "");
-  const safeCompanyName = companyName || APP_NAME;
+  const safeCompanyName = await resolveCompanyName(companyName);
   const safeInviterName = inviterName || "Your administrator";
 
   const html = renderTemplate(loadTemplate("welcome-user"), {
@@ -149,10 +168,19 @@ async function sendWelcomeUser({
   return { delivered: true, loginUrl };
 }
 
-async function sendPasswordReset({ to, firstName, token, expiresAt, client = "employee" }) {
+async function sendPasswordReset({
+  to,
+  firstName,
+  token,
+  expiresAt,
+  client = "employee",
+  companyName,
+}) {
   const resetUrl = buildResetUrl(token, client);
+  const safeCompanyName = await resolveCompanyName(companyName);
   const html = renderTemplate(loadTemplate("password-reset"), {
     appName: APP_NAME,
+    companyName: safeCompanyName,
     firstName: firstName || "there",
     resetUrl,
     expiresAt: formatExpiresAt(expiresAt),
@@ -168,11 +196,11 @@ async function sendPasswordReset({ to, firstName, token, expiresAt, client = "em
 
   const from =
     process.env.SMTP_FROM ||
-    `"${APP_NAME}" <no-reply@${APP_NAME.toLowerCase()}.local>`;
+    `"${safeCompanyName}" <no-reply@${APP_NAME.toLowerCase()}.local>`;
   await transport.sendMail({
     from,
     to,
-    subject: `Reset your ${APP_NAME} password`,
+    subject: `Reset your ${safeCompanyName} password`,
     html,
   });
 
